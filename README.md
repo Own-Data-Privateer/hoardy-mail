@@ -32,7 +32,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
     - `gmail-trash`
     : GMail-specific: move matching messages to GMail's Trash folder from all specified folders
 
-### imaparms count [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--folder FOLDERS] [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from HFROM]
+### imaparms count [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--folder FOLDERS] [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
 
 - optional arguments:
   - `--folder FOLDERS`
@@ -73,54 +73,12 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   : operate on messages older than this many days
   - `--newer-than DAYS`
   : operate on messages not older than this many days
-  - `--from HFROM`
-  : operate on messages that have this string as substring of their header's FROM field
+  - `--from ADDRESS`
+  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
+  - `--not-from ADDRESS`
+  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
-### imaparms delete [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) --folder FOLDERS [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from HFROM]
-
-- optional arguments:
-  - `--folder FOLDERS`
-  : mail folders to operate on; can be specified multiple times; required
-
-- debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
-  - `--dry-run`
-  : don't perform any actions, only show what would be done
-
-- server connection:
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to
-  - `--port PORT`
-  : port to use; default: 143 for --plain and --starttls, 993 for --ssl
-  - `--user USER`
-  : username on the server
-  - `--passfile PASSFILE`
-  : file containing the password
-  - `--passcmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
-
-- message search filters:
-  - `--all`
-  : operate on all messages
-  - `--seen`
-  : operate on messages marked as seen; the default
-  - `--unseen`
-  : operate on messages not marked as seen
-  - `--older-than DAYS`
-  : operate on messages older than this many days
-  - `--newer-than DAYS`
-  : operate on messages not older than this many days
-  - `--from HFROM`
-  : operate on messages that have this string as substring of their header's FROM field
-
-### imaparms gmail-trash [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) --folder FOLDERS [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from HFROM]
+### imaparms delete [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) --folder FOLDERS [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
 
 - optional arguments:
   - `--folder FOLDERS`
@@ -161,8 +119,64 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   : operate on messages older than this many days
   - `--newer-than DAYS`
   : operate on messages not older than this many days
-  - `--from HFROM`
-  : operate on messages that have this string as substring of their header's FROM field
+  - `--from ADDRESS`
+  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
+  - `--not-from ADDRESS`
+  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
+
+### imaparms gmail-trash [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) --folder FOLDERS [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
+
+- optional arguments:
+  - `--folder FOLDERS`
+  : mail folders to operate on; can be specified multiple times; required
+
+- debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
+  - `--dry-run`
+  : don't perform any actions, only show what would be done
+
+- server connection:
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to
+  - `--port PORT`
+  : port to use; default: 143 for --plain and --starttls, 993 for --ssl
+  - `--user USER`
+  : username on the server
+  - `--passfile PASSFILE`
+  : file containing the password
+  - `--passcmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
+
+- message search filters:
+  - `--all`
+  : operate on all messages
+  - `--seen`
+  : operate on messages marked as seen; the default
+  - `--unseen`
+  : operate on messages not marked as seen
+  - `--older-than DAYS`
+  : operate on messages older than this many days
+  - `--newer-than DAYS`
+  : operate on messages not older than this many days
+  - `--from ADDRESS`
+  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
+  - `--not-from ADDRESS`
+  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
+
+## Notes on usage
+
+Specifying `--folder` multiple times will perform the specified action on all specified folders.
+
+Message search filters are connected by logical "AND"s so `--from "github.com" --not-from "notifications.github.com"` will act on messages from "github.com" but not from "notifications.github.com".
+
+Also note that destructive actions act on `--seen` messages by default.
 
 ## Examples
 
@@ -209,7 +223,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7
   ```
 
-## Notes
+## Notes on GMail
 
 GMail considers IMAP/SMTP to be "insecure", so to use it you will have to enable 2FA in your account settings and then add an application-specific password for IMAP/SMTP access. Enabling 2FA requires a phone number, which you can then replace by an OTP authentificator of your choice (but Google will now know your phone number and will track your movements by buying location data from your network operator).
 
