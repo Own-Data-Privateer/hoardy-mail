@@ -16,4 +16,8 @@ buildPythonApplication rec {
         (baseName == "__pycache__")
       );
   };
+
+  nativeBuildInputs = [
+    mypy
+  ];
 }

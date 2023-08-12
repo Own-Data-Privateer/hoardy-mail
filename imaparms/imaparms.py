@@ -146,11 +146,14 @@ def imap_date(date):
 def make_search_filter(args):
     filters = []
 
-    if args.seen is not None:
-        if args.seen:
-            filters.append(f"SEEN")
-        else:
-            filters.append(f"UNSEEN")
+    if args.messages == "all":
+        pass
+    elif args.messages == "seen":
+        filters.append(f"SEEN")
+    elif args.messages == "unseen":
+        filters.append(f"UNSEEN")
+    else:
+        raise SystemError("BUG")
 
     if args.hfrom is not None:
         filters.append(f'FROM {imap_quote(args.hfrom)}')
@@ -209,53 +212,53 @@ def cmd_action(args):
         result = str(data[0], "utf-8")
         if result == "":
             # nothing to do
-            print(f"{folder} has 0 matching messages")
+            print(f"{folder} has 0 messages matching {search_filter}")
             srv.close()
             continue
 
         message_uids = result.split(" ")
         prefix = ""
         if args.command == "count":
-            print(f"{folder} has {len(message_uids)} matching messages")
+            print(f"{folder} has {len(message_uids)} messages matching {search_filter}")
             srv.close()
             continue
 
         if args.dry_run:
             if args.command == "gmail_trash":
-                print(f"would move {len(message_uids)} matching messages from {folder} to [GMail]/Trash")
+                print(f"--dry-run, otherwise would move {len(message_uids)} messages matching {search_filter} from {folder} to [GMail]/Trash")
+            elif args.command == "delete":
+                print(f"--dry-run, otherwise would delete {len(message_uids)} messages matching {search_filter} from {folder}")
             else:
-                print(f"would delete {len(message_uids)} matching messages from {folder}")
+                raise SystemError("BUG")
             srv.close()
             continue
 
         if args.command == "gmail_trash":
-            print(f"moving {len(message_uids)} matching messages from {folder} to [GMail]/Trash")
+            print(f"moving {len(message_uids)} messages matching {search_filter} from {folder} to [GMail]/Trash")
+        elif args.command == "delete":
+            print(f"deleting {len(message_uids)} messages matching {search_filter} from {folder}")
         else:
-            print(f"deleting {len(message_uids)} matching messages from {folder}")
+            raise SystemError("BUG")
 
         while len(message_uids) > 0:
             to_delete = message_uids[:100]
-            if args.command == "gmail_trash":
-                print(f"  ... moving {len(to_delete)} matching messages from {folder} to [GMail]/Trash")
-            else:
-                print(f"  ... deleting {len(to_delete)} matching messages from {folder}")
             message_uids = message_uids[100:]
             joined = ",".join(to_delete)
             if args.command == "gmail_trash":
+                print(f"... moving a batch of {len(to_delete)} messages matching {search_filter} from {folder} to [GMail]/Trash")
                 srv.uid('STORE', joined, '+X-GM-LABELS', '\\Trash')
-            else:
+            elif args.command == "delete":
+                print(f"... deleting a batch {len(to_delete)} messages matching {search_filter} from {folder}")
                 srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted")
                 srv.expunge()
+            else:
+                raise SystemError("BUG")
 
         srv.close()
 
     srv.logout()
 
 def add_examples(fmt):
-    fmt.add_text("# Notes")
-
-    fmt.add_text("""GMail considers IMAP/SMTP to be "insecure", so to use it you will have to enable 2FA in your account settings and then add an application-specific password for IMAP/SMTP access. Enabling 2FA requires a phone number, which you can then replace by an OTP authentificator of your choice (but Google will now know your phone number and will track your movements by buying location data from your network operator).""")
-
     fmt.add_text("# Examples")
 
     fmt.start_section("List all available IMAP folders and count how many messages they contain")
@@ -274,7 +277,8 @@ def add_examples(fmt):
     fmt.add_text("""
 Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets hacked, you won't be as vulnerable.""")
 
-    fmt.add_code('imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --seen --older-than 7')
+    fmt.add_code('imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --older-than 7')
+    fmt.add_text("(note that this only deletes `--seen` messages by default)")
     fmt.end_section()
 
     fmt.start_section('Count how many messages older than 7 days are in "[Gmail]/Trash" folder')
@@ -286,12 +290,18 @@ Assuming you fetched and backed up all your messages already this allows you to 
     fmt.add_text("""
 Unfortunately, in GMail, deleting messages from "INBOX" does not actually delete them, nor moves them to "Trash", just removes them from "INBOX", so this tool provides a GMail-specific command that moves messages to "Trash" on GMail:""")
 
-    fmt.add_code('imaparms gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --seen --older-than 7')
+    fmt.add_code('imaparms gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7')
+
+    fmt.add_text("(note that this only moves `--seen` messages by default)")
 
     fmt.add_text("after which you can now delete them (and other matching messages in Trash) with")
 
-    fmt.add_code('imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --older-than 7')
+    fmt.add_code('imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7')
     fmt.end_section()
+
+    fmt.add_text("# Notes")
+
+    fmt.add_text("""GMail considers IMAP/SMTP to be "insecure", so to use it you will have to enable 2FA in your account settings and then add an application-specific password for IMAP/SMTP access. Enabling 2FA requires a phone number, which you can then replace by an OTP authentificator of your choice (but Google will now know your phone number and will track your movements by buying location data from your network operator).""")
 
 def main() -> None:
     global _
@@ -310,45 +320,58 @@ def main() -> None:
     parser.set_defaults(func=no_cmd)
 
     def add_common(cmd):
-        cmd.add_argument("--debug", action="store_true", help="print IMAP conversation to stderr")
-        cmd.add_argument("--dry-run", action="store_true", help="don't perform any actions, only show what would be done")
+        agrp = cmd.add_argument_group("debugging")
+        agrp.add_argument("--debug", action="store_true", help="print IMAP conversation to stderr")
+        agrp.add_argument("--dry-run", action="store_true", help="don't perform any actions, only show what would be done")
 
-        grp = cmd.add_mutually_exclusive_group(required = True)
+        agrp = cmd.add_argument_group("server connection")
+        grp = agrp.add_mutually_exclusive_group(required = True)
         grp.add_argument("--plain", action="store_true", help="connect via plain-text socket")
         grp.add_argument("--ssl", action="store_true", help="connect over SSL socket")
         grp.add_argument("--starttls", action="store_true", help="connect via plain-text socket, but then use STARTTLS command")
 
-        cmd.add_argument("--host", type=str, required=True, help="IMAP server to connect to")
-        cmd.add_argument("--port", type=int, help="port to use; default: 143 for --plain and --starttls, 993 for --ssl")
-        cmd.add_argument("--user", type=str, required = True, help="username on the server")
+        agrp.add_argument("--host", type=str, required=True, help="IMAP server to connect to")
+        agrp.add_argument("--port", type=int, help="port to use; default: 143 for --plain and --starttls, 993 for --ssl")
+        agrp.add_argument("--user", type=str, required = True, help="username on the server")
 
-        grp = cmd.add_mutually_exclusive_group(required = True)
+        grp = agrp.add_mutually_exclusive_group(required = True)
         grp.add_argument("--passfile", type=str, help="file containing the password")
         grp.add_argument("--passcmd", type=str, help="shell command that returns the password as the first line of its stdout")
 
-    def add_filters_min(cmd):
-        grp = cmd.add_mutually_exclusive_group()
-        grp.add_argument("--seen", action="store_const", const = True, help="operate on messages not older than this many days")
-        grp.add_argument("--unseen", dest="seen", action="store_const", const = False, help="operate on messages not older than this many days")
+    def add_filters_min(cmd, seen_by_default = True):
+        agrp = cmd.add_argument_group("message search filters")
+        grp = agrp.add_mutually_exclusive_group()
 
-        cmd.add_argument("--older-than", type=int, help="operate on messages older than this many days")
-        cmd.add_argument("--newer-than", type=int, help="operate on messages not older than this many days")
-        cmd.add_argument("--from", dest="hfrom", type=str, help="operate on messages that have this string as substring of their header's FROM field")
+        def_all = ""
+        def_seen = ""
+        if not seen_by_default:
+            grp.set_defaults(messages = "all")
+            def_all = "; the default"
+        else:
+            grp.set_defaults(messages = "seen")
+            def_seen = "; the default"
+        grp.add_argument("--all", dest="messages", action="store_const", const = "all", help=f"operate on all messages{def_all}")
+        grp.add_argument("--seen", dest="messages", action="store_const", const = "seen", help=f"operate on messages marked as seen{def_seen}")
+        grp.add_argument("--unseen", dest="messages", action="store_const", const = "unseen", help="operate on messages not marked as seen")
+
+        agrp.add_argument("--older-than", metavar = "DAYS", type=int, help="operate on messages older than this many days")
+        agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help="operate on messages not older than this many days")
+        agrp.add_argument("--from", dest="hfrom", type=str, help="operate on messages that have this string as substring of their header's FROM field")
 
     def add_filters_act(cmd):
-        add_filters_min(cmd)
         cmd.add_argument("--folder", dest="folders", action="append", type=str, default=[], required = True, help='mail folders to operate on; can be specified multiple times; required')
+        add_filters_min(cmd)
 
     subparsers = parser.add_subparsers(title="subcommands")
 
     cmd = subparsers.add_parser("count", help="count how many matching messages specified folders (or all of them, by default) contain")
     add_common(cmd)
-    add_filters_min(cmd)
     cmd.add_argument("--folder", dest="folders", action="append", type=str, default=[], help='mail folders to operane on; can be specified multiple times; default: all available mail folders')
+    add_filters_min(cmd, False)
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="count")
 
-    cmd = subparsers.add_parser("delete", help="delete (expunge) matching messages from all specified folders")
+    cmd = subparsers.add_parser("delete", help="delete (and expunge) matching messages from all specified folders")
     add_common(cmd)
     add_filters_act(cmd)
     cmd.set_defaults(func=cmd_action)
