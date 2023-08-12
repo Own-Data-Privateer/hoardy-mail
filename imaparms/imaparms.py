@@ -155,8 +155,11 @@ def make_search_filter(args):
     else:
         raise SystemError("BUG")
 
-    if args.hfrom is not None:
-        filters.append(f'FROM {imap_quote(args.hfrom)}')
+    for f in args.hfrom:
+        filters.append(f'FROM {imap_quote(f)}')
+
+    for f in args.hnotfrom:
+        filters.append(f'NOT FROM {imap_quote(f)}')
 
     now = int(time.time())
     if args.older_than is not None:
@@ -259,6 +262,14 @@ def cmd_action(args):
     srv.logout()
 
 def add_examples(fmt):
+    fmt.add_text("# Notes on usage")
+
+    fmt.add_text("Specifying `--folder` multiple times will perform the specified action on all specified folders.")
+
+    fmt.add_text('Message search filters are connected by logical "AND"s so `--from "github.com" --not-from "notifications.github.com"` will act on messages from "github.com" but not from "notifications.github.com".')
+
+    fmt.add_text("Also note that destructive actions act on `--seen` messages by default.")
+
     fmt.add_text("# Examples")
 
     fmt.start_section("List all available IMAP folders and count how many messages they contain")
@@ -299,7 +310,7 @@ Unfortunately, in GMail, deleting messages from "INBOX" does not actually delete
     fmt.add_code('imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7')
     fmt.end_section()
 
-    fmt.add_text("# Notes")
+    fmt.add_text("# Notes on GMail")
 
     fmt.add_text("""GMail considers IMAP/SMTP to be "insecure", so to use it you will have to enable 2FA in your account settings and then add an application-specific password for IMAP/SMTP access. Enabling 2FA requires a phone number, which you can then replace by an OTP authentificator of your choice (but Google will now know your phone number and will track your movements by buying location data from your network operator).""")
 
@@ -356,7 +367,9 @@ def main() -> None:
 
         agrp.add_argument("--older-than", metavar = "DAYS", type=int, help="operate on messages older than this many days")
         agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help="operate on messages not older than this many days")
-        agrp.add_argument("--from", dest="hfrom", type=str, help="operate on messages that have this string as substring of their header's FROM field")
+
+        agrp.add_argument("--from", dest="hfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help="operate on messages that have this string as substring of their header's FROM field; can be specified multiple times")
+        agrp.add_argument("--not-from", dest="hnotfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help="operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times")
 
     def add_filters_act(cmd):
         cmd.add_argument("--folder", dest="folders", action="append", type=str, default=[], required = True, help='mail folders to operate on; can be specified multiple times; required')
