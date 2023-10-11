@@ -251,7 +251,7 @@ def cmd_action(args):
                 print(f"... moving a batch of {len(to_delete)} messages matching {search_filter} from {folder} to [GMail]/Trash")
                 srv.uid('STORE', joined, '+X-GM-LABELS', '\\Trash')
             elif args.command == "delete":
-                print(f"... deleting a batch {len(to_delete)} messages matching {search_filter} from {folder}")
+                print(f"... deleting a batch of {len(to_delete)} messages matching {search_filter} from {folder}")
                 srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted")
                 srv.expunge()
             else:
