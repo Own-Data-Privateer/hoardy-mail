@@ -10,17 +10,13 @@ import ssl
 import subprocess
 import sys
 import time
-import typing
+import typing as _t
 
 from gettext import gettext as _, ngettext
 
-try:
-    from . import argparse_better as argparse
-except ImportError:
-    # for when calling without installing first
-    import argparse_better as argparse # type: ignore
+from . import argparse_better as argparse
 
-def imap_parse_data(data : str, top_level : bool = True) -> typing.Tuple[typing.Any, str]:
+def imap_parse_data(data : str, top_level : bool = True) -> _t.Tuple[_t.Any, str]:
     "Parse IMAP response string into a tree of strings."
     acc = []
     res = ""
@@ -72,7 +68,7 @@ def imap_parse_data(data : str, top_level : bool = True) -> typing.Tuple[typing.
         acc.append(res)
     return acc, ""
 
-def imap_parse(data : str) -> typing.Any:
+def imap_parse(data : str) -> _t.Any:
     res, rest = imap_parse_data(data)
     if rest != "":
         raise ValueError("unexpected tail", rest)
@@ -84,7 +80,7 @@ def imap_parse(data : str) -> typing.Any:
 #print(imap_parse('(1 2 3) 4 "\\\\Nya" 5 6 7'))
 #print(imap_parse('(0 1) (1 2 3'))
 
-def connect(args):
+def connect(args : _t.Any) -> _t.Any:
     IMAP_base : type
     if args.plain or args.starttls:
         port = 143

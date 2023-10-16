@@ -1,10 +1,14 @@
-with import <nixpkgs> {};
-with python3Packages;
+{ pkgs ? import <nixpkgs> {}
+, lib ? pkgs.lib
+, debug ? false
+}:
 
-buildPythonApplication rec {
+with pkgs.python3Packages;
+
+buildPythonApplication (rec {
   pname = "imaparms";
   version = "1.1";
-  disabled = !isPy3k;
+  format = "pyproject";
 
   src = lib.cleanSourceWith {
     src = ./.;
@@ -17,7 +21,13 @@ buildPythonApplication rec {
       );
   };
 
+  propagatedBuildInputs = [
+    setuptools
+  ];
+} // lib.optionalAttrs debug {
   nativeBuildInputs = [
     mypy
   ];
-}
+
+  preBuild = "mypy";
+})

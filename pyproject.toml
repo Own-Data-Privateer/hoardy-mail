@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "imaparms"
+version = "1.1"
+authors = [{ name = "Jan Malakhovski", email = "oxij@oxij.org" }]
+description = "Swiss army knife tool for interacting with IMAP4 servers"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Communications :: Email",
+    "Topic :: Office/Business",
+    "Topic :: System :: Archiving",
+    "Topic :: System :: Archiving :: Backup",
+    "Topic :: System :: Archiving :: Mirroring",
+    "Topic :: System :: Recovery Tools",
+    "Operating System :: POSIX",
+    "Environment :: Console",
+]
+keywords = [
+    "IMAP",
+    "Mail",
+    "archive",
+    "download",
+]
+dependencies = [
+    'importlib-metadata; python_version<"3.8"',
+]
+requires-python = ">=3.7"
+[project.scripts]
+imaparms = "imaparms.__main__:main"
