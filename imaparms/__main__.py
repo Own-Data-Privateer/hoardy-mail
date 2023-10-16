@@ -149,7 +149,7 @@ def make_search_filter(args):
     elif args.messages == "unseen":
         filters.append(f"UNSEEN")
     else:
-        raise SystemError("BUG")
+        assert False
 
     for f in args.hfrom:
         filters.append(f'FROM {imap_quote(f)}')
@@ -183,16 +183,15 @@ def cmd_action(args):
     srv = connect(args)
 
     if len(args.folders) == 0:
-        if args.command != "count":
-            raise SystemError("BUG")
-        else:
-            typ, data = srv.list()
-            for el in data:
-                line = str(el, "utf-8")
-                tags, _, arg = imap_parse(line)
-                if "\\Noselect" in tags:
-                    continue
-                args.folders.append(arg)
+        assert args.command == "count"
+
+        typ, data = srv.list()
+        for el in data:
+            line = str(el, "utf-8")
+            tags, _, arg = imap_parse(line)
+            if "\\Noselect" in tags:
+                continue
+            args.folders.append(arg)
 
     for folder in args.folders:
         typ, data = srv.select(imap_quote(folder))
@@ -228,7 +227,7 @@ def cmd_action(args):
             elif args.command == "delete":
                 print(f"--dry-run, otherwise would delete {len(message_uids)} messages matching {search_filter} from {folder}")
             else:
-                raise SystemError("BUG")
+                assert False
             srv.close()
             continue
 
@@ -237,7 +236,7 @@ def cmd_action(args):
         elif args.command == "delete":
             print(f"deleting {len(message_uids)} messages matching {search_filter} from {folder}")
         else:
-            raise SystemError("BUG")
+            assert False
 
         while len(message_uids) > 0:
             to_delete = message_uids[:100]
@@ -251,7 +250,7 @@ def cmd_action(args):
                 srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted")
                 srv.expunge()
             else:
-                raise SystemError("BUG")
+                assert False
 
         srv.close()
 
@@ -410,7 +409,7 @@ def main() -> None:
             if retcode != 0:
                 raise SystemError("failed to execute passcmd")
     else:
-        raise SystemError("BUG")
+        assert False
 
     if password[-1:] == "\n":
         password = password[:-1]
