@@ -1,13 +1,81 @@
 # What?
 
-A tool that logins to an IMAP4 server and performs actions on messages in specified folders matching specified criteria.
+A Keep It Stupid Simple (KISS) Swiss army knife tool for interacting with IMAP4 servers: login to a specified server, perform specified actions on messages in specified folders matching specified criteria.
 
-Inspired by <https://gitlab.com/mikecardwell/IMAPExpire>, but this
+The main use case I made this for is as follows:
 
-- is written in Python instead of Perl;
-- requires nothing but the basic Python install, no third-party libraries needed;
-- provides `--seen` option, so you won't accidentally delete any messages you have not yet fetched;
+- you periodically fetch and backup your mail somehow (e.g. with `fetchmail` and `rsync`/`git`/`bup`) and then,
+- after your backup succeeds, you run this tool and remove old (older than zero or more intervals between backups) already-fetched messages from your mail servers,
+- so that when/if your account get cracked/hacked you are not as exposed.
+
+After all, nefarious actors getting all of your unfetched + zero or more days of your fetched mail is much better than them getting the whole last 20 years or whatever of your correspondence.
+(And if your personal computer gets compromised enough, attackers will eventually get everything anyway, so deleting old mail from servers does not make things worse.)
+
+This tool was inspired by [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) which I used and (privately) patched bugs out of for years before getting tired of it and deciding it would be simpler to just write my own thingy.
+Unlike IMAPExpire this
+
+- is written in Python instead of Perl and requires nothing but the basic Python install, no third-party libraries needed;
+- allows all UNICODE characters except `\n` in passwords/passphrases (yes, including spaces, quotes, etc),
+- provides `--seen` option and uses it by default for destructive actions, so you won't accidentally delete any messages you have not yet fetched;
 - provides GMail-specific commands.
+
+You can even run this tool without installing it like this:
+```
+python3 -m imaparms.__main__ --help
+```
+
+# Some Fun and Relevant Facts
+
+Note that [Snowden revelations](https://en.wikipedia.org/wiki/Global_surveillance_disclosures_(2013%E2%80%93present)) mean that Google and US Government store copies of all of your correspondence since 2001-2009 (it depends) even if you delete everything from all the servers.
+
+And they wiretap basically all the traffic going though international Internet exchanges because they wiretap all underwater cables.
+Simply because they can, apparently?
+
+(Which is a bit creepy, if you ask me.
+If you think about it, there is absolutely no point to doing this if you are trying to achieve the stated signal-intelligence goals.
+Governments and organized crime use one-time-pads since 1950s.
+AES256 + 32 bytes of shared secret + some simple [steganography](https://en.wikipedia.org/wiki/Steganography) and even if the signal gets discovered, no quantum-computer will ever be able to break it, no research into [quantum-safe cryptography](https://en.wikipedia.org/wiki/Post-quantum_cryptography) needed.
+So, clearly, this data collection only works against private citizens and civil society which have no ways to distribute symmetric keys and thus have to use public-key cryptography.)
+
+Globally, >70% of all e-mails originate from or get delivered to Google servers (GMail, GMail on custom domains, corporate GMail).
+
+Most e-mails never gets E2E-encrypted at all, `(100 - epsilon)`% (so, basically, 100%) of all e-mails sent over the Internet never get encrypted with quantum-safe cryptography in-transit.
+
+So, eventually, US Government will get plain-text for almost everything you ever sent (unless you are a government official, work for well-organized crime syndicate, or you and all your friends are really paranoid).
+Which means that, unless they come to their senses there and shred all that data, eventually, all that mail will get stolen.
+
+So, in the best case scenario, a simple relatively benign blackmail-everyone-you-can-to-get-as-much-money-as-possible AI will be able organize a personal WikiLeaks-style breach, for every single person on planet Earth.
+No input from nefarious humans interested in exploiting *personally you* required.
+After all, you are not that interesting, so you have nothing to fear, nothing to hide, and you certainly did not write any still-embarrassing e-mails when you were 16 years old and did not send any nudes of yourself or anyone else to anyone (including any doctors, during the pandemic) ever.
+
+It would be glorious!
+Wouldn't it?
+
+(Seriously, abstractly speaking, I'm kinda interested in civilization-wide legal and cultural effects of *every embarrassing, even slightly illegal and/or hypocritical thing every person ever did* relentlessly programmatically exploited as blackmail or worse.
+Non-abstractly speaking, the fact that governments spend public money to make this possible creeps me out.
+After all, hoarding of exploitable material worked so well with [EternalBlue](https://en.wikipedia.org/wiki/EternalBlue), and that thing was a fixable bug, which leaked blackmail is not.)
+
+That is to say, as a long-term defense measure, this tool is probably useless.
+All your mail will get leaked eventually, regardless.
+Short-term and against random exploitations of your mail servers, this thing is perfect, IMHO.
+
+# GMail: Some Fun and Relevant Facts
+
+GMail considers IMAP/SMTP to be "insecure", so to use it you will have to enable 2FA in your account settings and then add an application-specific password for IMAP/SMTP access.
+
+(Which is kinda funny, given that [signing in with Google prompts](https://web.archive.org/web/20230702050207/https://support.google.com/accounts/answer/7026266?co=GENIE.Platform%3DAndroid&hl=en) exists.
+I.e. you can borrow their phone, unlock it (passcode? peek over their shoulder or just get some video surveillance footage of them typing it in public; fingerprint? they leave their fingerprints all over the device itself, dust with some flour, take a photo, apply some simple filters, 3D-print the result, this actually takes ~3 minutes to do if you know what you are doing), ask Google to authenticate via prompt.
+Done, you can login to everything with no password needed.
+And Google appears to give no way to disable Google prompts if your account has an attached Android device.
+Though, you can make Google prompts ask for a password too, but that feature need special setup.
+Meanwhile, "legacy" passwords are not secure, apparently?)
+
+Then, to enable 2FA, even for very old accounts that never used anything phone or Android-related, for no rational reasons, GMail requires specifying a working phone number that can receive SMS.
+Which you can then simply remove after you copied your OTP secret into an authentificator of your choice.
+
+Sorry, why did you need the phone number, again?
+Ah, well, Google now knows it and will be able track your movements by buying location data from your network operator.
+Thank you very much.
 
 # Usage
 
@@ -54,7 +122,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--host HOST`
   : IMAP server to connect to
   - `--port PORT`
-  : port to use; default: 143 for --plain and --starttls, 993 for --ssl
+  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
   - `--user USER`
   : username on the server
   - `--passfile PASSFILE`
@@ -64,7 +132,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
 
 - message search filters:
   - `--all`
-  : operate on all messages; the default
+  : operate on all messages (default)
   - `--seen`
   : operate on messages marked as seen
   - `--unseen`
@@ -100,7 +168,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--host HOST`
   : IMAP server to connect to
   - `--port PORT`
-  : port to use; default: 143 for --plain and --starttls, 993 for --ssl
+  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
   - `--user USER`
   : username on the server
   - `--passfile PASSFILE`
@@ -112,7 +180,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--all`
   : operate on all messages
   - `--seen`
-  : operate on messages marked as seen; the default
+  : operate on messages marked as seen (default)
   - `--unseen`
   : operate on messages not marked as seen
   - `--older-than DAYS`
@@ -146,7 +214,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--host HOST`
   : IMAP server to connect to
   - `--port PORT`
-  : port to use; default: 143 for --plain and --starttls, 993 for --ssl
+  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
   - `--user USER`
   : username on the server
   - `--passfile PASSFILE`
@@ -158,7 +226,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--all`
   : operate on all messages
   - `--seen`
-  : operate on messages marked as seen; the default
+  : operate on messages marked as seen (default)
   - `--unseen`
   : operate on messages not marked as seen
   - `--older-than DAYS`
@@ -174,7 +242,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
 
 Specifying `--folder` multiple times will perform the specified action on all specified folders.
 
-Message search filters are connected by logical "AND"s so `--from "github.com" --not-from "notifications.github.com"` will act on messages from "github.com" but not from "notifications.github.com".
+Message search filters are connected by logical "AND"s so `--from "github.com" --not-from "notifications@github.com"` will act on messages from "github.com" but not from "notifications@github.com".
 
 Also note that destructive actions act on `--seen` messages by default.
 
@@ -192,7 +260,7 @@ Also note that destructive actions act on `--seen` messages by default.
     imaparms count --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com"
     ```
 
-- Delete seen messages older than 7 days from "INBOX" folder:
+- Delete all seen messages older than 7 days from `INBOX` folder:
 
   Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets hacked, you won't be as vulnerable.
 
@@ -200,7 +268,14 @@ Also note that destructive actions act on `--seen` messages by default.
   imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --older-than 7
   ```
 
-  (note that this only deletes `--seen` messages by default)
+  Note that the above only removes `--seen` messages by default.
+
+- **DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `--seen` messages instead::
+  ```
+  imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX"
+  ```
+
+  Though, setting at least `--older-than 1` in case you forgot you had another fetcher running in parallel and you want to be sure you won't lose any data in case something breaks, is highly recommended anyway.
 
 - Count how many messages older than 7 days are in "[Gmail]/Trash" folder:
   ```
@@ -215,15 +290,11 @@ Also note that destructive actions act on `--seen` messages by default.
   imaparms gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7
   ```
 
-  (note that this only moves `--seen` messages by default)
+  Also, note that the above only moves `--seen` messages by default.
 
   after which you can now delete them (and other matching messages in Trash) with
 
   ```
   imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7
   ```
-
-## Notes on GMail
-
-GMail considers IMAP/SMTP to be "insecure", so to use it you will have to enable 2FA in your account settings and then add an application-specific password for IMAP/SMTP access. Enabling 2FA requires a phone number, which you can then replace by an OTP authentificator of your choice (but Google will now know your phone number and will track your movements by buying location data from your network operator).
 

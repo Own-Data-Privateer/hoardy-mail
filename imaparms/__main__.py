@@ -261,7 +261,7 @@ def add_examples(fmt):
 
     fmt.add_text("Specifying `--folder` multiple times will perform the specified action on all specified folders.")
 
-    fmt.add_text('Message search filters are connected by logical "AND"s so `--from "github.com" --not-from "notifications.github.com"` will act on messages from "github.com" but not from "notifications.github.com".')
+    fmt.add_text('Message search filters are connected by logical "AND"s so `--from "github.com" --not-from "notifications@github.com"` will act on messages from "github.com" but not from "notifications@github.com".')
 
     fmt.add_text("Also note that destructive actions act on `--seen` messages by default.")
 
@@ -279,12 +279,16 @@ def add_examples(fmt):
 
     fmt.end_section()
 
-    fmt.start_section('Delete seen messages older than 7 days from "INBOX" folder')
+    fmt.start_section('Delete all seen messages older than 7 days from `INBOX` folder')
     fmt.add_text("""
 Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets hacked, you won't be as vulnerable.""")
-
     fmt.add_code('imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --older-than 7')
-    fmt.add_text("(note that this only deletes `--seen` messages by default)")
+    fmt.add_text("Note that the above only removes `--seen` messages by default.")
+    fmt.end_section()
+
+    fmt.start_section("""**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `--seen` messages instead:""")
+    fmt.add_code('imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX"')
+    fmt.add_text("Though, setting at least `--older-than 1` in case you forgot you had another fetcher running in parallel and you want to be sure you won't lose any data in case something breaks, is highly recommended anyway.")
     fmt.end_section()
 
     fmt.start_section('Count how many messages older than 7 days are in "[Gmail]/Trash" folder')
@@ -298,16 +302,12 @@ Unfortunately, in GMail, deleting messages from "INBOX" does not actually delete
 
     fmt.add_code('imaparms gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7')
 
-    fmt.add_text("(note that this only moves `--seen` messages by default)")
+    fmt.add_text("Also, note that the above only moves `--seen` messages by default.")
 
     fmt.add_text("after which you can now delete them (and other matching messages in Trash) with")
 
     fmt.add_code('imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7')
     fmt.end_section()
-
-    fmt.add_text("# Notes on GMail")
-
-    fmt.add_text("""GMail considers IMAP/SMTP to be "insecure", so to use it you will have to enable 2FA in your account settings and then add an application-specific password for IMAP/SMTP access. Enabling 2FA requires a phone number, which you can then replace by an OTP authentificator of your choice (but Google will now know your phone number and will track your movements by buying location data from your network operator).""")
 
 def main() -> None:
     global _
@@ -337,7 +337,7 @@ def main() -> None:
         grp.add_argument("--starttls", action="store_true", help="connect via plain-text socket, but then use STARTTLS command")
 
         agrp.add_argument("--host", type=str, required=True, help="IMAP server to connect to")
-        agrp.add_argument("--port", type=int, help="port to use; default: 143 for --plain and --starttls, 993 for --ssl")
+        agrp.add_argument("--port", type=int, help="port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`")
         agrp.add_argument("--user", type=str, required = True, help="username on the server")
 
         grp = agrp.add_mutually_exclusive_group(required = True)
@@ -350,12 +350,13 @@ def main() -> None:
 
         def_all = ""
         def_seen = ""
+        def_str = " (default)"
         if not seen_by_default:
             grp.set_defaults(messages = "all")
-            def_all = "; the default"
+            def_all = def_str
         else:
             grp.set_defaults(messages = "seen")
-            def_seen = "; the default"
+            def_seen = def_str
         grp.add_argument("--all", dest="messages", action="store_const", const = "all", help=f"operate on all messages{def_all}")
         grp.add_argument("--seen", dest="messages", action="store_const", const = "seen", help=f"operate on messages marked as seen{def_seen}")
         grp.add_argument("--unseen", dest="messages", action="store_const", const = "unseen", help="operate on messages not marked as seen")
