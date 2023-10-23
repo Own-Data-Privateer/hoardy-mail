@@ -180,6 +180,14 @@ def cmd_action(args):
     #print(search_filter)
     #sys.exit(1)
 
+    if args.command == "delete":
+        if args.method == "auto":
+            if args.host in ["imap.gmail.com"] and \
+               args.folders != ["[Gmail]/Trash"]:
+                args.method = "gmail-trash"
+            else:
+                args.method = "delete"
+
     srv = connect(args)
 
     if len(args.folders) == 0:
@@ -221,19 +229,21 @@ def cmd_action(args):
             srv.close()
             continue
 
+        assert args.command == "delete"
+
         if args.dry_run:
-            if args.command == "gmail_trash":
+            if args.method == "gmail-trash":
                 print(f"--dry-run, otherwise would move {len(message_uids)} messages matching {search_filter} from {folder} to [GMail]/Trash")
-            elif args.command == "delete":
+            elif args.method in ["delete", "delete-noexpunge"]:
                 print(f"--dry-run, otherwise would delete {len(message_uids)} messages matching {search_filter} from {folder}")
             else:
                 assert False
             srv.close()
             continue
 
-        if args.command == "gmail_trash":
+        if args.method == "gmail-trash":
             print(f"moving {len(message_uids)} messages matching {search_filter} from {folder} to [GMail]/Trash")
-        elif args.command == "delete":
+        elif args.method in ["delete", "delete-noexpunge"]:
             print(f"deleting {len(message_uids)} messages matching {search_filter} from {folder}")
         else:
             assert False
@@ -242,13 +252,14 @@ def cmd_action(args):
             to_delete = message_uids[:100]
             message_uids = message_uids[100:]
             joined = ",".join(to_delete)
-            if args.command == "gmail_trash":
+            if args.method == "gmail-trash":
                 print(f"... moving a batch of {len(to_delete)} messages matching {search_filter} from {folder} to [GMail]/Trash")
                 srv.uid('STORE', joined, '+X-GM-LABELS', '\\Trash')
-            elif args.command == "delete":
+            elif args.method in ["delete", "delete-noexpunge"]:
                 print(f"... deleting a batch of {len(to_delete)} messages matching {search_filter} from {folder}")
                 srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted")
-                srv.expunge()
+                if args.method == "delete":
+                    srv.expunge()
             else:
                 assert False
 
@@ -286,26 +297,33 @@ Assuming you fetched and backed up all your messages already this allows you to 
     fmt.add_text("Note that the above only removes `--seen` messages by default.")
     fmt.end_section()
 
-    fmt.start_section("""**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `--seen` messages instead:""")
+    fmt.start_section("""**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `--seen` messages instead""")
     fmt.add_code('imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX"')
     fmt.add_text("Though, setting at least `--older-than 1` in case you forgot you had another fetcher running in parallel and you want to be sure you won't lose any data in case something breaks, is highly recommended anyway.")
     fmt.end_section()
 
-    fmt.start_section('Count how many messages older than 7 days are in "[Gmail]/Trash" folder')
+    fmt.start_section('Count how many messages older than 7 days are in `[Gmail]/Trash` folder')
     fmt.add_code('imaparms count --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --older-than 7')
     fmt.end_section()
 
-    fmt.start_section('GMail-specific mode: move old messages from "[Gmail]/All Mail" to Trash')
+    fmt.start_section('GMail-specific deletion mode: move (expire) old messages from `[Gmail]/All Mail` to `[Gmail]/Trash`')
 
     fmt.add_text("""
-Unfortunately, in GMail, deleting messages from "INBOX" does not actually delete them, nor moves them to "Trash", just removes them from "INBOX", so this tool provides a GMail-specific command that moves messages to "Trash" on GMail:""")
+Unfortunately, in GMail, deleting messages from `INBOX` does not actually delete them, nor moves them to trash, just removes them from `INBOX` while keeping them available from `[Gmail]/All Mail`.""")
+    fmt.add_text("""To work around this, this tool provides a GMail-specific deletion method that moves messages to `[Gmail]/Trash` in a GMail-specific way (this is not a repetition, it does require issuing special STORE commands to achieve this).""")
+    fmt.add_text("""You will probably want to run it over `[Gmail]/All Mail` folder (again, after you fetched everything from there) instead of `INBOX`:""")
 
-    fmt.add_code('imaparms gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7')
+    fmt.add_code('imaparms delete --method gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7')
+    fmt.add_text("which is equivalent to simply")
+    fmt.add_code('imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7')
+    fmt.add_text("""since `--method gmail-trash` is the default when `--host imap.gmail.com` and `--folder` is not `[Gmail]/Trash`""")
 
     fmt.add_text("Also, note that the above only moves `--seen` messages by default.")
 
-    fmt.add_text("after which you can now delete them (and other matching messages in Trash) with")
+    fmt.add_text("""Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with""")
 
+    fmt.add_code('imaparms delete --method delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7')
+    fmt.add_text("which is equivalent to simply")
     fmt.add_code('imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7')
     fmt.end_section()
 
@@ -325,10 +343,11 @@ def main() -> None:
         sys.exit(2)
     parser.set_defaults(func=no_cmd)
 
-    def add_common(cmd):
+    def add_common(cmd, dry_run : bool = False):
         agrp = cmd.add_argument_group("debugging")
         agrp.add_argument("--debug", action="store_true", help="print IMAP conversation to stderr")
-        agrp.add_argument("--dry-run", action="store_true", help="don't perform any actions, only show what would be done")
+        if dry_run:
+            agrp.add_argument("--dry-run", action="store_true", help="don't perform any actions, only show what would be done")
 
         agrp = cmd.add_argument_group("server connection")
         grp = agrp.add_mutually_exclusive_group(required = True)
@@ -344,7 +363,7 @@ def main() -> None:
         grp.add_argument("--passfile", type=str, help="file containing the password")
         grp.add_argument("--passcmd", type=str, help="shell command that returns the password as the first line of its stdout")
 
-    def add_filters_min(cmd, seen_by_default = True):
+    def add_filters(cmd, seen_by_default = True):
         agrp = cmd.add_argument_group("message search filters")
         grp = agrp.add_mutually_exclusive_group()
 
@@ -367,30 +386,28 @@ def main() -> None:
         agrp.add_argument("--from", dest="hfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help="operate on messages that have this string as substring of their header's FROM field; can be specified multiple times")
         agrp.add_argument("--not-from", dest="hnotfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help="operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times")
 
-    def add_filters_act(cmd):
-        cmd.add_argument("--folder", dest="folders", action="append", type=str, default=[], required = True, help='mail folders to operate on; can be specified multiple times; required')
-        add_filters_min(cmd)
-
     subparsers = parser.add_subparsers(title="subcommands")
 
     cmd = subparsers.add_parser("count", help="count how many matching messages specified folders (or all of them, by default) contain")
     add_common(cmd)
     cmd.add_argument("--folder", dest="folders", action="append", type=str, default=[], help='mail folders to operane on; can be specified multiple times; default: all available mail folders')
-    add_filters_min(cmd, False)
+    add_filters(cmd, False)
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="count")
 
-    cmd = subparsers.add_parser("delete", help="delete (and expunge) matching messages from all specified folders")
-    add_common(cmd)
-    add_filters_act(cmd)
+    cmd = subparsers.add_parser("delete", help="delete matching messages from specified folders")
+    add_common(cmd, True)
+    cmd.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help="""delete messages how:
+- `auto`: `gmail-trash` when `--host imap.gmail.com` and `--folder` is not (single) `[Gmail]/Trash`, `delete` otherwise (default)
+- `delete`: mark messages with `\\Deleted` flag and then use IMAP `EXPUNGE` command, i.e. this does what you would expect a "delete" command to do, works for most IMAP servers
+- `delete-noexpunge`: mark messages with `\\Deleted` flag but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly
+- `gmail-trash`: move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `imaparms delete --method delete --folder "[Gmail]/Trash"` them after, or you could just leave them there and GMail will delete them in 30 days)
+""")
+    agrp = cmd.add_argument_group("required arguments")
+    agrp.add_argument("--folder", dest="folders", action="append", type=str, default=[], required = True, help='mail folders to operate on; can be specified multiple times')
+    add_filters(cmd)
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="delete")
-
-    cmd = subparsers.add_parser("gmail-trash", help="GMail-specific: move matching messages to GMail's Trash folder from all specified folders")
-    add_common(cmd)
-    add_filters_act(cmd)
-    cmd.set_defaults(func=cmd_action)
-    cmd.set_defaults(command="gmail_trash")
 
     args = parser.parse_args(sys.argv[1:])
 

@@ -17,7 +17,7 @@ Unlike IMAPExpire this
 - is written in Python instead of Perl and requires nothing but the basic Python install, no third-party libraries needed;
 - allows all UNICODE characters except `\n` in passwords/passphrases (yes, including spaces, quotes, etc),
 - provides `--seen` option and uses it by default for destructive actions, so you won't accidentally delete any messages you have not yet fetched;
-- provides GMail-specific commands.
+- provides GMail-specific options.
 
 You can even run this tool without installing it like this:
 ```
@@ -79,7 +79,7 @@ Thank you very much.
 
 # Usage
 
-## imaparms [--version] [-h] [--help-markdown] {count,delete,gmail-trash} ...
+## imaparms [--version] [-h] [--help-markdown] {count,delete} ...
 
 Login to an IMAP4 server and perform actions on messages in specified folders matching specified criteria.
 
@@ -92,15 +92,13 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   : show this help message formatted in Markdown and exit
 
 - subcommands:
-  - `{count,delete,gmail-trash}`
+  - `{count,delete}`
     - `count`
     : count how many matching messages specified folders (or all of them, by default) contain
     - `delete`
-    : delete (and expunge) matching messages from all specified folders
-    - `gmail-trash`
-    : GMail-specific: move matching messages to GMail's Trash folder from all specified folders
+    : delete matching messages from specified folders
 
-### imaparms count [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--folder FOLDERS] [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
+### imaparms count [--debug] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--folder FOLDERS] [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
 
 - optional arguments:
   - `--folder FOLDERS`
@@ -109,8 +107,6 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
 - debugging:
   - `--debug`
   : print IMAP conversation to stderr
-  - `--dry-run`
-  : don't perform any actions, only show what would be done
 
 - server connection:
   - `--plain`
@@ -146,11 +142,15 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--not-from ADDRESS`
   : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
-### imaparms delete [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) --folder FOLDERS [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
+### imaparms delete [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder FOLDERS [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
 
 - optional arguments:
-  - `--folder FOLDERS`
-  : mail folders to operate on; can be specified multiple times; required
+  - `--method {auto,delete,delete-noexpunge,gmail-trash}`
+  : delete messages how:
+    - `auto`: `gmail-trash` when `--host imap.gmail.com` and `--folder` is not (single) `[Gmail]/Trash`, `delete` otherwise (default)
+    - `delete`: mark messages with `\Deleted` flag and then use IMAP `EXPUNGE` command, i.e. this does what you would expect a "delete" command to do, works for most IMAP servers
+    - `delete-noexpunge`: mark messages with `\Deleted` flag but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly
+    - `gmail-trash`: move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `imaparms delete --method delete --folder "[Gmail]/Trash"` them after, or you could just leave them there and GMail will delete them in 30 days)
 
 - debugging:
   - `--debug`
@@ -176,51 +176,9 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
-- message search filters:
-  - `--all`
-  : operate on all messages
-  - `--seen`
-  : operate on messages marked as seen (default)
-  - `--unseen`
-  : operate on messages not marked as seen
-  - `--older-than DAYS`
-  : operate on messages older than this many days
-  - `--newer-than DAYS`
-  : operate on messages not older than this many days
-  - `--from ADDRESS`
-  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
-  - `--not-from ADDRESS`
-  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
-
-### imaparms gmail-trash [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) --folder FOLDERS [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
-
-- optional arguments:
+- required arguments:
   - `--folder FOLDERS`
-  : mail folders to operate on; can be specified multiple times; required
-
-- debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
-  - `--dry-run`
-  : don't perform any actions, only show what would be done
-
-- server connection:
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to
-  - `--port PORT`
-  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
-  - `--user USER`
-  : username on the server
-  - `--passfile PASSFILE`
-  : file containing the password
-  - `--passcmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
+  : mail folders to operate on; can be specified multiple times
 
 - message search filters:
   - `--all`
@@ -270,29 +228,47 @@ Also note that destructive actions act on `--seen` messages by default.
 
   Note that the above only removes `--seen` messages by default.
 
-- **DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `--seen` messages instead::
+- **DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `--seen` messages instead:
   ```
   imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX"
   ```
 
   Though, setting at least `--older-than 1` in case you forgot you had another fetcher running in parallel and you want to be sure you won't lose any data in case something breaks, is highly recommended anyway.
 
-- Count how many messages older than 7 days are in "[Gmail]/Trash" folder:
+- Count how many messages older than 7 days are in `[Gmail]/Trash` folder:
   ```
   imaparms count --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --older-than 7
   ```
 
-- GMail-specific mode: move old messages from "[Gmail]/All Mail" to Trash:
+- GMail-specific deletion mode: move (expire) old messages from `[Gmail]/All Mail` to `[Gmail]/Trash`:
 
-  Unfortunately, in GMail, deleting messages from "INBOX" does not actually delete them, nor moves them to "Trash", just removes them from "INBOX", so this tool provides a GMail-specific command that moves messages to "Trash" on GMail:
+  Unfortunately, in GMail, deleting messages from `INBOX` does not actually delete them, nor moves them to trash, just removes them from `INBOX` while keeping them available from `[Gmail]/All Mail`.
+
+  To work around this, this tool provides a GMail-specific deletion method that moves messages to `[Gmail]/Trash` in a GMail-specific way (this is not a repetition, it does require issuing special STORE commands to achieve this).
+
+  You will probably want to run it over `[Gmail]/All Mail` folder (again, after you fetched everything from there) instead of `INBOX`:
 
   ```
-  imaparms gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7
+  imaparms delete --method gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7
   ```
+
+  which is equivalent to simply
+
+  ```
+  imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7
+  ```
+
+  since `--method gmail-trash` is the default when `--host imap.gmail.com` and `--folder` is not `[Gmail]/Trash`
 
   Also, note that the above only moves `--seen` messages by default.
 
-  after which you can now delete them (and other matching messages in Trash) with
+  Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with
+
+  ```
+  imaparms delete --method delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7
+  ```
+
+  which is equivalent to simply
 
   ```
   imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7
