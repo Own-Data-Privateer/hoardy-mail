@@ -1,14 +1,19 @@
 # Copyright (c) 2023 Jan Malakovski <oxij@oxij.org>
 #
-# This file can be distributed under Python Software Foundation License.
+# This file can be distributed under the terms of Python Software
+# Foundation License version 2 (PSF-2.0) as published by Python
+# Software Foundation.
 
+import typing as _t
 from argparse import *
-from gettext import gettext as _, ngettext
+from gettext import gettext as _
 
 class BetterHelpFormatter(HelpFormatter):
-    "Like argparse.HelpFormatter, but better"
+    """Like argparse.HelpFormatter, but with better formatting.
+       Also, it adds `add_code` function.
+    """
 
-    def _fill_text(self, text, width, indent): # type: ignore
+    def _fill_text(self, text : str, width : int, indent : str) -> str:
         import textwrap
         res = []
         for line in text.splitlines():
@@ -21,40 +26,44 @@ class BetterHelpFormatter(HelpFormatter):
                 res.append(sub)
         return "\n".join(res)
 
-    def _split_lines(self, text, width): # type: ignore
+    def _split_lines(self, text : str, width : int) -> _t.List[str]:
         import textwrap
         res = []
         for line in text.splitlines():
             res += textwrap.wrap(line, width)
         return res
 
-    def add_code(self, text):
+    def add_code(self, text : str) -> None:
         self.add_text(text)
 
 class MarkdownBetterHelpFormatter(BetterHelpFormatter):
     """BetterHelpFormatter that outputs stuff formatted in Markdown"""
 
-    def add_code(self, text):
+    def add_code(self, text : str) -> None:
         self.add_text("```\n" + text + "\n```")
 
-    def _format_usage(self, usage, actions, groups, prefix):
+    def _format_usage(self, usage : _t.Optional[str], actions : _t.Any, groups : _t.Any, prefix : _t.Optional[str]) -> str:
         return super()._format_usage(usage, actions, groups, "")
 
-    def _format_action(self, action):
+    def _format_action(self, action : _t.Any) -> str:
         # determine the required width and the entry label
         action_header = self._format_action_invocation(action)
 
         tup = self._current_indent, '', "`" + action_header + "`"
         action_header = '%*s- %s\n' % tup
-        help_position = self._current_indent + 2
 
         # collect the pieces of the action help
         parts = [action_header]
 
         # if there was help for the action, add it
         if action.help and action.help.strip():
-            help_text = self._expand_help(action)
-            parts.append('%*s: %s\n' % (help_position - 2, '', help_text))
+            first = True
+            for line in self._expand_help(action).splitlines():
+                if first:
+                    parts.append('%*s: %s\n' % (self._current_indent, '', line))
+                else:
+                    parts.append('%*s  %s\n' % (self._current_indent, '', line))
+                first = False
 
         # or add a newline if the description doesn't end with one
         elif not action_header.endswith('\n'):
@@ -67,8 +76,8 @@ class MarkdownBetterHelpFormatter(BetterHelpFormatter):
         # return a single string
         return self._join_parts(parts)
 
-    class _Section(HelpFormatter._Section): # type: ignore
-        def format_help(self):
+    class _Section(HelpFormatter._Section):
+        def format_help(self) -> str:
             if self.parent is not None:
                 self.formatter._indent()
             join = self.formatter._join_parts
@@ -82,8 +91,7 @@ class MarkdownBetterHelpFormatter(BetterHelpFormatter):
 
             # add the heading if the section was non-empty
             if self.heading is not SUPPRESS and self.heading is not None:
-                current_indent = self.formatter._current_indent
-                heading = '%*s- %s:\n' % (current_indent, '', self.heading)
+                heading = '%*s- %s:\n' % (self.formatter._current_indent, '', self.heading)
             else:
                 heading = ''
 
@@ -91,15 +99,23 @@ class MarkdownBetterHelpFormatter(BetterHelpFormatter):
             return join(['\n', heading, item_help, '\n'])
 
 class BetterArgumentParser(ArgumentParser):
+    """Like argparse.ArgumentParser but uses BetterHelpFormatter by default,
+       adds `--help` only to the root node, and
+       that `--help` prints the help for all the subcommands at once.
+       Also, provides `add_version` option.
+    """
+
+    formatter_class : _t.Any
+
     def __init__(self,
-                 prog=None,
-                 version=None,
-                 add_version=False, # we set these two to False by default
-                 add_help=False,    # so that subparsers don't get them enabled by default
-                 additional_sections = [],
-                 formatter_class=BetterHelpFormatter,
-                 *args, **kwargs):
-        super().__init__(prog, *args, formatter_class = formatter_class, add_help = False, **kwargs)
+                 prog : _t.Optional[str] = None,
+                 version : _t.Optional[str] = None,
+                 add_version : bool = False, # we set these two to False by default
+                 add_help : bool = False,    # so that subparsers don't get them enabled by default
+                 additional_sections : _t.List[_t.Callable[[BetterHelpFormatter], None]] = [],
+                 formatter_class : _t.Any = BetterHelpFormatter,
+                 *args : _t.Any, **kwargs : _t.Any) -> None:
+        super().__init__(prog, *args, formatter_class = formatter_class, add_help = False, **kwargs) # type: ignore
 
         if version is None:
             version = "dev"
@@ -124,9 +140,10 @@ class BetterArgumentParser(ArgumentParser):
 
         if self.add_help:
             self.add_argument(
-                default_prefix + "h", default_prefix*2 + "help", action='help', default=SUPPRESS, help=_('show this help message and exit'))
+                default_prefix + "h", default_prefix*2 + "help", action='help',
+                default=SUPPRESS, help=_('show this help message and exit'))
 
-    def set_formatter_class(self, formatter_class):
+    def set_formatter_class(self, formatter_class : _t.Any) -> None:
         self.formatter_class = formatter_class
         if hasattr(self._subparsers, "_group_actions"):
             for grp in self._subparsers._group_actions: # type: ignore
@@ -134,7 +151,7 @@ class BetterArgumentParser(ArgumentParser):
                     if e.formatter_class != formatter_class:
                         e.formatter_class = formatter_class
 
-    def format_help(self, width = None):
+    def format_help(self, width : _t.Optional[int] = None) -> str:
         if width is None:
             import shutil
             width = shutil.get_terminal_size().columns - 2
@@ -150,7 +167,7 @@ class BetterArgumentParser(ArgumentParser):
                 formatter.add_arguments(action_group._group_actions)
                 formatter.end_section()
 
-        res = "# " + formatter.format_help()
+        res : str = "# " + formatter.format_help()
 
         if hasattr(self._subparsers, "_group_actions"):
             seen = set()
