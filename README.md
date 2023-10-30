@@ -4,25 +4,58 @@ A Keep It Stupid Simple (KISS) Swiss army knife tool for interacting with IMAP4 
 
 The main use case I made this for is as follows:
 
-- you periodically fetch and backup your mail somehow (e.g. with `fetchmail` and `rsync`/`git`/`bup`) and then,
-- after your backup succeeds, you run this tool and remove old (older than zero or more intervals between backups) already-fetched messages from your mail servers,
+- you periodically fetch and backup/archive your mail with this tool's `imaparms fetch` (or with [fetchmail](https://www.fetchmail.info/), [imapsync](https://github.com/imapsync/imapsync), etc) followed by `rsync`/`git`/`bup`/etc to make at least one other copy somewhere, and then,
+- after your backup succeeds, you run this tool and remove old (older than zero or more intervals between backups) already-fetched messages from the original mail server,
 - so that when/if your account get cracked/hacked you are not as exposed.
 
 After all, nefarious actors getting all of your unfetched + zero or more days of your fetched mail is much better than them getting the whole last 20 years or whatever of your correspondence.
 (And if your personal computer gets compromised enough, attackers will eventually get everything anyway, so deleting old mail from servers does not make things worse.)
 
-This tool was inspired by [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) which I used and (privately) patched bugs out of for years before getting tired of it and deciding it would be simpler to just write my own thingy.
-Unlike IMAPExpire this
+This tool was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) which I used and (usually privately, but sometimes not) patched for years before getting tired of both and deciding it would be simpler to just write my own thingy.
+
+# Comparison to
+
+## [fetchmail](https://www.fetchmail.info/)
+
+`imaparms fetch`
+
+- is much simpler to use when fetching to a local `Maildir`, this tool needs no configuration to fetch messages as-is without modifying any headers, thus fetching the same messages twice will produce identical files (which is not true for `fetchmail`, `imaparms --mda MDA fetch` is roughly equivalent to `fetchmail --softbounce --invisible --norewrite --mda MDA`),
+- only does deliveries to MDA/LDA (similar to `fetchmail --mda` option), deliveries over SMTP are not and will never be supported (if you want this you can just use [msmtp](https://marlam.de/msmtp/) as your MDA),
+- fetches your mail >150 times faster by default (`fetchmail` fetches and marks messages one-by-one, incurring huge network latency overheads, `imaparms fetch` does it in (configurable) batches),
+- fetches messages out-of-order to try and maximize `messages/second` metric when it makes sense (i.e. it temporarily delays fetching of larger messages if many smaller ones can be fetched instead) so that you could efficiently index your mail in parallel with fetching,
+- probably will not work with most broken IMAP servers (`fetchmail` has lots of workarounds for server bugs, `imaparms fetch` does not),
+- has other subcommands, not just `imaparms fetch`.
+
+## [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire)
+
+`imaparms delete`
 
 - is written in Python instead of Perl and requires nothing but the basic Python install, no third-party libraries needed;
 - allows all UNICODE characters except `\n` in passwords/passphrases (yes, including spaces, quotes, etc),
 - provides `--seen` option and uses it by default for destructive actions, so you won't accidentally delete any messages you have not yet fetched;
-- provides GMail-specific options.
+- provides GMail-specific options,
+- has other subcommands, not just `imaparms delete`.
 
-You can even run this tool without installing it like this:
-```
-python3 -m imaparms.__main__ --help
-```
+## [imapsync](https://github.com/imapsync/imapsync)
+
+- `imaparms fetch` does deliveries to MDA/LDA instead of fetching from one IMAP-server and delivering to another,
+- `imaparms` has other subcommands, not just `imaparms fetch`.
+
+# Quickstart
+
+- You can run this tool without installing it:
+
+  ```
+  python3 -m imaparms.__main__ --help
+  ```
+
+- or you can install it via Nix
+
+  ```
+  nix-env -i -f ./default.nix
+  ```
+
+See the [usage examples below](#examples).
 
 # Some Fun and Relevant Facts
 
@@ -79,7 +112,7 @@ Thank you very much.
 
 # Usage
 
-## imaparms [--version] [-h] [--help-markdown] {count,delete} ...
+## imaparms [--version] [-h] [--help-markdown] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] {count,mark,fetch,delete} ...
 
 Login to an IMAP4 server and perform actions on messages in specified folders matching specified criteria.
 
@@ -91,18 +124,36 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--help-markdown`
   : show this help message formatted in Markdown and exit
 
+- IMAP batching settings:
+  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
+
+  - `--store-number INT`
+  : batch at most this many message UIDs in IMAP STORE requests (default: 150)
+  - `--fetch-number INT`
+  : batch at most this many message UIDs in IMAP FETCH metadata requests (default: 150)
+  - `--batch-number INT`
+  : batch at most this many message UIDs in IMAP FETCH data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
+  - `--batch-size INT`
+  : FETCH at most this many bytes of RFC822 messages at once; essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted (default: 4194304)
+
+- delivery settings:
+  - `--mda COMMAND`
+  : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
+    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
+    `maildrop` from Courier Mail Server project is a good KISS default.
+
 - subcommands:
-  - `{count,delete}`
+  - `{count,mark,fetch,delete}`
     - `count`
     : count how many matching messages specified folders (or all of them, by default) contain
+    - `mark`
+    : mark matching messages in specified folders with a specified way
+    - `fetch`
+    : fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds
     - `delete`
     : delete matching messages from specified folders
 
-### imaparms count [--debug] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--folder FOLDERS] [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
-
-- optional arguments:
-  - `--folder FOLDERS`
-  : mail folders to operane on; can be specified multiple times; default: all available mail folders
+### imaparms count [--debug] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME]
 
 - debugging:
   - `--debug`
@@ -130,9 +181,13 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--all`
   : operate on all messages (default)
   - `--seen`
-  : operate on messages marked as seen
+  : operate on messages marked as SEEN
   - `--unseen`
-  : operate on messages not marked as seen
+  : operate on messages not marked as SEEN
+  - `--flagged`
+  : operate on messages marked as FLAGGED
+  - `--unflagged`
+  : operate on messages not marked as FLAGGED
   - `--older-than DAYS`
   : operate on messages older than this many days
   - `--newer-than DAYS`
@@ -142,7 +197,129 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--not-from ADDRESS`
   : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
-### imaparms delete [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder FOLDERS [--all | --seen | --unseen] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS]
+- folder specification:
+  - `--folder NAME`
+  : mail folders to operane on; can be specified multiple times (default: all available mail folders)
+
+### imaparms mark [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) (--all | --seen | --unseen | --flagged | --unflagged) [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME {seen,unseen,flagged,unflagged}
+
+- debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
+  - `--dry-run`
+  : don't perform any actions, only show what would be done
+
+- server connection:
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to
+  - `--port PORT`
+  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
+  - `--user USER`
+  : username on the server
+  - `--passfile PASSFILE`
+  : file containing the password
+  - `--passcmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
+
+- message search filters (required):
+  - `--all`
+  : operate on all messages
+  - `--seen`
+  : operate on messages marked as SEEN
+  - `--unseen`
+  : operate on messages not marked as SEEN
+  - `--flagged`
+  : operate on messages marked as FLAGGED
+  - `--unflagged`
+  : operate on messages not marked as FLAGGED
+  - `--older-than DAYS`
+  : operate on messages older than this many days
+  - `--newer-than DAYS`
+  : operate on messages not older than this many days
+  - `--from ADDRESS`
+  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
+  - `--not-from ADDRESS`
+  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
+
+- folder specification:
+  - `--folder NAME`
+  : mail folders to operate on; can be specified multiple times (required)
+
+- marking:
+  - `{seen,unseen,flagged,unflagged}`
+  : mark how (required):
+    - `seen`: add `SEEN` flag
+    - `unseen`: remove `SEEN` flag
+    - `flag`: add `FLAGGED` flag
+    - `unflag`: remove `FLAGGED` flag
+
+### imaparms fetch [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+
+- debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
+  - `--dry-run`
+  : don't perform any actions, only show what would be done
+
+- server connection:
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to
+  - `--port PORT`
+  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
+  - `--user USER`
+  : username on the server
+  - `--passfile PASSFILE`
+  : file containing the password
+  - `--passcmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
+
+- message search filters:
+  - `--all`
+  : operate on all messages
+  - `--seen`
+  : operate on messages marked as SEEN
+  - `--unseen`
+  : operate on messages not marked as SEEN (default)
+  - `--flagged`
+  : operate on messages marked as FLAGGED
+  - `--unflagged`
+  : operate on messages not marked as FLAGGED
+  - `--older-than DAYS`
+  : operate on messages older than this many days
+  - `--newer-than DAYS`
+  : operate on messages not older than this many days
+  - `--from ADDRESS`
+  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
+  - `--not-from ADDRESS`
+  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
+
+- folder specification:
+  - `--folder NAME`
+  : mail folders to operate on; can be specified multiple times (required)
+
+- marking:
+  - `--mark {auto,noop,seen,unseen,flagged,unflagged}`
+  : after the message was fetched:
+    - `auto`: `flagged` when `--unflagged`, `--seen` when `--unseen`, `noop` otherwise (default)
+    - `noop`: do nothing
+    - `seen`: add `SEEN` flag
+    - `unseen`: remove `SEEN` flag
+    - `flagged`: add `FLAGGED` flag
+    - `unflagged`: remove `FLAGGED` flag
+
+### imaparms delete [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder NAME
 
 - optional arguments:
   - `--method {auto,delete,delete-noexpunge,gmail-trash}`
@@ -176,17 +353,17 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
-- required arguments:
-  - `--folder FOLDERS`
-  : mail folders to operate on; can be specified multiple times
-
 - message search filters:
   - `--all`
   : operate on all messages
   - `--seen`
-  : operate on messages marked as seen (default)
+  : operate on messages marked as SEEN (default)
   - `--unseen`
-  : operate on messages not marked as seen
+  : operate on messages not marked as SEEN
+  - `--flagged`
+  : operate on messages marked as FLAGGED
+  - `--unflagged`
+  : operate on messages not marked as FLAGGED
   - `--older-than DAYS`
   : operate on messages older than this many days
   - `--newer-than DAYS`
@@ -196,13 +373,17 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--not-from ADDRESS`
   : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
+- folder specification:
+  - `--folder NAME`
+  : mail folders to operate on; can be specified multiple times (required)
+
 ## Notes on usage
 
 Specifying `--folder` multiple times will perform the specified action on all specified folders.
 
 Message search filters are connected by logical "AND"s so `--from "github.com" --not-from "notifications@github.com"` will act on messages from "github.com" but not from "notifications@github.com".
 
-Also note that destructive actions act on `--seen` messages by default.
+Also note that `fetch` and `delete` subcommands act on `--seen` messages by default.
 
 ## Examples
 
@@ -218,7 +399,21 @@ Also note that destructive actions act on `--seen` messages by default.
     imaparms count --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com"
     ```
 
-- Delete all seen messages older than 7 days from `INBOX` folder:
+- Mark all messages in `INBOX` as UNSEEN, and then fetch all UNSEEN messages marking them SEEN as you download them, so that if the process gets interrupted you could continue from where you left off:
+  ```
+  imaparms mark unseen --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --all
+  ```
+
+  ```
+  imaparms fetch --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX"
+  ```
+
+- Fetch all messages from `INBOX` folder that were delivered in the last 7 days, but don't change any flags:
+  ```
+  imaparms fetch --mark noop --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --all --newer-than 7
+  ```
+
+- Delete all SEEN messages older than 7 days from `INBOX` folder:
 
   Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets hacked, you won't be as vulnerable.
 
