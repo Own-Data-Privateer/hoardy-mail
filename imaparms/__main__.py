@@ -15,6 +15,7 @@ import typing as _t
 from gettext import gettext as _, ngettext
 
 from . import argparse
+from .exceptions import *
 
 def imap_parse_data(data : str, top_level : bool = True) -> _t.Tuple[_t.Any, str]:
     "Parse IMAP response string into a tree of strings."
