@@ -112,7 +112,7 @@ Thank you very much.
 
 # Usage
 
-## imaparms [--version] [-h] [--help-markdown] [--debug] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] {count,mark,fetch,delete} ...
+## imaparms [--version] [-h] [--help-markdown] [--debug] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] {count,list,mark,fetch,mirror,delete,expire} ...
 
 Login to an IMAP4 server and perform actions on messages in specified folders matching specified criteria.
 
@@ -169,14 +169,14 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
     `maildrop` from Courier Mail Server project is a good KISS default.
 
 - subcommands:
-  - `{count,mark,fetch,delete}`
-    - `count`
+  - `{count,list,mark,fetch,mirror,delete,expire}`
+    - `count (list)`
     : count how many matching messages specified folders (or all of them, by default) contain
     - `mark`
     : mark matching messages in specified folders with a specified way
-    - `fetch`
+    - `fetch (mirror)`
     : fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds
-    - `delete`
+    - `delete (expire)`
     : delete matching messages from specified folders
 
 ### imaparms count [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME]

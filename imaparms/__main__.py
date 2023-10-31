@@ -638,7 +638,7 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(title="subcommands")
 
-    cmd = subparsers.add_parser("count", help="count how many matching messages specified folders (or all of them, by default) contain")
+    cmd = subparsers.add_parser("count", aliases = ["list"], help="count how many matching messages specified folders (or all of them, by default) contain")
     add_filters(cmd, "all")
     add_folders(cmd)
     cmd.set_defaults(func=cmd_action)
@@ -658,7 +658,7 @@ def main() -> None:
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="mark")
 
-    cmd = subparsers.add_parser("fetch", help="fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds")
+    cmd = subparsers.add_parser("fetch", aliases = ["mirror"], help="fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds")
     add_dry_run(cmd)
     add_filters(cmd, "unseen")
     add_req_folders(cmd)
@@ -674,7 +674,7 @@ def main() -> None:
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="fetch")
 
-    cmd = subparsers.add_parser("delete", help="delete matching messages from specified folders")
+    cmd = subparsers.add_parser("delete", aliases = ["expire"], help="delete matching messages from specified folders")
     add_dry_run(cmd)
     add_filters(cmd, "seen")
     cmd.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help="""delete messages how:
