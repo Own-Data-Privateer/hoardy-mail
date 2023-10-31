@@ -112,7 +112,7 @@ Thank you very much.
 
 # Usage
 
-## imaparms [--version] [-h] [--help-markdown] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] {count,mark,fetch,delete} ...
+## imaparms [--version] [-h] [--help-markdown] [--debug] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] {count,mark,fetch,delete} ...
 
 Login to an IMAP4 server and perform actions on messages in specified folders matching specified criteria.
 
@@ -123,6 +123,32 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   : show this help message and exit
   - `--help-markdown`
   : show this help message formatted in Markdown and exit
+
+- debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
+
+- server connection:
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket (default)
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to
+  - `--port PORT`
+  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
+
+- server auth:
+  `--user` and either of `--passfile` or `--passcmd` are required
+
+  - `--user USER`
+  : username on the server
+  - `--passfile PASSFILE`
+  : file containing the password
+  - `--passcmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
 
 - IMAP batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
@@ -153,29 +179,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
     - `delete`
     : delete matching messages from specified folders
 
-### imaparms count [--debug] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME]
-
-- debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
-
-- server connection:
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to
-  - `--port PORT`
-  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
-  - `--user USER`
-  : username on the server
-  - `--passfile PASSFILE`
-  : file containing the password
-  - `--passcmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
+### imaparms count [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME]
 
 - message search filters:
   - `--all`
@@ -201,31 +205,11 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--folder NAME`
   : mail folders to operane on; can be specified multiple times (default: all available mail folders)
 
-### imaparms mark [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) (--all | --seen | --unseen | --flagged | --unflagged) [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME {seen,unseen,flagged,unflagged}
+### imaparms mark [--dry-run] (--all | --seen | --unseen | --flagged | --unflagged) [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME {seen,unseen,flagged,unflagged}
 
 - debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
-
-- server connection:
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to
-  - `--port PORT`
-  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
-  - `--user USER`
-  : username on the server
-  - `--passfile PASSFILE`
-  : file containing the password
-  - `--passcmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
 
 - message search filters (required):
   - `--all`
@@ -259,31 +243,11 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
     - `flag`: add `FLAGGED` flag
     - `unflag`: remove `FLAGGED` flag
 
-### imaparms fetch [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--dry-run] [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 - debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
-
-- server connection:
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to
-  - `--port PORT`
-  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
-  - `--user USER`
-  : username on the server
-  - `--passfile PASSFILE`
-  : file containing the password
-  - `--passcmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
 
 - message search filters:
   - `--all`
@@ -319,7 +283,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--debug] [--dry-run] (--plain | --ssl | --starttls) --host HOST [--port PORT] --user USER (--passfile PASSFILE | --passcmd PASSCMD) [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder NAME
+### imaparms delete [--dry-run] [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder NAME
 
 - optional arguments:
   - `--method {auto,delete,delete-noexpunge,gmail-trash}`
@@ -330,28 +294,8 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
     - `gmail-trash`: move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `imaparms delete --method delete --folder "[Gmail]/Trash"` them after, or you could just leave them there and GMail will delete them in 30 days)
 
 - debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
-
-- server connection:
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to
-  - `--port PORT`
-  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
-  - `--user USER`
-  : username on the server
-  - `--passfile PASSFILE`
-  : file containing the password
-  - `--passcmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
 
 - message search filters:
   - `--all`
@@ -391,26 +335,26 @@ Also note that `fetch` and `delete` subcommands act on `--seen` messages by defa
 
   - with the password taken from the first line of the given file:
     ```
-    imaparms count --ssl --host imap.example.com --user myself@example.com --passfile /path/to/file/containing/myself@example.com.password
+    imaparms --ssl --host imap.example.com --user myself@example.com --passfile /path/to/file/containing/myself@example.com.password count
     ```
 
   - with the password taken from the output of password-store util:
     ```
-    imaparms count --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com"
+    imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" count
     ```
 
 - Mark all messages in `INBOX` as UNSEEN, and then fetch all UNSEEN messages marking them SEEN as you download them, so that if the process gets interrupted you could continue from where you left off:
   ```
-  imaparms mark unseen --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --all
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark unseen --folder "INBOX" --all
   ```
 
   ```
-  imaparms fetch --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX"
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX"
   ```
 
 - Fetch all messages from `INBOX` folder that were delivered in the last 7 days, but don't change any flags:
   ```
-  imaparms fetch --mark noop --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --all --newer-than 7
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --mark noop --folder "INBOX" --all --newer-than 7
   ```
 
 - Delete all SEEN messages older than 7 days from `INBOX` folder:
@@ -418,21 +362,21 @@ Also note that `fetch` and `delete` subcommands act on `--seen` messages by defa
   Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets hacked, you won't be as vulnerable.
 
   ```
-  imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --older-than 7
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" delete --folder "INBOX" --older-than 7
   ```
 
   Note that the above only removes `--seen` messages by default.
 
 - **DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `--seen` messages instead:
   ```
-  imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX"
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" delete --folder "INBOX"
   ```
 
   Though, setting at least `--older-than 1` in case you forgot you had another fetcher running in parallel and you want to be sure you won't lose any data in case something breaks, is highly recommended anyway.
 
 - Count how many messages older than 7 days are in `[Gmail]/Trash` folder:
   ```
-  imaparms count --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --older-than 7
+  imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" count --folder "[Gmail]/Trash" --older-than 7
   ```
 
 - GMail-specific deletion mode: move (expire) old messages from `[Gmail]/All Mail` to `[Gmail]/Trash`:
@@ -444,13 +388,13 @@ Also note that `fetch` and `delete` subcommands act on `--seen` messages by defa
   You will probably want to run it over `[Gmail]/All Mail` folder (again, after you fetched everything from there) instead of `INBOX`:
 
   ```
-  imaparms delete --method gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7
+  imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --method gmail-trash --folder "[Gmail]/All Mail" --older-than 7
   ```
 
   which is equivalent to simply
 
   ```
-  imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7
+  imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --folder "[Gmail]/All Mail" --older-than 7
   ```
 
   since `--method gmail-trash` is the default when `--host imap.gmail.com` and `--folder` is not `[Gmail]/Trash`
@@ -460,12 +404,12 @@ Also note that `fetch` and `delete` subcommands act on `--seen` messages by defa
   Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with
 
   ```
-  imaparms delete --method delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7
+  imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --method delete --folder "[Gmail]/Trash" --all --older-than 7
   ```
 
   which is equivalent to simply
 
   ```
-  imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7
+  imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --folder "[Gmail]/Trash" --all --older-than 7
   ```
 

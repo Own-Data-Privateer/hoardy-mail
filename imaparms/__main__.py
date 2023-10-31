@@ -112,10 +112,10 @@ def imap_parse_attrs(data : _t.List[_t.Union[str, bytes]]) -> _t.Dict[_t.Union[s
 
 def connect(args : _t.Any) -> _t.Any:
     IMAP_base : type
-    if args.plain or args.starttls:
+    if args.socket in ["plain", "starttls"]:
         port = 143
         IMAP_base = imaplib.IMAP4
-    elif args.ssl:
+    elif args.socket == "ssl":
         port = 993
         IMAP_base = imaplib.IMAP4_SSL
 
@@ -149,7 +149,7 @@ def connect(args : _t.Any) -> _t.Any:
     ssl_context.check_hostname = True
     ssl_context.load_default_certs()
 
-    if args.ssl:
+    if args.socket == "ssl":
         srv = IMAP(args.host, port, ssl_context = ssl_context)
     else:
         srv = IMAP(args.host, port)
@@ -492,38 +492,38 @@ def add_examples(fmt):
     fmt.start_section("List all available IMAP folders and count how many messages they contain")
 
     fmt.start_section("with the password taken from the first line of the given file")
-    fmt.add_code('imaparms count --ssl --host imap.example.com --user myself@example.com --passfile /path/to/file/containing/myself@example.com.password')
+    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passfile /path/to/file/containing/myself@example.com.password count')
     fmt.end_section()
 
     fmt.start_section("with the password taken from the output of password-store util")
-    fmt.add_code('imaparms count --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com"')
+    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" count')
     fmt.end_section()
 
     fmt.end_section()
 
     fmt.start_section("Mark all messages in `INBOX` as UNSEEN, and then fetch all UNSEEN messages marking them SEEN as you download them, so that if the process gets interrupted you could continue from where you left off")
-    fmt.add_code('imaparms mark unseen --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --all')
-    fmt.add_code('imaparms fetch --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX"')
+    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark unseen --folder "INBOX" --all')
+    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX"')
     fmt.end_section()
 
     fmt.start_section("Fetch all messages from `INBOX` folder that were delivered in the last 7 days, but don't change any flags")
-    fmt.add_code('imaparms fetch --mark noop --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --all --newer-than 7')
+    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --mark noop --folder "INBOX" --all --newer-than 7')
     fmt.end_section()
 
     fmt.start_section('Delete all SEEN messages older than 7 days from `INBOX` folder')
     fmt.add_text("""
 Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets hacked, you won't be as vulnerable.""")
-    fmt.add_code('imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX" --older-than 7')
+    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" delete --folder "INBOX" --older-than 7')
     fmt.add_text("Note that the above only removes `--seen` messages by default.")
     fmt.end_section()
 
     fmt.start_section("""**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `--seen` messages instead""")
-    fmt.add_code('imaparms delete --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --folder "INBOX"')
+    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" delete --folder "INBOX"')
     fmt.add_text("Though, setting at least `--older-than 1` in case you forgot you had another fetcher running in parallel and you want to be sure you won't lose any data in case something breaks, is highly recommended anyway.")
     fmt.end_section()
 
     fmt.start_section('Count how many messages older than 7 days are in `[Gmail]/Trash` folder')
-    fmt.add_code('imaparms count --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --older-than 7')
+    fmt.add_code('imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" count --folder "[Gmail]/Trash" --older-than 7')
     fmt.end_section()
 
     fmt.start_section('GMail-specific deletion mode: move (expire) old messages from `[Gmail]/All Mail` to `[Gmail]/Trash`')
@@ -533,18 +533,18 @@ Unfortunately, in GMail, deleting messages from `INBOX` does not actually delete
     fmt.add_text("""To work around this, this tool provides a GMail-specific deletion method that moves messages to `[Gmail]/Trash` in a GMail-specific way (this is not a repetition, it does require issuing special STORE commands to achieve this).""")
     fmt.add_text("""You will probably want to run it over `[Gmail]/All Mail` folder (again, after you fetched everything from there) instead of `INBOX`:""")
 
-    fmt.add_code('imaparms delete --method gmail-trash --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7')
+    fmt.add_code('imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --method gmail-trash --folder "[Gmail]/All Mail" --older-than 7')
     fmt.add_text("which is equivalent to simply")
-    fmt.add_code('imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/All Mail" --older-than 7')
+    fmt.add_code('imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --folder "[Gmail]/All Mail" --older-than 7')
     fmt.add_text("""since `--method gmail-trash` is the default when `--host imap.gmail.com` and `--folder` is not `[Gmail]/Trash`""")
 
     fmt.add_text("Also, note that the above only moves `--seen` messages by default.")
 
     fmt.add_text("""Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with""")
 
-    fmt.add_code('imaparms delete --method delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7')
+    fmt.add_code('imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --method delete --folder "[Gmail]/Trash" --all --older-than 7')
     fmt.add_text("which is equivalent to simply")
-    fmt.add_code('imaparms delete --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --folder "[Gmail]/Trash" --all --older-than 7')
+    fmt.add_code('imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --folder "[Gmail]/Trash" --all --older-than 7')
     fmt.end_section()
 
 def main() -> None:
@@ -557,6 +557,26 @@ def main() -> None:
         add_help = True,
         add_version = True)
     parser.add_argument("--help-markdown", action="store_true", help=_("show this help message formatted in Markdown and exit"))
+
+    agrp = parser.add_argument_group("debugging")
+    agrp.add_argument("--debug", action="store_true", help="print IMAP conversation to stderr")
+
+    agrp = parser.add_argument_group("server connection")
+    grp = agrp.add_mutually_exclusive_group()
+    grp.add_argument("--plain", dest="socket", action="store_const", const = "plain", help="connect via plain-text socket")
+    grp.add_argument("--ssl", dest="socket", action="store_const", const = "ssl", help="connect over SSL socket (default)")
+    grp.add_argument("--starttls", dest="socket", action="store_const", const = "starttls", help="connect via plain-text socket, but then use STARTTLS command")
+    grp.set_defaults(socket = "ssl")
+
+    agrp.add_argument("--host", type=str, default = "localhost", help="IMAP server to connect to")
+    agrp.add_argument("--port", type=int, help="port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`")
+
+    agrp = parser.add_argument_group("server auth", description = "`--user` and either of `--passfile` or `--passcmd` are required")
+    agrp.add_argument("--user", type=str, help="username on the server")
+
+    grp = agrp.add_mutually_exclusive_group()
+    grp.add_argument("--passfile", type=str, help="file containing the password")
+    grp.add_argument("--passcmd", type=str, help="shell command that returns the password as the first line of its stdout")
 
     agrp = parser.add_argument_group("IMAP batching settings", description = "larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen")
     agrp.add_argument("--store-number", metavar = "INT", type=int, default = 150, help="batch at most this many message UIDs in IMAP STORE requests (default: %(default)s)")
@@ -574,25 +594,9 @@ def main() -> None:
         sys.exit(2)
     parser.set_defaults(func=no_cmd)
 
-    def add_common(cmd, dry_run : bool = False):
+    def add_dry_run(cmd):
         agrp = cmd.add_argument_group("debugging")
-        agrp.add_argument("--debug", action="store_true", help="print IMAP conversation to stderr")
-        if dry_run:
-            agrp.add_argument("--dry-run", action="store_true", help="don't perform any actions, only show what would be done")
-
-        agrp = cmd.add_argument_group("server connection")
-        grp = agrp.add_mutually_exclusive_group(required = True)
-        grp.add_argument("--plain", action="store_true", help="connect via plain-text socket")
-        grp.add_argument("--ssl", action="store_true", help="connect over SSL socket")
-        grp.add_argument("--starttls", action="store_true", help="connect via plain-text socket, but then use STARTTLS command")
-
-        agrp.add_argument("--host", type=str, required=True, help="IMAP server to connect to")
-        agrp.add_argument("--port", type=int, help="port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`")
-        agrp.add_argument("--user", type=str, required = True, help="username on the server")
-
-        grp = agrp.add_mutually_exclusive_group(required = True)
-        grp.add_argument("--passfile", type=str, help="file containing the password")
-        grp.add_argument("--passcmd", type=str, help="shell command that returns the password as the first line of its stdout")
+        agrp.add_argument("--dry-run", action="store_true", help="don't perform any actions, only show what would be done")
 
     def add_filters(cmd, messages):
         def_req = ""
@@ -635,14 +639,13 @@ def main() -> None:
     subparsers = parser.add_subparsers(title="subcommands")
 
     cmd = subparsers.add_parser("count", help="count how many matching messages specified folders (or all of them, by default) contain")
-    add_common(cmd)
     add_filters(cmd, "all")
     add_folders(cmd)
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="count")
 
     cmd = subparsers.add_parser("mark", help="mark matching messages in specified folders with a specified way")
-    add_common(cmd, True)
+    add_dry_run(cmd)
     add_filters(cmd, None)
     add_req_folders(cmd)
     agrp = cmd.add_argument_group("marking")
@@ -656,7 +659,7 @@ def main() -> None:
     cmd.set_defaults(command="mark")
 
     cmd = subparsers.add_parser("fetch", help="fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds")
-    add_common(cmd, True)
+    add_dry_run(cmd)
     add_filters(cmd, "unseen")
     add_req_folders(cmd)
     agrp = cmd.add_argument_group("marking")
@@ -672,7 +675,7 @@ def main() -> None:
     cmd.set_defaults(command="fetch")
 
     cmd = subparsers.add_parser("delete", help="delete matching messages from specified folders")
-    add_common(cmd, True)
+    add_dry_run(cmd)
     add_filters(cmd, "seen")
     cmd.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help="""delete messages how:
 - `auto`: `gmail-trash` when `--host imap.gmail.com` and `--folder` is not (single) `[Gmail]/Trash`, `delete` otherwise (default)
@@ -691,6 +694,9 @@ def main() -> None:
         print(parser.format_help(1024))
         parser.exit()
 
+    if args.user is None:
+        parser.error("`--user` is required")
+
     if args.passfile is not None:
         with open(args.passfile, "rb") as f:
             password = f.readline().decode("utf-8")
@@ -702,12 +708,16 @@ def main() -> None:
             if retcode != 0:
                 raise SystemError("failed to execute passcmd")
     else:
-        assert False
+        parser.error("either `--passfile` or `--passcmd` is required")
 
     if password[-1:] == "\n":
         password = password[:-1]
 
     args.password = password
+
+    if args.command == "fetch":
+        if args.mda is None:
+            parser.error("`--mda` is not set")
 
     try:
         args.func(args)
