@@ -518,12 +518,32 @@ def add_examples(fmt):
     fmt.end_section()
 
     fmt.start_section("Mark all messages in `INBOX` as UNSEEN, and then fetch all UNSEEN messages marking them SEEN as you download them, so that if the process gets interrupted you could continue from where you left off")
-    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark unseen --folder "INBOX" --all')
-    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX"')
+    fmt.add_code("""imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark --folder "INBOX" --seen unseen
+imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX"
+
+# download updates
+while true; do
+    sleep 3600
+    imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX"
+done
+""")
     fmt.end_section()
 
-    fmt.start_section("Fetch all messages from `INBOX` folder that were delivered in the last 7 days, but don't change any flags")
-    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --mark noop --folder "INBOX" --all --newer-than 7')
+    fmt.start_section("Similarly, but use FLAGGED instead of SEEN. This allows to use this in parallel with another instance of `imaparms` using SEEN flag, or in parallel with `fetchmail` or other similar tool")
+    fmt.add_code("""imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark --folder "INBOX" --flagged unflagged
+imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX" --unflagged
+
+# and this will work as if nothing of the above was run
+fetchmail
+""")
+    fmt.end_section()
+
+    fmt.start_section("Fetch all messages from `INBOX` folder that were delivered in the last 7 days (rounded to the start of the start day by server time), but don't change any flags")
+    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --mda maildrop fetch --mark noop --folder "INBOX" --all --newer-than 7')
+    fmt.end_section()
+
+    fmt.start_section("Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time)")
+    fmt.add_code('imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --mda maildrop fetch --mark noop --folder "INBOX" --all --newer-than 7')
     fmt.end_section()
 
     fmt.start_section('Delete all SEEN messages older than 7 days from `INBOX` folder')
@@ -540,6 +560,21 @@ Assuming you fetched and backed up all your messages already this allows you to 
 
     fmt.start_section('Count how many messages older than 7 days are in `[Gmail]/Trash` folder')
     fmt.add_code('imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" count --folder "[Gmail]/Trash" --older-than 7')
+    fmt.end_section()
+
+    fmt.start_section('Fetch everything GMail considers to be Spam for local filtering')
+    fmt.add_code("""
+mkdir -p ~/Maildir/spam/new
+mkdir -p ~/Maildir/spam/cur
+mkdir -p ~/Maildir/spam/tmp
+
+cat > ~/.mailfilter-spam << EOF
+DEFAULT="$HOME/Maildir/spam"
+EOF
+
+imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" mark --folder "[Gmail]/Spam" --seen unseen
+imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --mda "maildrop ~/.mailfilter-spam" fetch --folder "[Gmail]/Spam"
+""")
     fmt.end_section()
 
     fmt.start_section('GMail-specific deletion mode: move (expire) old messages from `[Gmail]/All Mail` to `[Gmail]/Trash`')

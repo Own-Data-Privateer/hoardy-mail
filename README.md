@@ -1,17 +1,18 @@
 # What?
 
-A Keep It Stupid Simple (KISS) Swiss army knife tool for interacting with IMAP4 servers: login to a specified server, perform specified actions on messages in specified folders matching specified criteria.
+A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for performing batch operations on messages residing on IMAP4 servers.
+That is: login to a specified server, perform specified actions (count, flag/mark, fetch, delete, etc) on all messages matching specified criteria in all specified folders, logout.
 
 The main use case I made this for is as follows:
 
-- you periodically fetch and backup/archive your mail with this tool's `imaparms fetch` (or with [fetchmail](https://www.fetchmail.info/), [imapsync](https://github.com/imapsync/imapsync), etc) followed by `rsync`/`git`/`bup`/etc to make at least one other copy somewhere, and then,
-- after your backup succeeds, you run this tool and remove old (older than zero or more intervals between backups) already-fetched messages from the original mail server,
+- you periodically fetch and backup/archive your mail with this tool's `imaparms fetch` subcommand (or with [fetchmail](https://www.fetchmail.info/), [imapsync](https://github.com/imapsync/imapsync), etc) followed by `rsync`/`git`/`bup`/etc to make at least one other copy somewhere, and then,
+- after your backup succeeds, you run this tool's `imaparms delete` subcommand and remove old (older than one or more intervals between backups) already-fetched messages from the original mail server,
 - so that when/if your account get cracked/hacked you are not as exposed.
 
 After all, nefarious actors getting all of your unfetched + zero or more days of your fetched mail is much better than them getting the whole last 20 years or whatever of your correspondence.
 (And if your personal computer gets compromised enough, attackers will eventually get everything anyway, so deleting old mail from servers does not make things worse.)
 
-This tool was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) which I used and (usually privately, but sometimes not) patched for years before getting tired of both and deciding it would be simpler to just write my own thingy.
+This tool was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) which I used and (usually privately, but sometimes not) patched for years before getting tired of both and deciding it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and add all the options I want to `IMAPExpire`.
 
 # Comparison to
 
@@ -32,7 +33,7 @@ This tool was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpi
 
 - is written in Python instead of Perl and requires nothing but the basic Python install, no third-party libraries needed;
 - allows all UNICODE characters except `\n` in passwords/passphrases (yes, including spaces, quotes, etc),
-- provides `--seen` option and uses it by default for destructive actions, so you won't accidentally delete any messages you have not yet fetched;
+- provides a bunch of options controlling message selection and uses `--seen` option by default for destructive actions, so you won't accidentally delete any messages you have not yet fetched even if your fetcher got stuck/crashed;
 - provides GMail-specific options,
 - has other subcommands, not just `imaparms delete`.
 
@@ -345,16 +346,35 @@ Also note that `fetch` and `delete` subcommands act on `--seen` messages by defa
 
 - Mark all messages in `INBOX` as UNSEEN, and then fetch all UNSEEN messages marking them SEEN as you download them, so that if the process gets interrupted you could continue from where you left off:
   ```
-  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark unseen --folder "INBOX" --all
-  ```
-
-  ```
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark --folder "INBOX" --seen unseen
   imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX"
+
+  # download updates
+  while true; do
+      sleep 3600
+      imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX"
+  done
+
   ```
 
-- Fetch all messages from `INBOX` folder that were delivered in the last 7 days, but don't change any flags:
+- Similarly, but use FLAGGED instead of SEEN. This allows to use this in parallel with another instance of `imaparms` using SEEN flag, or in parallel with `fetchmail` or other similar tool:
   ```
-  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --mark noop --folder "INBOX" --all --newer-than 7
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark --folder "INBOX" --flagged unflagged
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX" --unflagged
+
+  # and this will work as if nothing of the above was run
+  fetchmail
+
+  ```
+
+- Fetch all messages from `INBOX` folder that were delivered in the last 7 days (rounded to the start of the start day by server time), but don't change any flags:
+  ```
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --mda maildrop fetch --mark noop --folder "INBOX" --all --newer-than 7
+  ```
+
+- Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time):
+  ```
+  imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --mda maildrop fetch --mark noop --folder "INBOX" --all --newer-than 7
   ```
 
 - Delete all SEEN messages older than 7 days from `INBOX` folder:
@@ -377,6 +397,22 @@ Also note that `fetch` and `delete` subcommands act on `--seen` messages by defa
 - Count how many messages older than 7 days are in `[Gmail]/Trash` folder:
   ```
   imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" count --folder "[Gmail]/Trash" --older-than 7
+  ```
+
+- Fetch everything GMail considers to be Spam for local filtering:
+  ```
+
+  mkdir -p ~/Maildir/spam/new
+  mkdir -p ~/Maildir/spam/cur
+  mkdir -p ~/Maildir/spam/tmp
+
+  cat > ~/.mailfilter-spam << EOF
+  DEFAULT="$HOME/Maildir/spam"
+  EOF
+
+  imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" mark --folder "[Gmail]/Spam" --seen unseen
+  imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --mda "maildrop ~/.mailfilter-spam" fetch --folder "[Gmail]/Spam"
+
   ```
 
 - GMail-specific deletion mode: move (expire) old messages from `[Gmail]/All Mail` to `[Gmail]/Trash`:
