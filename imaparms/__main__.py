@@ -6,6 +6,7 @@
 
 import imaplib
 import os
+import signal
 import ssl
 import subprocess
 import sys
@@ -16,6 +17,20 @@ from gettext import gettext as _, ngettext
 
 from . import argparse
 from .exceptions import *
+
+want_stop = False
+raise_once = False
+def sig_handler(signal, frame):
+    global want_stop
+    global raise_once
+    want_stop = True
+    if raise_once:
+        raise_once = False
+        raise KeyboardInterrupt()
+
+def handle_signals():
+    signal.signal(signal.SIGINT, sig_handler)
+    signal.signal(signal.SIGTERM, sig_handler)
 
 def imap_parse_data(data : str, literals : _t.List[bytes] = [], top_level : bool = True) -> _t.Tuple[_t.Any, str]:
     "Parse IMAP response string into a tree of strings."
@@ -209,8 +224,7 @@ def make_search_filter(args):
         return "(" + " ".join(filters) + ")"
 
 had_errors = False
-
-def error(command : str, desc : str, data : _t.Any = None) -> None:
+def imap_error(command : str, desc : str, data : _t.Any = None) -> None:
     global had_errors
     had_errors = True
     if data is None:
@@ -252,92 +266,92 @@ def cmd_action(args):
     except Exception as exc:
         raise CatastrophicFailure("failed to connect to host %s port %s: %s", args.host, args.port, repr(exc))
 
-    data = imap_check(CatastrophicFailure, "CAPABILITY", srv.capability())
-    capabilities = data[0].decode("utf-8").split(" ")
-    #print(capabilities)
-    if "IMAP4rev1" not in capabilities:
-        raise CatastrophicFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", args.host, args.port)
+    try:
+        data = imap_check(CatastrophicFailure, "CAPABILITY", srv.capability())
+        capabilities = data[0].decode("utf-8").split(" ")
+        #print(capabilities)
+        if "IMAP4rev1" not in capabilities:
+            raise CatastrophicFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", args.host, args.port)
 
-    if len(args.folders) == 0:
-        assert args.command in ["count", "fetch"]
+        if len(args.folders) == 0:
+            assert args.command in ["count", "fetch"]
 
-        typ, data = srv.list()
-        for el in data:
-            tags, _, arg = imap_parse(el)
-            if "\\Noselect" in tags:
+            typ, data = srv.list()
+            for el in data:
+                tags, _, arg = imap_parse(el)
+                if "\\Noselect" in tags:
+                    continue
+                args.folders.append(arg)
+
+        for folder in args.folders:
+            typ, data = srv.select(imap_quote(folder))
+            if typ != "OK":
+                imap_error("SELECT", typ, data)
                 continue
-            args.folders.append(arg)
 
-    for folder in args.folders:
-        typ, data = srv.select(imap_quote(folder))
-        if typ != "OK":
-            error("SELECT", typ, data)
-            continue
+            try:
+                typ, data = srv.uid("SEARCH", search_filter)
+                if typ != "OK":
+                    imap_error("SEARCH", typ, data)
+                    continue
 
-        typ, data = srv.uid("SEARCH", search_filter)
-        if typ != "OK":
-            error("SEARCH", typ, data)
-            srv.close()
-            continue
+                result = data[0].decode("utf-8")
+                if result == "":
+                    message_uids = []
+                else:
+                    message_uids = result.split(" ")
 
-        result = data[0].decode("utf-8")
-        if result == "":
-            message_uids = []
-        else:
-            message_uids = result.split(" ")
+                if args.command == "count":
+                    print(f"{folder} has {len(message_uids)} messages matching {search_filter}")
+                    continue
+                elif len(message_uids) == 0:
+                    # nothing to do
+                    print(f"no messages matching {search_filter} in {folder}")
+                    continue
 
-        if args.command == "count":
-            print(f"{folder} has {len(message_uids)} messages matching {search_filter}")
-            srv.close()
-            continue
-        elif len(message_uids) == 0:
-            # nothing to do
-            print(f"no messages matching {search_filter} in {folder}")
-            srv.close()
-            continue
+                if args.command == "mark":
+                    act = f"marking as {args.mark.upper()} {len(message_uids)} messages matching {search_filter} from {folder}"
+                elif args.command == "fetch":
+                    act = f"fetching {len(message_uids)} messages matching {search_filter} from {folder}"
+                elif args.command == "delete":
+                    if args.method in ["delete", "delete-noexpunge"]:
+                        act = f"deleting {len(message_uids)} messages matching {search_filter} from {folder}"
+                    elif args.method == "gmail-trash":
+                        act = f"moving {len(message_uids)} messages matching {search_filter} from {folder} to [GMail]/Trash"
+                    else:
+                        assert False
+                else:
+                    assert False
 
-        if args.command == "mark":
-            act = f"marking as {args.mark.upper()} {len(message_uids)} messages matching {search_filter} from {folder}"
-        elif args.command == "fetch":
-            act = f"fetching {len(message_uids)} messages matching {search_filter} from {folder}"
-        elif args.command == "delete":
-            if args.method in ["delete", "delete-noexpunge"]:
-                act = f"deleting {len(message_uids)} messages matching {search_filter} from {folder}"
-            elif args.method == "gmail-trash":
-                act = f"moving {len(message_uids)} messages matching {search_filter} from {folder} to [GMail]/Trash"
-            else:
-                assert False
-        else:
-            assert False
+                if args.dry_run:
+                    print(f"dry-run, not {act}")
+                    continue
+                else:
+                    print(act)
 
-        if args.dry_run:
-            print(f"dry-run, not {act}")
-            srv.close()
-            continue
-        else:
-            print(act)
-
-        if args.command == "mark":
-            do_store(args, srv, args.mark, message_uids, search_filter, folder)
-        elif args.command == "fetch":
-            do_fetch(args, srv, message_uids, search_filter, folder)
-        elif args.command == "delete":
-            do_store(args, srv, args.method, message_uids, search_filter, folder)
-
-        srv.close()
-
-    srv.logout()
+                if args.command == "mark":
+                    do_store(args, srv, args.mark, message_uids, search_filter, folder)
+                elif args.command == "fetch":
+                    do_fetch(args, srv, message_uids, search_filter, folder)
+                elif args.command == "delete":
+                    do_store(args, srv, args.method, message_uids, search_filter, folder)
+            finally:
+                srv.close()
+    finally:
+        srv.logout()
 
 def do_fetch(args, srv, message_uids, search_filter, folder):
     fetch_num = args.fetch_number
     batch = []
     batch_total = 0
     while len(message_uids) > 0:
+        if want_stop: raise KeyboardInterrupt()
+
         to_fetch, message_uids = message_uids[:fetch_num], message_uids[fetch_num:]
         to_fetch_set = set(to_fetch)
         typ, data = srv.uid("FETCH", ",".join(to_fetch), "(RFC822.SIZE)")
         if typ != "OK":
-            error("FETCH", typ, data)
+            imap_error("FETCH", typ, data)
             continue
 
         new = []
@@ -351,7 +365,7 @@ def do_fetch(args, srv, message_uids, search_filter, folder):
             to_fetch_set.remove(uid)
 
         if len(to_fetch_set) > 0:
-            error("FETCH", "did not get enough elements")
+            imap_error("FETCH", "did not get enough elements")
             continue
 
         while True:
@@ -381,6 +395,7 @@ def do_fetch(args, srv, message_uids, search_filter, folder):
 
 def do_fetch_batch(args, srv, messages, total_size, search_filter, folder):
     global had_errors
+    if want_stop: raise KeyboardInterrupt()
 
     if len(messages) == 0: return
     print(f"... fetching a batch of {len(messages)} messages ({total_size} bytes) matching {search_filter} from {folder}")
@@ -388,7 +403,7 @@ def do_fetch_batch(args, srv, messages, total_size, search_filter, folder):
     joined = ",".join(messages)
     typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])")
     if typ != "OK":
-        error("FETCH", typ, data)
+        imap_error("FETCH", typ, data)
         return
 
     done_messages = []
@@ -442,8 +457,7 @@ def do_fetch_batch(args, srv, messages, total_size, search_filter, folder):
         if delivered:
             done_messages.append(uid)
         else:
-            sys.stderr.write("MDA failed to deliver message %s" % (uid,) + "\n")
-            had_errors = True
+            imap_error("FETCH", "MDA failed to deliver message", uid)
 
     print(f"! delivered a batch of {len(done_messages)} messages matching {search_filter} from {folder} via {args.mda}")
     do_store(args, srv, args.mark, done_messages, search_filter, folder)
@@ -453,6 +467,8 @@ def do_store(args, srv, method, message_uids, search_filter, folder):
 
     store_num = args.store_number
     while len(message_uids) > 0:
+        if want_stop: raise KeyboardInterrupt()
+
         to_store, message_uids = message_uids[:store_num], message_uids[store_num:]
         joined = ",".join(to_store)
         if method == "seen":
@@ -718,6 +734,8 @@ def main() -> None:
     if args.command == "fetch":
         if args.mda is None:
             parser.error("`--mda` is not set")
+
+    handle_signals()
 
     try:
         args.func(args)
