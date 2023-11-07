@@ -21,7 +21,7 @@ from .exceptions import *
 
 want_stop = False
 raise_once = False
-def sig_handler(signal, frame):
+def sig_handler(signal : int, frame : _t.Any) -> None:
     global want_stop
     global raise_once
     want_stop = True
@@ -29,62 +29,62 @@ def sig_handler(signal, frame):
         raise_once = False
         raise KeyboardInterrupt()
 
-def handle_signals():
+def handle_signals() -> None:
     signal.signal(signal.SIGINT, sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
 
-def imap_parse_data(data : str, literals : _t.List[bytes] = [], top_level : bool = True) -> _t.Tuple[_t.Any, str]:
+def imap_parse_data(data : bytes, literals : _t.List[bytes] = [], top_level : bool = True) -> _t.Tuple[_t.Any, bytes]:
     "Parse IMAP response string into a tree of strings."
-    acc : _t.List[_t.Union[str, bytes]] = []
-    res = ""
+    acc : _t.List[bytes] = []
+    res = b""
     i = 0
     state = False
     while i < len(data):
         c = data[i:i+1]
         #print(c)
         if state == False:
-            if c == '"':
-                if res != "":
+            if c == b'"':
+                if res != b"":
                     raise ValueError("unexpected quote")
-                res = ""
+                res = b""
                 state = True
-            elif c == " ":
+            elif c == b" ":
                 acc.append(res)
-                res = ""
-            elif c == "(":
-                if res != "":
+                res = b""
+            elif c == b"(":
+                if res != b"":
                     raise ValueError("unexpected parens")
                 res, data = imap_parse_data(data[i+1:], literals, False)
                 acc.append(res)
-                res = ""
+                res = b""
                 i = 0
                 if len(data) == 0:
-                    return acc, ""
-                elif data[i] not in [" ", ")"]:
+                    return acc, b""
+                elif data[i:i+1] not in [b" ", b")"]:
                     raise ValueError("expecting space or end parens")
-            elif c == ")":
+            elif c == b")":
                 acc.append(res)
                 return acc, data[i+1:]
-            elif c == "{":
-                if res != "":
+            elif c == b"{":
+                if res != b"":
                     raise ValueError("unexpected curly")
-                endcurly = data.find("}", i + 1)
+                endcurly = data.find(b"}", i + 1)
                 if endcurly == -1:
                     raise ValueError("expected curly")
                 acc.append(literals.pop(0))
                 i = endcurly + 1
                 if i >= len(data):
-                    return acc, ""
-                elif data[i] not in [" ", ")"]:
+                    return acc, b""
+                elif data[i:i+1] not in [b" ", b")"]:
                     raise ValueError("expecting space or end parens")
             else:
-                if type(res) is not str:
+                if type(res) is not bytes:
                     raise ValueError("unexpected char")
                 res += c
         elif state == True:
-            if c == '"':
+            if c == b'"':
                 state = False
-            elif c == "\\":
+            elif c == b"\\":
                 i+=1
                 if i >= len(data):
                     raise ValueError("unfinished escape sequence")
@@ -92,30 +92,31 @@ def imap_parse_data(data : str, literals : _t.List[bytes] = [], top_level : bool
             else:
                 res += c
         i+=1
-    if res != "":
+    if res != b"":
         if state or not top_level:
             raise ValueError("unfinished quote or parens")
         acc.append(res)
-    return acc, ""
+    return acc, b""
 
 def imap_parse(line : bytes, literals : _t.List[bytes] = []) -> _t.Any:
-    res, rest = imap_parse_data(line.decode("utf-8"), literals)
-    if rest != "":
+    res, rest = imap_parse_data(line, literals)
+    if rest != b"":
         raise ValueError("unexpected tail", rest)
     return res
 
 ##print(imap_parse(b'(0 1) (1 2 3'))
-#print(imap_parse(b'(\\Trash \\Nya) "." "\\"All Mail"'))
+#print(imap_parse(b'(\\Trash \\Nya) "." "All Mail"'))
+#print(imap_parse(b'(\\Trash \\Nya) "." "All\\"Mail"'))
 #print(imap_parse(b'(1 2 3)'))
 #print(imap_parse(b'(0 1) ((1 2 3))'))
 #print(imap_parse(b'(0 1) ((1 2 3) )'))
 #print(imap_parse(b'1 2 3 4 "\\\\Nya" 5 6 7'))
 #print(imap_parse(b'(1 2 3) 4 "\\\\Nya" 5 6 7'))
 #print(imap_parse(b'1 (UID 123 RFC822.SIZE 128)'))
-#print(imap_parse(b'1 (UID 123 BODY[HEADER] {128})', [b"128"]))
+#print(imap_parse(b'1 (UID 123 BODY[HEADER] {128})', [b'128bytesofdata']))
 #sys.exit(1)
 
-def imap_parse_attrs(data : _t.List[_t.Union[str, bytes]]) -> _t.Dict[_t.Union[str, bytes], _t.Union[str, bytes]]:
+def imap_parse_attrs(data : _t.List[bytes]) -> _t.Dict[bytes, bytes]:
     if len(data) % 2 != 0:
         raise ValueError("data array of non-even length")
 
@@ -125,6 +126,9 @@ def imap_parse_attrs(data : _t.List[_t.Union[str, bytes]]) -> _t.Dict[_t.Union[s
         value = data[i+1]
         res[name] = value
     return res
+
+#print(imap_parse_attrs(imap_parse(b'UID 123 BODY[HEADER] {128}', [b'128bytesofdata'])))
+#sys.exit(1)
 
 def connect(args : _t.Any) -> _t.Any:
     IMAP_base : type
@@ -141,23 +145,23 @@ def connect(args : _t.Any) -> _t.Any:
 
     if args.debug:
         binstderr = os.fdopen(sys.stderr.fileno(), "wb")
-        class IMAP(IMAP_base):
-            def send(self, data):
+        class IMAP(IMAP_base): # type: ignore
+            def send(self, data : bytes) -> int:
                 binstderr.write(b"C: " + data)
                 binstderr.flush()
-                return super().send(data)
+                return super().send(data) # type: ignore
 
-            def read(self, size):
+            def read(self, size : int) -> bytes:
                 res = super().read(size)
                 binstderr.write(b"S: " + res)
                 binstderr.flush()
-                return res
+                return res # type: ignore
 
-            def readline(self):
+            def readline(self) -> bytes:
                 res = super().readline()
                 binstderr.write(b"S: " + res)
                 binstderr.flush()
-                return res
+                return res # type: ignore
     else:
         IMAP = IMAP_base # type: ignore
 
@@ -186,10 +190,10 @@ def imap_quote(arg : str) -> str:
 
 imap_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-def imap_date(date):
+def imap_date(date : time.struct_time) -> str:
     return f"{str(date.tm_mday)}-{imap_months[date.tm_mon-1]}-{str(date.tm_year)}"
 
-def make_search_filter(args):
+def make_search_filter(args : _t.Any) -> str:
     filters = []
 
     if args.messages == "all":
@@ -240,7 +244,7 @@ def imap_error(command : str, desc : str, data : _t.Any = None) -> None:
     else:
         sys.stderr.write(_("error") + ": " + (_("%s command failed") + ": %s %s") % (command, desc, repr(data)) + "\n")
 
-def imap_check(exc, command, v):
+def imap_check(exc : _t.Any, command : str, v : _t.Tuple[str, _t.Any]) -> _t.Any:
     global had_errors
     typ, data = v
     if typ != "OK":
@@ -248,7 +252,7 @@ def imap_check(exc, command, v):
         raise exc("%s command failed: %s %s", command, typ, repr(data))
     return data
 
-def cmd_action(args):
+def cmd_action(args : _t.Any) -> None:
     search_filter = make_search_filter(args)
     #print(search_filter)
     #sys.exit(1)
@@ -276,9 +280,9 @@ def cmd_action(args):
 
     try:
         data = imap_check(CatastrophicFailure, "CAPABILITY", srv.capability())
-        capabilities = data[0].decode("utf-8").split(" ")
+        capabilities = data[0].split(b" ")
         #print(capabilities)
-        if "IMAP4rev1" not in capabilities:
+        if b"IMAP4rev1" not in capabilities:
             raise CatastrophicFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", args.host, args.port)
 
         if len(args.folders) == 0:
@@ -303,11 +307,11 @@ def cmd_action(args):
                     imap_error("SEARCH", typ, data)
                     continue
 
-                result = data[0].decode("utf-8")
-                if result == "":
+                result = data[0]
+                if result == b"":
                     message_uids = []
                 else:
-                    message_uids = result.split(" ")
+                    message_uids = result.split(b" ")
 
                 if args.command == "count":
                     print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
@@ -317,6 +321,8 @@ def cmd_action(args):
                     print(gettext("folder `%s` has no messages matching %s") % (folder, search_filter))
                     continue
 
+                act : str
+                actargs : _t.Any
                 if args.command == "mark":
                     act = "marking as %s %d messages matching %s from folder `%s`"
                     actargs  = (args.mark.upper(), len(message_uids), search_filter, folder)
@@ -352,16 +358,16 @@ def cmd_action(args):
     finally:
         srv.logout()
 
-def do_fetch(args, srv, message_uids):
+def do_fetch(args : _t.Any, srv : _t.Any, message_uids : _t.List[bytes]) -> None:
     fetch_num = args.fetch_number
-    batch = []
+    batch : _t.List[bytes] = []
     batch_total = 0
     while len(message_uids) > 0:
         if want_stop: raise KeyboardInterrupt()
 
         to_fetch, message_uids = message_uids[:fetch_num], message_uids[fetch_num:]
-        to_fetch_set = set(to_fetch)
-        typ, data = srv.uid("FETCH", ",".join(to_fetch), "(RFC822.SIZE)")
+        to_fetch_set : _t.Set[bytes] = set(to_fetch)
+        typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)")
         if typ != "OK":
             imap_error("FETCH", typ, data)
             continue
@@ -370,9 +376,10 @@ def do_fetch(args, srv, message_uids):
         for el in data:
             _, attrs_ = imap_parse(el)
             attrs = imap_parse_attrs(attrs_)
+            #print(attrs)
 
-            uid = attrs["UID"]
-            size = int(attrs["RFC822.SIZE"])
+            uid = attrs[b"UID"]
+            size = int(attrs[b"RFC822.SIZE"])
             new.append((uid, size))
             to_fetch_set.remove(uid)
 
@@ -405,20 +412,20 @@ def do_fetch(args, srv, message_uids):
 
     do_fetch_batch(args, srv, batch, batch_total)
 
-def do_fetch_batch(args, srv, messages, total_size):
+def do_fetch_batch(args : _t.Any, srv : _t.Any, message_uids : _t.List[bytes], total_size : int) -> None:
     global had_errors
     if want_stop: raise KeyboardInterrupt()
 
-    if len(messages) == 0: return
-    print("... " + gettext("fetching a batch of %d messages (%d bytes)") % (len(messages), total_size))
+    if len(message_uids) == 0: return
+    print("... " + gettext("fetching a batch of %d messages (%d bytes)") % (len(message_uids), total_size))
 
-    joined = ",".join(messages)
+    joined = b",".join(message_uids)
     typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])")
     if typ != "OK":
         imap_error("FETCH", typ, data)
         return
 
-    done_messages = []
+    done_message_uids = []
     while len(data) > 0:
         # have to do this whole thing beacause imaplib returns
         # multiple outputs as a flat list of partially-parsed chunks,
@@ -442,9 +449,9 @@ def do_fetch_batch(args, srv, messages, total_size):
         attrs = imap_parse_attrs(attrs_)
         #print(attrs)
 
-        uid = attrs["UID"]
-        header = attrs["BODY[HEADER]"]
-        body = attrs["BODY[TEXT]"]
+        uid = attrs[b"UID"]
+        header = attrs[b"BODY[HEADER]"]
+        body = attrs[b"BODY[TEXT]"]
         if True:
             # strip \r like fetchmail does
             header = header.replace(b"\r\n", b"\n")
@@ -453,7 +460,7 @@ def do_fetch_batch(args, srv, messages, total_size):
         # try delivering to MDA
         delivered = True
         with subprocess.Popen(args.mda, stdin=subprocess.PIPE, stdout=None, stderr=None, shell=True) as p:
-            fd : _t.Any = p.stdin # type: ignore
+            fd : _t.Any = p.stdin
             try:
                 fd.write(header)
                 fd.write(body)
@@ -467,14 +474,14 @@ def do_fetch_batch(args, srv, messages, total_size):
                 delivered = False
 
         if delivered:
-            done_messages.append(uid)
+            done_message_uids.append(uid)
         else:
             imap_error("FETCH", "MDA failed to deliver message", uid)
 
-    print("... " + gettext("delivered a batch of %d messages via %s") % (len(done_messages), args.mda))
-    do_store(args, srv, args.mark, done_messages)
+    print("... " + gettext("delivered a batch of %d messages via %s") % (len(done_message_uids), args.mda))
+    do_store(args, srv, args.mark, done_message_uids)
 
-def do_store(args, srv, method, message_uids):
+def do_store(args : _t.Any, srv : _t.Any, method : str, message_uids : _t.List[bytes]) -> None:
     if method == "noop": return
 
     marking_as = "... " + gettext("marking as %s a batch of %d messages")
@@ -484,7 +491,7 @@ def do_store(args, srv, method, message_uids):
         if want_stop: raise KeyboardInterrupt()
 
         to_store, message_uids = message_uids[:store_num], message_uids[store_num:]
-        joined = ",".join(to_store)
+        joined = b",".join(to_store)
         if method == "seen":
             print(marking_as % ("SEEN", len(to_store)))
             srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Seen")
@@ -508,7 +515,7 @@ def do_store(args, srv, method, message_uids):
         else:
             assert False
 
-def add_examples(fmt):
+def add_examples(fmt : _t.Any) -> None:
     _ = gettext
     fmt.add_text("# " + _("Notes on usage"))
 
@@ -658,16 +665,16 @@ def main() -> None:
                            _(f"`{__package__}` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.") + "\n" + \
                            _("`maildrop` from Courier Mail Server project is a good KISS default."))
 
-    def no_cmd(args):
+    def no_cmd(args : _t.Any) -> None:
         parser.print_help(sys.stderr)
         sys.exit(2)
     parser.set_defaults(func=no_cmd)
 
-    def add_dry_run(cmd):
+    def add_dry_run(cmd : _t.Any) -> None:
         agrp = cmd.add_argument_group(_("debugging"))
         agrp.add_argument("--dry-run", action="store_true", help=_("don't perform any actions, only show what would be done"))
 
-    def add_filters(cmd, messages):
+    def add_filters(cmd : _t.Any, messages : _t.Optional[str]) -> None:
         def_req = ""
         def_str = " " + _("(default)")
         def_all, def_seen, def_unseen = "", "", ""
@@ -697,12 +704,12 @@ def main() -> None:
         agrp.add_argument("--from", dest="hfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that have this string as substring of their header's FROM field; can be specified multiple times"))
         agrp.add_argument("--not-from", dest="hnotfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times"))
 
-    def add_folders(cmd):
+    def add_folders(cmd : _t.Any) -> None:
         agrp = cmd.add_argument_group(_("folder specification"))
         agrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=[],
                           help=_("mail folders to operane on; can be specified multiple times") + " " + _("(default: all available mail folders)"))
 
-    def add_req_folders(cmd):
+    def add_req_folders(cmd : _t.Any) -> None:
         agrp = cmd.add_argument_group(_("folder specification"))
         agrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=[], required = True,
                           help=_("mail folders to operate on; can be specified multiple times") + " " + _("(required)"))
