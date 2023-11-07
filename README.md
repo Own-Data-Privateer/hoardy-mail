@@ -115,7 +115,8 @@ Thank you very much.
 
 ## imaparms [--version] [-h] [--help-markdown] [--debug] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] {count,list,mark,fetch,mirror,delete,expire} ...
 
-Login to an IMAP4 server and perform actions on messages in specified folders matching specified criteria.
+A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for performing batch operations on messages residing on IMAP4 servers.
+Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out.
 
 - optional arguments:
   - `--version`
@@ -139,7 +140,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--host HOST`
   : IMAP server to connect to
   - `--port PORT`
-  : port to use; default: 143 for `--plain` and `--starttls`, 993 for `--ssl`
+  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
 
 - server auth:
   `--user` and either of `--passfile` or `--passcmd` are required
@@ -147,7 +148,7 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--user USER`
   : username on the server
   - `--passfile PASSFILE`
-  : file containing the password
+  : file containing the password on its first line
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
@@ -290,8 +291,8 @@ Login to an IMAP4 server and perform actions on messages in specified folders ma
   - `--method {auto,delete,delete-noexpunge,gmail-trash}`
   : delete messages how:
     - `auto`: `gmail-trash` when `--host imap.gmail.com` and `--folder` is not (single) `[Gmail]/Trash`, `delete` otherwise (default)
-    - `delete`: mark messages with `\Deleted` flag and then use IMAP `EXPUNGE` command, i.e. this does what you would expect a "delete" command to do, works for most IMAP servers
-    - `delete-noexpunge`: mark messages with `\Deleted` flag but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly
+    - `delete`: mark messages as deleted and then use IMAP `EXPUNGE` command, i.e. this does what you would expect a "delete" command to do, works for most IMAP servers
+    - `delete-noexpunge`: mark messages as deleted but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly
     - `gmail-trash`: move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `imaparms delete --method delete --folder "[Gmail]/Trash"` them after, or you could just leave them there and GMail will delete them in 30 days)
 
 - debugging:
@@ -437,7 +438,7 @@ Also note that `fetch` and `delete` subcommands act on `--seen` messages by defa
 
   Also, note that the above only moves `--seen` messages by default.
 
-  Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with
+  Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with:
 
   ```
   imaparms --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --method delete --folder "[Gmail]/Trash" --all --older-than 7
