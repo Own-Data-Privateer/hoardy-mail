@@ -162,7 +162,7 @@ Logins to a specified server, performs specified actions on all messages matchin
   - `--batch-number INT`
   : batch at most this many message UIDs in IMAP FETCH data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
   - `--batch-size INT`
-  : FETCH at most this many bytes of RFC822 messages at once; essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted (default: 4194304)
+  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetchen one by one; essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted (default: 4194304)
 
 - delivery settings:
   - `--mda COMMAND`
@@ -173,9 +173,9 @@ Logins to a specified server, performs specified actions on all messages matchin
 - subcommands:
   - `{count,list,mark,fetch,mirror,delete,expire}`
     - `count (list)`
-    : count how many matching messages specified folders (or all of them, by default) contain
+    : count how many matching messages each specified folder has (counts for all available folders by default)
     - `mark`
-    : mark matching messages in specified folders with a specified way
+    : mark matching messages in specified folders in a specified way
     - `fetch (mirror)`
     : fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds
     - `delete (expire)`
@@ -327,7 +327,7 @@ Logins to a specified server, performs specified actions on all messages matchin
 
 Specifying `--folder` multiple times will perform the specified action on all specified folders.
 
-Message search filters are connected by logical "AND"s so `--from "github.com" --not-from "notifications@github.com"` will act on messages from "github.com" but not from "notifications@github.com".
+Message search filters are connected by logical "AND"s so, e.g., `--from "github.com" --not-from "notifications@github.com"` will act on messages which have a `From:` header with `github.com` but without `notifications@github.com` as substrings.
 
 Also note that `fetch` and `delete` subcommands act on `--seen` messages by default.
 

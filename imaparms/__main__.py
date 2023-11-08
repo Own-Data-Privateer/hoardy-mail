@@ -521,7 +521,7 @@ def add_examples(fmt : _t.Any) -> None:
 
     fmt.add_text(_("Specifying `--folder` multiple times will perform the specified action on all specified folders."))
 
-    fmt.add_text(_('Message search filters are connected by logical "AND"s so `--from "github.com" --not-from "notifications@github.com"` will act on messages from "github.com" but not from "notifications@github.com".'))
+    fmt.add_text(_('Message search filters are connected by logical "AND"s so, e.g., `--from "github.com" --not-from "notifications@github.com"` will act on messages which have a `From:` header with `github.com` but without `notifications@github.com` as substrings.'))
 
     fmt.add_text(_("Also note that `fetch` and `delete` subcommands act on `--seen` messages by default."))
 
@@ -657,7 +657,7 @@ def main() -> None:
     agrp.add_argument("--store-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP STORE requests (default: %(default)s)"))
     agrp.add_argument("--fetch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP FETCH metadata requests (default: %(default)s)"))
     agrp.add_argument("--batch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP FETCH data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
-    agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_("FETCH at most this many bytes of RFC822 messages at once; essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
+    agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_("batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetchen one by one; essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
 
     agrp = parser.add_argument_group(_("delivery settings"))
     agrp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
@@ -716,13 +716,13 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(title="subcommands")
 
-    cmd = subparsers.add_parser("count", aliases = ["list"], help=_("count how many matching messages specified folders (or all of them, by default) contain"))
+    cmd = subparsers.add_parser("count", aliases = ["list"], help=_("count how many matching messages each specified folder has (counts for all available folders by default)"))
     add_filters(cmd, "all")
     add_folders(cmd)
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="count")
 
-    cmd = subparsers.add_parser("mark", help=_("mark matching messages in specified folders with a specified way"))
+    cmd = subparsers.add_parser("mark", help=_("mark matching messages in specified folders in a specified way"))
     add_dry_run(cmd)
     add_filters(cmd, None)
     add_req_folders(cmd)
