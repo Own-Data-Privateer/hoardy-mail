@@ -44,16 +44,25 @@ This tool was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpi
 
 # Quickstart
 
-- You can run this tool without installing it:
-
+- Install with:
   ```
-  python3 -m imaparms.__main__ --help
+  pip install imaparms
+  ```
+  and run as
+  ```
+  imaparms --help
   ```
 
-- or you can install it via Nix
+- Alternatively, install it via Nix
 
   ```
   nix-env -i -f ./default.nix
+  ```
+
+- Alternatively, you can run this without installing it:
+
+  ```
+  python3 -m imaparms.__main__ --help
   ```
 
 See the [usage examples below](#examples).
