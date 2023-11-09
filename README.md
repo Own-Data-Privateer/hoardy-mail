@@ -234,7 +234,7 @@ Logins to a specified server, performs specified actions on all messages matchin
     - `delete (expire)`
     : delete matching messages from specified folders
 
-### imaparms list [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND]
+### imaparms list [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND]
 
 Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
@@ -266,6 +266,14 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
+- folder search filters:
+  - `--all-folders`
+  : operate on all folders (default)
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
+
 - IMAP batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
 
@@ -284,7 +292,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
     `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
     `maildrop` from Courier Mail Server project is a good KISS default.
 
-### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME] [--porcelain]
+### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
@@ -319,6 +327,14 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   : file containing the password on its first line
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
+
+- folder search filters:
+  - `--all-folders`
+  : operate on all folders (default)
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
 
 - IMAP batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
@@ -360,11 +376,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--unflagged`
   : operate on messages not marked as FLAGGED
 
-- folder specification:
-  - `--folder NAME`
-  : mail folders to operane on; can be specified multiple times (default: all available mail folders)
-
-### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME {seen,unseen,flagged,unflagged}
+### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] (--all-folders | --folder NAME) [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
 
@@ -395,6 +407,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   : file containing the password on its first line
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
+
+- folder search filters:
+  - `--all-folders`
+  : operate on all folders
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times (required)
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
 
 - IMAP batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
@@ -436,10 +456,6 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   - `--unflagged`
   : operate on messages not marked as FLAGGED
 
-- folder specification:
-  - `--folder NAME`
-  : mail folders to operate on; can be specified multiple times (required)
-
 - marking:
   - `{seen,unseen,flagged,unflagged}`
   : mark how (required):
@@ -448,7 +464,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message search filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message search filter is specified
 
-### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands.
 
@@ -479,6 +495,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   : file containing the password on its first line
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
+
+- folder search filters:
+  - `--all-folders`
+  : operate on all folders (default)
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
 
 - IMAP batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
@@ -520,10 +544,6 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--unflagged`
   : operate on messages not marked as FLAGGED
 
-- folder specification:
-  - `--folder NAME`
-  : mail folders to operate on; can be specified multiple times (required)
-
 - marking:
   - `--mark {auto,noop,seen,unseen,flagged,unflagged}`
   : after the message was fetched:
@@ -534,7 +554,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder NAME
+### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] (--all-folders | --folder NAME) [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
 
@@ -573,6 +593,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   : file containing the password on its first line
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
+
+- folder search filters:
+  - `--all-folders`
+  : operate on all folders
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times (required)
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
 
 - IMAP batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
@@ -613,10 +641,6 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   : operate on messages marked as FLAGGED
   - `--unflagged`
   : operate on messages not marked as FLAGGED
-
-- folder specification:
-  - `--folder NAME`
-  : mail folders to operate on; can be specified multiple times (required)
 
 ## Notes on usage
 

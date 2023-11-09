@@ -336,6 +336,7 @@ def cmd_action(args : _t.Any) -> None:
             if args.host in ["imap.gmail.com"] and \
                args.folders != ["[Gmail]/Trash"]:
                 args.method = "gmail-trash"
+                args.not_folders.append("[Gmail]/Trash")
             else:
                 args.method = "delete"
 
@@ -356,13 +357,12 @@ def do_action(args : _t.Any, srv : IMAP4, search_filter : str) -> None:
     if b"IMAP4rev1" not in capabilities:
         raise CatastrophicFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", args.host, args.port)
 
-    if len(args.folders) == 0:
-        assert args.command in ["count", "fetch"]
+    if args.all_folders and len(args.folders) == 0:
         folders = get_folders(srv)
     else:
         folders = args.folders
 
-    for folder in folders:
+    for folder in filter(lambda f: f not in args.not_folders, folders):
         if want_stop: raise KeyboardInterrupt()
 
         do_folder_action(args, srv, search_filter, folder)
@@ -805,7 +805,7 @@ def main() -> None:
 
             cfg.accounts.append(Account(cfg.socket, host, port, user, password, IMAP_base))
 
-    def add_common(cmd : _t.Any) -> None:
+    def add_common(cmd : _t.Any, all_folders_by_default : bool) -> None:
         cmd.set_defaults(accounts = [])
 
         agrp = cmd.add_argument_group(_("debugging"))
@@ -829,6 +829,21 @@ def main() -> None:
         grp.add_argument("--passfile", action=EmitAccount, default="file", help=_("file containing the password on its first line"))
         grp.add_argument("--passcmd", action=EmitAccount, default="cmd", help=_("shell command that returns the password as the first line of its stdout"))
         grp.set_defaults(password = None)
+
+        def_all, def_req = "", ""
+        if all_folders_by_default:
+            def_all = " " + _("(default)")
+        else:
+            def_req = " " + _("(required)")
+
+        agrp = cmd.add_argument_group(_("folder search filters"))
+        egrp = agrp.add_mutually_exclusive_group(required = not all_folders_by_default)
+        egrp.add_argument("--all-folders", action="store_true", default = all_folders_by_default,
+                          help=_("operate on all folders") + def_all)
+        egrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=[],
+                          help=_("mail folders to include; can be specified multiple times") + def_req)
+        agrp.add_argument("--not-folder", metavar = "NAME", dest="not_folders", action="append", type=str, default=[],
+                          help=_("mail folders to exclude; can be specified multiple times"))
 
         agrp = cmd.add_argument_group(_("IMAP batching settings"), description=_("larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen"))
         agrp.add_argument("--store-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `STORE` requests (default: %(default)s)"))
@@ -881,16 +896,6 @@ def main() -> None:
         agrp.add_argument("--from", dest="hfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that have this string as substring of their header's FROM field; can be specified multiple times"))
         agrp.add_argument("--not-from", dest="hnotfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times"))
 
-    def add_folders(cmd : _t.Any) -> None:
-        agrp = cmd.add_argument_group(_("folder specification"))
-        agrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=[],
-                          help=_("mail folders to operane on; can be specified multiple times") + " " + _("(default: all available mail folders)"))
-
-    def add_req_folders(cmd : _t.Any) -> None:
-        agrp = cmd.add_argument_group(_("folder specification"))
-        agrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=[], required = True,
-                          help=_("mail folders to operate on; can be specified multiple times") + " " + _("(required)"))
-
     def no_cmd(args : _t.Any) -> None:
         parser.print_help(sys.stderr)
         sys.exit(2)
@@ -900,23 +905,21 @@ def main() -> None:
 
     cmd = subparsers.add_parser("list", help=_("list all available folders on the server, one per line"),
                                 description = _("Login, perform IMAP `LIST` command to get all folders, print them one per line."))
-    add_common(cmd)
+    add_common(cmd, True)
     cmd.set_defaults(func=cmd_list)
 
     cmd = subparsers.add_parser("count", help=_("count how many matching messages each specified folder has (counts for all available folders by default)"),
                                 description = _("Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line."))
-    add_common(cmd)
+    add_common(cmd, True)
     add_filters(cmd, "all")
-    add_folders(cmd)
     cmd.add_argument("--porcelain", action="store_true", help=_("print in a machine-readable format"))
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="count")
 
     cmd = subparsers.add_parser("mark", help=_("mark matching messages in specified folders in a specified way"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands."))
-    add_common(cmd)
+    add_common(cmd, False)
     add_filters(cmd, None)
-    add_req_folders(cmd)
     agrp = cmd.add_argument_group("marking")
     sets_x_if = _("sets `%s` if no message search filter is specified")
     agrp.add_argument("mark", choices=["seen", "unseen", "flagged", "unflagged"], help=_("mark how") + " " + _("(required)") + f""":
@@ -930,9 +933,8 @@ def main() -> None:
 
     cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands."))
-    add_common(cmd)
+    add_common(cmd, True)
     add_filters(cmd, "unseen")
-    add_req_folders(cmd)
     agrp = cmd.add_argument_group("marking")
     agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
 - `auto`: {_('`seen` when only `--unseen` is set (default), `flagged` when only `--unflagged` is set, `noop` otherwise')}
@@ -947,7 +949,7 @@ def main() -> None:
 
     cmd = subparsers.add_parser("delete", aliases = ["expire"], help=_("delete matching messages from specified folders"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method."))
-    add_common(cmd)
+    add_common(cmd, False)
     add_filters(cmd, "seen")
     cmd.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help=_("delete messages how") + f""":
 - `auto`: {_('`gmail-trash` when `--host imap.gmail.com` and `--folder` is not (single) `[Gmail]/Trash`, `delete` otherwise')} {_("(default)")}
@@ -955,7 +957,6 @@ def main() -> None:
 - `delete-noexpunge`: {_('mark messages as deleted but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly')}
 - `gmail-trash`: {_(f'move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `{__package__} delete --method delete --folder "[Gmail]/Trash"` them after, or you could just leave them there and GMail will delete them in 30 days)')}
 """)
-    add_req_folders(cmd)
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="delete")
 
