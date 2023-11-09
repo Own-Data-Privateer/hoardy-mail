@@ -55,7 +55,7 @@ DEFAULT="$HOME/Mail/INBOX"
 EOF
 
 # fetch
-imaparms "${common[@]}" fetch --folder "INBOX" --unseen
+imaparms fetch "${common[@]}" --folder "INBOX" --unseen
 
 # now you can index it or whatever
 notmuch new
@@ -64,7 +64,7 @@ notmuch new
 rsync -aHAXiv ~/Mail /disk/backup
 
 # expire old mail from the server
-imaparms "${common[@]}" delete --folder "INBOX" --seen --older-than 3
+imaparms delete "${common[@]}" --folder "INBOX" --seen --older-than 3
 ```
 
 The paranoid version looks something like this:
@@ -80,13 +80,13 @@ DEFAULT="$HOME/Mail/INBOX.secondary"
 EOF
 
 # ... prepare by unflagging all messages
-imaparms "${secondary_common[@]}" mark --folder "INBOX" unflagged
+imaparms mark "${secondary_common[@]}" --folder "INBOX" unflagged
 
 # run fetchmail daemon as usual
 fetchmail --mda maildrop -d 900
 
 # fetch using the FLAGGED flag for tracking state
-imaparms "${secondary_common[@]}" fetch --folder "INBOX" --unflagged
+imaparms fetch "${secondary_common[@]}" --folder "INBOX" --unflagged
 
 # deduplicate
 jdupes -o time -O -rdN Mail/INBOX Mail/INBOX.secondary
@@ -98,7 +98,7 @@ notmuch new
 rsync -aHAXiv ~/Mail /disk/backup
 
 # expire old messages fetched by both fetchmail and this
-imaparms "${secondary_common[@]}" delete --folder "INBOX" --seen --flagged --older-than 3
+imaparms delete "${secondary_common[@]}" --folder "INBOX" --seen --flagged --older-than 3
 ```
 
 See the [usage section](#usage) for explanation of used command line options.
@@ -208,7 +208,7 @@ That is to say, I don't use OAuth2, which is why `imaparms` does not support OAu
 
 # Usage
 
-## imaparms [--version] [-h] [--help-markdown] [--debug] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] {list,count,mark,fetch,delete,expire} ...
+## imaparms [--version] [-h] [--help-markdown] {list,count,mark,fetch,delete,expire} ...
 
 A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.
 Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out.
@@ -221,9 +221,28 @@ Logins to a specified server, performs specified actions on all messages matchin
   - `--help-markdown`
   : show this help message formatted in Markdown and exit
 
+- subcommands:
+  - `{list,count,mark,fetch,delete,expire}`
+    - `list`
+    : list all available folders on the server, one per line
+    - `count`
+    : count how many matching messages each specified folder has (counts for all available folders by default)
+    - `mark`
+    : mark matching messages in specified folders in a specified way
+    - `fetch`
+    : fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds
+    - `delete (expire)`
+    : delete matching messages from specified folders
+
+### imaparms list [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND]
+
+Login, perform IMAP `LIST` command to get all folders, print them one per line.
+
 - debugging:
   - `--debug`
   : print IMAP conversation to stderr
+  - `--dry-run`
+  : don't perform any actions, only show what would be done
 
 - server connection:
   - `--plain`
@@ -265,30 +284,59 @@ Logins to a specified server, performs specified actions on all messages matchin
     `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
     `maildrop` from Courier Mail Server project is a good KISS default.
 
-- subcommands:
-  - `{list,count,mark,fetch,delete,expire}`
-    - `list`
-    : list all available folders on the server, one per line
-    - `count`
-    : count how many matching messages each specified folder has (counts for all available folders by default)
-    - `mark`
-    : mark matching messages in specified folders in a specified way
-    - `fetch`
-    : fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds
-    - `delete (expire)`
-    : delete matching messages from specified folders
-
-### imaparms list
-
-Login, perform IMAP `LIST` command to get all folders, print them one per line.
-
-### imaparms count [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME] [--porcelain]
+### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME] [--porcelain]
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
 - optional arguments:
   - `--porcelain`
   : print in a machine-readable format
+
+- debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
+  - `--dry-run`
+  : don't perform any actions, only show what would be done
+
+- server connection:
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket (default)
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to (required)
+  - `--port PORT`
+  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
+
+- server auth:
+  either of `--passfile` or `--passcmd` are required
+
+  - `--user USER`
+  : username on the server (required)
+  - `--passfile PASSFILE`
+  : file containing the password on its first line
+  - `--passcmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
+
+- IMAP batching settings:
+  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
+
+  - `--store-number INT`
+  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
+  - `--fetch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
+  - `--batch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
+  - `--batch-size INT`
+  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
+
+- delivery settings:
+  - `--mda COMMAND`
+  : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
+    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
+    `maildrop` from Courier Mail Server project is a good KISS default.
 
 - message search filters:
   - `--older-than DAYS`
@@ -316,13 +364,55 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--folder NAME`
   : mail folders to operane on; can be specified multiple times (default: all available mail folders)
 
-### imaparms mark [--dry-run] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME {seen,unseen,flagged,unflagged}
+### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME {seen,unseen,flagged,unflagged}
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
 
 - debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
+
+- server connection:
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket (default)
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to (required)
+  - `--port PORT`
+  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
+
+- server auth:
+  either of `--passfile` or `--passcmd` are required
+
+  - `--user USER`
+  : username on the server (required)
+  - `--passfile PASSFILE`
+  : file containing the password on its first line
+  - `--passcmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
+
+- IMAP batching settings:
+  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
+
+  - `--store-number INT`
+  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
+  - `--fetch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
+  - `--batch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
+  - `--batch-size INT`
+  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
+
+- delivery settings:
+  - `--mda COMMAND`
+  : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
+    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
+    `maildrop` from Courier Mail Server project is a good KISS default.
 
 - message search filters:
   - `--older-than DAYS`
@@ -358,13 +448,55 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message search filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message search filter is specified
 
-### imaparms fetch [--dry-run] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands.
 
 - debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
+
+- server connection:
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket (default)
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to (required)
+  - `--port PORT`
+  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
+
+- server auth:
+  either of `--passfile` or `--passcmd` are required
+
+  - `--user USER`
+  : username on the server (required)
+  - `--passfile PASSFILE`
+  : file containing the password on its first line
+  - `--passcmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
+
+- IMAP batching settings:
+  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
+
+  - `--store-number INT`
+  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
+  - `--fetch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
+  - `--batch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
+  - `--batch-size INT`
+  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
+
+- delivery settings:
+  - `--mda COMMAND`
+  : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
+    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
+    `maildrop` from Courier Mail Server project is a good KISS default.
 
 - message search filters:
   - `--older-than DAYS`
@@ -402,7 +534,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--dry-run] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder NAME
+### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder NAME
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
 
@@ -415,8 +547,50 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
     - `gmail-trash`: move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `imaparms delete --method delete --folder "[Gmail]/Trash"` them after, or you could just leave them there and GMail will delete them in 30 days)
 
 - debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
+
+- server connection:
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket (default)
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to (required)
+  - `--port PORT`
+  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
+
+- server auth:
+  either of `--passfile` or `--passcmd` are required
+
+  - `--user USER`
+  : username on the server (required)
+  - `--passfile PASSFILE`
+  : file containing the password on its first line
+  - `--passcmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
+
+- IMAP batching settings:
+  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
+
+  - `--store-number INT`
+  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
+  - `--fetch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
+  - `--batch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
+  - `--batch-size INT`
+  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
+
+- delivery settings:
+  - `--mda COMMAND`
+  : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
+    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
+    `maildrop` from Courier Mail Server project is a good KISS default.
 
 - message search filters:
   - `--older-than DAYS`
@@ -458,20 +632,20 @@ Specifying `--folder` multiple times will perform the specified action on all sp
 
   - with the password taken from the first line of the given file:
     ```
-    imaparms --ssl --host imap.example.com --user myself@example.com --passfile /path/to/file/containing/myself@example.com.password count
+    imaparms count --ssl --host imap.example.com --user myself@example.com --passfile /path/to/file/containing/myself@example.com.password
     ```
 
   - with the password taken from the output of password-store util:
     ```
-    imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" count
+    imaparms count --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com"
     ```
 
   - with two accounts on the same server:
     ```
-    imaparms --ssl --host imap.example.com \
+    imaparms count --porcelain \
+             --ssl --host imap.example.com \
              --user myself@example.com --passcmd "pass show mail/myself@example.com" \
-             --user another@example.com --passcmd "pass show mail/another@example.com" \
-             count --porcelain
+             --user another@example.com --passcmd "pass show mail/another@example.com"
 
     ```
 
@@ -487,33 +661,33 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 
 - Count how many messages older than 7 days are in `[Gmail]/Trash` folder:
   ```
-  imaparms "${gmail_common[@]}" count --folder "[Gmail]/Trash" --older-than 7
+  imaparms count "${gmail_common[@]}" --folder "[Gmail]/Trash" --older-than 7
   ```
 
 - Mark all messages in `INBOX` as UNSEEN, fetch all UNSEEN messages marking them SEEN as you download them so that if the process gets interrupted you could continue from where you left off, and then run `imaparms fetch` as daemon to download updates every hour:
   ```
   # setup: do once
-  imaparms "${common[@]}" mark --folder "INBOX" unseen
+  imaparms mark "${common[@]}" --folder "INBOX" unseen
 
   # repeatable part
-  imaparms "${common[@]}" fetch --folder "INBOX"
+  imaparms fetch "${common[@]}" --folder "INBOX"
 
   # download updates
   while true; do
       sleep 3600
-      imaparms "${common[@]}" fetch --folder "INBOX"
+      imaparms fetch "${common[@]}" --folder "INBOX"
   done
 
   ```
 
 - Fetch all messages from `INBOX` folder that were delivered in the last 7 days (rounded to the start of the start day by server time), but don't change any flags:
   ```
-  imaparms "${common[@]}" fetch --folder "INBOX" --all --newer-than 7
+  imaparms fetch "${common[@]}" --folder "INBOX" --all --newer-than 7
   ```
 
 - Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time):
   ```
-  imaparms "${common[@]}" fetch --folder "INBOX" --all --newer-than 0
+  imaparms fetch "${common[@]}" --folder "INBOX" --all --newer-than 0
   ```
 
 - Delete all SEEN messages older than 7 days from `INBOX` folder:
@@ -521,14 +695,14 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
   Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets cracked/hacked, you won't be as vulnerable.
 
   ```
-  imaparms "${common[@]}" delete --folder "INBOX" --older-than 7
+  imaparms delete "${common[@]}" --folder "INBOX" --older-than 7
   ```
 
   (`--seen` is implied by default)
 
 - **DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all SEEN messages instead:
   ```
-  imaparms "${common[@]}" delete --folder "INBOX"
+  imaparms delete "${common[@]}" --folder "INBOX"
   ```
 
   Though, setting at least `--older-than 1` to make sure you won't lose any data in case something breaks is highly recommended anyway.
@@ -536,16 +710,16 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 - Similarly to the above, but use FLAGGED instead of SEEN. This allows to use this in parallel with another instance of `imaparms` using the SEEN flag, e.g. if you want to backup to two different machines independently, or if you want to use `imaparms` simultaneously in parallel with `fetchmail` or other similar tool:
   ```
   # setup: do once
-  imaparms "${common[@]}" mark --folder "INBOX" unflagged
+  imaparms mark "${common[@]}" --folder "INBOX" unflagged
 
   # repeatable part
-  imaparms "${common[@]}" fetch --folder "INBOX" --unflagged
+  imaparms fetch "${common[@]}" --folder "INBOX" --unflagged
 
   # this will work as if nothing of the above was run
   fetchmail
 
   # in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both imaparms and fetchmail
-  imaparms "${common[@]}" delete --folder "INBOX" --older-than 7 --seen --flagged
+  imaparms delete "${common[@]}" --folder "INBOX" --older-than 7 --seen --flagged
 
   ```
 
@@ -558,10 +732,10 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
   DEFAULT="$HOME/Mail/spam"
   EOF
 
-  imaparms "${gmail_common_no_mda[@]}" mark --folder "[Gmail]/Spam" unseen
+  imaparms mark "${gmail_common_no_mda[@]}" --folder "[Gmail]/Spam" unseen
 
   # repeatable part
-  imaparms "${gmail_common_no_mda[@]}" --mda "maildrop ~/.mailfilter-spam" fetch --folder "[Gmail]/Spam"
+  imaparms fetch "${gmail_common_no_mda[@]}" --mda "maildrop ~/.mailfilter-spam" --folder "[Gmail]/Spam"
 
   ```
 
@@ -572,7 +746,7 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
   To work around this, this tool provides a GMail-specific `--method gmail-trash` that moves messages to `[Gmail]/Trash` in a GMail-specific way (this is not a repetition, it does require issuing special IMAP `STORE` commands to achieve this):
 
   ```
-  imaparms "${gmail_common[@]}" delete --folder "[Gmail]/All Mail" --older-than 7
+  imaparms delete "${gmail_common[@]}" --folder "[Gmail]/All Mail" --older-than 7
   ```
 
   (`--method gmail-trash` is implied by `--host imap.gmail.com` and `--folder` not being `[Gmail]/Trash`)
@@ -582,7 +756,7 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
   Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with:
 
   ```
-  imaparms "${gmail_common[@]}" delete --folder "[Gmail]/Trash" --all --older-than 7
+  imaparms delete "${gmail_common[@]}" --folder "[Gmail]/Trash" --all --older-than 7
   ```
 
   (`--method delete` is implied by `--host imap.gmail.com` but `--folder` being `[Gmail]/Trash`)
