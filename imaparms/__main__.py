@@ -4,7 +4,7 @@
 #
 # This file can be distributed under the terms of the GNU GPL, version 3 or later.
 
-import imaplib
+import dataclasses as _dc
 import os
 import signal
 import ssl
@@ -14,6 +14,7 @@ import time
 import traceback as traceback
 import typing as _t
 
+from imaplib import IMAP4, IMAP4_SSL
 from gettext import gettext, ngettext
 
 from . import argparse
@@ -130,66 +131,6 @@ def imap_parse_attrs(data : _t.List[bytes]) -> _t.Dict[bytes, bytes]:
 #print(imap_parse_attrs(imap_parse(b'UID 123 BODY[HEADER] {128}', [b'128bytesofdata'])))
 #sys.exit(1)
 
-def login(args : _t.Any) -> _t.Any:
-    IMAP_base : type
-    if args.socket in ["plain", "starttls"]:
-        port = 143
-        IMAP_base = imaplib.IMAP4
-    elif args.socket == "ssl":
-        port = 993
-        IMAP_base = imaplib.IMAP4_SSL
-
-    if args.port is not None:
-        port = args.port
-    args.port = port
-
-    if args.debug:
-        binstderr = os.fdopen(sys.stderr.fileno(), "wb")
-        class IMAP(IMAP_base): # type: ignore
-            def send(self, data : bytes) -> int:
-                binstderr.write(b"C: " + data)
-                binstderr.flush()
-                return super().send(data) # type: ignore
-
-            def read(self, size : int) -> bytes:
-                res = super().read(size)
-                binstderr.write(b"S: " + res)
-                binstderr.flush()
-                return res # type: ignore
-
-            def readline(self) -> bytes:
-                res = super().readline()
-                binstderr.write(b"S: " + res)
-                binstderr.flush()
-                return res # type: ignore
-    else:
-        IMAP = IMAP_base # type: ignore
-
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-    ssl_context.verify_mode = ssl.CERT_REQUIRED
-    ssl_context.check_hostname = True
-    ssl_context.load_default_certs()
-
-    try:
-        if args.socket == "ssl":
-            srv = IMAP(args.host, port, ssl_context = ssl_context)
-        else:
-            srv = IMAP(args.host, port)
-            if args.starttls:
-                srv.starttls(ssl_context)
-    except Exception as exc:
-        raise CatastrophicFailure("failed to connect to host %s port %s: %s", args.host, args.port, repr(exc))
-
-    try:
-        srv.login(args.user, args.password)
-    except Exception as exc:
-        raise CatastrophicFailure("failed to login as %s to host %s port %s: %s", args.user, args.host, args.port, repr(exc))
-
-    sys.stdout.write("# " + gettext("logged in as %s to host %s port %d (%s)") % (args.user, args.host, args.port, args.socket.upper()) + "\n")
-    sys.stdout.flush()
-
-    return srv
-
 def imap_quote(arg : str) -> str:
     arg = arg[:]
     arg = arg.replace('\\', '\\\\')
@@ -259,18 +200,96 @@ def imap_check(exc : _t.Any, command : str, v : _t.Tuple[str, _t.Any]) -> _t.Any
         raise exc("%s command failed: %s %s", command, typ, repr(data))
     return data
 
-def cmd_list(args : _t.Any) -> None:
-    srv = login(args)
-    try:
-        folders = get_folders(srv)
-        for e in folders:
-            print(e)
-    finally:
-        srv.logout()
+@_dc.dataclass
+class Account:
+    socket : str
+    host : str
+    port : int
+    user : str
+    password : str
+    IMAP_base : type
 
-def get_folders(srv : _t.Any) -> _t.List[str]:
+def connect(account : Account, debug : bool) -> _t.Any:
+    if debug:
+        binstderr = os.fdopen(sys.stderr.fileno(), "wb")
+        class IMAP(account.IMAP_base): # type: ignore
+            def send(self, data : bytes) -> int:
+                binstderr.write(b"C: " + data)
+                binstderr.flush()
+                return super().send(data) # type: ignore
+
+            def read(self, size : int) -> bytes:
+                res = super().read(size)
+                binstderr.write(b"S: " + res)
+                binstderr.flush()
+                return res # type: ignore
+
+            def readline(self) -> bytes:
+                res = super().readline()
+                binstderr.write(b"S: " + res)
+                binstderr.flush()
+                return res # type: ignore
+    else:
+        IMAP = account.IMAP_base # type: ignore
+
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    ssl_context.verify_mode = ssl.CERT_REQUIRED
+    ssl_context.check_hostname = True
+    ssl_context.load_default_certs()
+
+    try:
+        if account.socket == "ssl":
+            srv = IMAP(account.host, account.port, ssl_context = ssl_context)
+        else:
+            srv = IMAP(account.host, account.port)
+            if account.socket == "starttls":
+                srv.starttls(ssl_context)
+    except Exception as exc:
+        raise CatastrophicFailure("failed to connect to host %s port %s: %s", account.host, account.port, repr(exc))
+
+    return srv
+
+def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
+    global had_errors
+    #print(cfg.accounts)
+    #sys.exit(1)
+
+    account : Account
+    for account in cfg.accounts:
+        if want_stop: raise KeyboardInterrupt()
+
+        try:
+            srv = connect(account, cfg.debug)
+            typ, data = srv._simple_command("LOGIN", imap_quote(account.user), imap_quote(account.password))
+            if typ != "OK":
+                raise CatastrophicFailure("failed to login as %s to host %s port %d: %s", account.user, account.host, account.port, repr(data))
+            srv.state = "AUTH"
+
+            sys.stdout.write("# " + gettext("logged in as %s to host %s port %d (%s)") % (account.user, account.host, account.port, account.socket.upper()) + "\n")
+            sys.stdout.flush()
+
+            func(cfg, srv, *args)
+        except CatastrophicFailure as exc:
+            had_errors = True
+            sys.stderr.write(gettext("error") + ": " + exc.show() + "\n")
+        finally:
+            try:
+                srv.logout()
+            except:
+                pass
+            srv = None
+
+def cmd_list(cfg : _t.Any) -> None:
+    for_each_account(cfg, do_list)
+
+def do_list(cfg : _t.Any, srv : IMAP4) -> None:
+    folders = get_folders(srv)
+    for e in folders:
+        print(e)
+
+def get_folders(srv : IMAP4) -> _t.List[str]:
     res = []
-    data = imap_check(CatastrophicFailure, "LIST", srv.list())
+    data = imap_check(Failure, "LIST", srv.list())
     for el in data:
         tags, _, arg = imap_parse(el)
         if b"\\Noselect" in tags:
@@ -321,93 +340,95 @@ def cmd_action(args : _t.Any) -> None:
                 args.method = "delete"
 
     search_filter = make_search_filter(args)
-    #print(args)
-    #print(search_filter, args.mark)
+
+    if "mark" in args:
+        print("# " + gettext("searching %s and marking %s") % (search_filter, args.mark))
+    else:
+        print("# " + gettext("searching %s") % (search_filter,))
     #sys.exit(1)
 
-    srv = login(args)
-    try:
-        data = imap_check(CatastrophicFailure, "CAPABILITY", srv.capability())
-        capabilities = data[0].split(b" ")
-        #print(capabilities)
-        if b"IMAP4rev1" not in capabilities:
-            raise CatastrophicFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", args.host, args.port)
+    for_each_account(args, do_action, search_filter)
 
-        if len(args.folders) == 0:
-            assert args.command in ["count", "fetch"]
-            folders = get_folders(srv)
-        else:
-            folders = args.folders
+def do_action(args : _t.Any, srv : IMAP4, search_filter : str) -> None:
+    data = imap_check(CatastrophicFailure, "CAPABILITY", srv.capability())
+    capabilities = data[0].split(b" ")
+    #print(capabilities)
+    if b"IMAP4rev1" not in capabilities:
+        raise CatastrophicFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", args.host, args.port)
 
-        for folder in folders:
-            if want_stop: raise KeyboardInterrupt()
+    if len(args.folders) == 0:
+        assert args.command in ["count", "fetch"]
+        folders = get_folders(srv)
+    else:
+        folders = args.folders
 
-            typ, data = srv.select(imap_quote(folder))
+    for folder in folders:
+        if want_stop: raise KeyboardInterrupt()
+
+        typ, data = srv.select(imap_quote(folder))
+        if typ != "OK":
+            imap_error("SELECT", typ, data)
+            continue
+
+        try:
+            typ, data = srv.uid("SEARCH", search_filter)
             if typ != "OK":
-                imap_error("SELECT", typ, data)
+                imap_error("SEARCH", typ, data)
                 continue
 
-            try:
-                typ, data = srv.uid("SEARCH", search_filter)
-                if typ != "OK":
-                    imap_error("SEARCH", typ, data)
-                    continue
+            result = data[0]
+            if result == b"":
+                message_uids = []
+            else:
+                message_uids = result.split(b" ")
 
-                result = data[0]
-                if result == b"":
-                    message_uids = []
+            if args.command == "count":
+                if args.porcelain:
+                    print(f"{len(message_uids)} {folder}")
                 else:
-                    message_uids = result.split(b" ")
+                    print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
+                continue
+            elif len(message_uids) == 0:
+                # nothing to do
+                print(gettext("folder `%s` has no messages matching %s") % (folder, search_filter))
+                continue
 
-                if args.command == "count":
-                    if args.porcelain:
-                        print(f"{len(message_uids)} {folder}")
-                    else:
-                        print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
-                    continue
-                elif len(message_uids) == 0:
-                    # nothing to do
-                    print(gettext("folder `%s` has no messages matching %s") % (folder, search_filter))
-                    continue
-
-                act : str
-                actargs : _t.Any
-                if args.command == "mark":
-                    act = "marking as %s %d messages matching %s from folder `%s`"
-                    actargs  = (args.mark.upper(), len(message_uids), search_filter, folder)
-                elif args.command == "fetch":
-                    act = "fetching %d messages matching %s from folder `%s`"
+            act : str
+            actargs : _t.Any
+            if args.command == "mark":
+                act = "marking as %s %d messages matching %s from folder `%s`"
+                actargs  = (args.mark.upper(), len(message_uids), search_filter, folder)
+            elif args.command == "fetch":
+                act = "fetching %d messages matching %s from folder `%s`"
+                actargs  = (len(message_uids), search_filter, folder)
+            elif args.command == "delete":
+                if args.method in ["delete", "delete-noexpunge"]:
+                    act = "deleting %d messages matching %s from folder `%s`"
                     actargs  = (len(message_uids), search_filter, folder)
-                elif args.command == "delete":
-                    if args.method in ["delete", "delete-noexpunge"]:
-                        act = "deleting %d messages matching %s from folder `%s`"
-                        actargs  = (len(message_uids), search_filter, folder)
-                    elif args.method == "gmail-trash":
-                        act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
-                        actargs  = (len(message_uids), search_filter, folder)
-                    else:
-                        assert False
+                elif args.method == "gmail-trash":
+                    act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
+                    actargs  = (len(message_uids), search_filter, folder)
                 else:
                     assert False
+            else:
+                assert False
 
-                if args.dry_run:
-                    print(gettext("dry-run, not " + act) % actargs)
-                    continue
-                else:
-                    print(gettext(act) % actargs)
+            if args.dry_run:
+                print(gettext("dry-run, not " + act) % actargs)
+                continue
+            else:
+                print(gettext(act) % actargs)
 
-                if args.command == "mark":
-                    do_store(args, srv, args.mark, message_uids)
-                elif args.command == "fetch":
-                    do_fetch(args, srv, message_uids)
-                elif args.command == "delete":
-                    do_store(args, srv, args.method, message_uids)
-            finally:
-                srv.close()
-    finally:
-        srv.logout()
+            if args.command == "mark":
+                do_store(args, srv, args.mark, message_uids)
+            elif args.command == "fetch":
+                do_fetch(args, srv, message_uids)
+            elif args.command == "delete":
+                do_store(args, srv, args.method, message_uids)
+        finally:
+            srv.close()
 
-def do_fetch(args : _t.Any, srv : _t.Any, message_uids : _t.List[bytes]) -> None:
+def do_fetch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
     fetch_num = args.fetch_number
     batch : _t.List[bytes] = []
     batch_total = 0
@@ -416,7 +437,7 @@ def do_fetch(args : _t.Any, srv : _t.Any, message_uids : _t.List[bytes]) -> None
 
         to_fetch, message_uids = message_uids[:fetch_num], message_uids[fetch_num:]
         to_fetch_set : _t.Set[bytes] = set(to_fetch)
-        typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)")
+        typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)") # type: ignore
         if typ != "OK":
             imap_error("FETCH", typ, data)
             continue
@@ -473,7 +494,7 @@ def fetch_check_untagged(args : _t.Any, attrs : _t.Dict[bytes, bytes]) -> None:
             raise KeyError()
     except KeyError:
         sys.stderr.write("attrs dump: %s" % (repr(attrs),) + "\n")
-        raise CatastrophicFailure("another client is performing unknown conflicting actions in parallel with us, aborting")
+        raise Failure("another client is performing unknown conflicting actions in parallel with us, aborting")
 
     # This is an untagged response generated by the server because
     # another client changed some flags.
@@ -482,9 +503,9 @@ def fetch_check_untagged(args : _t.Any, attrs : _t.Dict[bytes, bytes]) -> None:
        (args.mark == "unseen" and b"\\Seen" not in flags) or \
        (args.mark == "flagged" and b"\\Flagged" in flags) or \
        (args.mark == "unflagged" and b"\\Flagged" not in flags):
-        raise CatastrophicFailure("another client is marking messages with conflicting flags in parallel with us, aborting")
+        raise Failure("another client is marking messages with conflicting flags in parallel with us, aborting")
 
-def do_fetch_batch(args : _t.Any, srv : _t.Any, message_uids : _t.List[bytes], total_size : int) -> None:
+def do_fetch_batch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes], total_size : int) -> None:
     global had_errors
     if want_stop: raise KeyboardInterrupt()
 
@@ -492,7 +513,7 @@ def do_fetch_batch(args : _t.Any, srv : _t.Any, message_uids : _t.List[bytes], t
     print("... " + gettext("fetching a batch of %d messages (%d bytes)") % (len(message_uids), total_size))
 
     joined = b",".join(message_uids)
-    typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])")
+    typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])") # type: ignore
     if typ != "OK":
         imap_error("FETCH", typ, data)
         return
@@ -558,7 +579,7 @@ def do_fetch_batch(args : _t.Any, srv : _t.Any, message_uids : _t.List[bytes], t
     print("... " + gettext("delivered a batch of %d messages via %s") % (len(done_message_uids), args.mda))
     do_store(args, srv, args.mark, done_message_uids)
 
-def do_store(args : _t.Any, srv : _t.Any, method : str, message_uids : _t.List[bytes]) -> None:
+def do_store(args : _t.Any, srv : IMAP4, method : str, message_uids : _t.List[bytes]) -> None:
     if method == "noop": return
 
     marking_as = "... " + gettext("marking as %s a batch of %d messages")
@@ -571,24 +592,24 @@ def do_store(args : _t.Any, srv : _t.Any, method : str, message_uids : _t.List[b
         joined = b",".join(to_store)
         if method == "seen":
             print(marking_as % ("SEEN", len(to_store)))
-            srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Seen")
+            srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Seen") # type: ignore
         elif method == "unseen":
             print(marking_as % ("UNSEEN", len(to_store)))
-            srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Seen")
+            srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Seen") # type: ignore
         elif method == "flagged":
             print(marking_as % ("FLAGGED", len(to_store)))
-            srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Flagged")
+            srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Flagged") # type: ignore
         elif method == "unflagged":
             print(marking_as % ("UNFLAGGED", len(to_store)))
-            srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Flagged")
+            srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Flagged") # type: ignore
         elif method in ["delete", "delete-noexpunge"]:
             print("... " + gettext("deleting a batch of %d messages") % (len(to_store),))
-            srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted")
+            srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted") # type: ignore
             if method == "delete":
                 srv.expunge()
         elif method == "gmail-trash":
             print("... " + gettext("moving a batch of %d messages to `[GMail]/Trash`") % (len(to_store),))
-            srv.uid("STORE", joined, "+X-GM-LABELS", "\\Trash")
+            srv.uid("STORE", joined, "+X-GM-LABELS", "\\Trash") # type: ignore
         else:
             assert False
 
@@ -614,6 +635,14 @@ def add_examples(fmt : _t.Any) -> None:
     fmt.add_code(f'{__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" count')
     fmt.end_section()
 
+    fmt.start_section(_("with two accounts on the same server"))
+    fmt.add_code(f"""{__package__} --ssl --host imap.example.com \\
+         --user myself@example.com --passcmd "pass show mail/myself@example.com" \\
+         --user another@example.com --passcmd "pass show mail/another@example.com" \\
+         count --porcelain
+""")
+    fmt.end_section()
+
     fmt.end_section()
 
     fmt.add_text(_("Now, assuming the following are set:"))
@@ -627,7 +656,7 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
     fmt.add_code(f'{__package__} "${{gmail_common[@]}}" count --folder "[Gmail]/Trash" --older-than 7')
     fmt.end_section()
 
-    fmt.start_section(_("Mark all messages in `INBOX` as UNSEEN, and then fetch all UNSEEN messages marking them SEEN as you download them, so that if the process gets interrupted you could continue from where you left off"))
+    fmt.start_section(_(f"Mark all messages in `INBOX` as UNSEEN, fetch all UNSEEN messages marking them SEEN as you download them so that if the process gets interrupted you could continue from where you left off, and then run `{__package__} fetch` as daemon to download updates every hour"))
     fmt.add_code(f"""# {_("setup: do once")}
 {__package__} "${{common[@]}}" mark --folder "INBOX" unseen
 
@@ -725,6 +754,56 @@ def main() -> None:
     agrp = parser.add_argument_group("debugging")
     agrp.add_argument("--debug", action="store_true", help=_("print IMAP conversation to stderr"))
 
+    parser.set_defaults(accounts = [])
+
+    class EmitAccount(argparse.Action):
+        def __init__(self, option_strings : str, dest : str, default : _t.Any = None, **kwargs : _t.Any) -> None:
+            self.ptype = default
+            super().__init__(option_strings, dest, type=str, **kwargs)
+
+        def __call__(self, parser : _t.Any, cfg : _t.Any, value : _t.Any, option_string : _t.Optional[str] = None) -> None:
+            if cfg.host is None:
+                return die(_("`--host` is required"))
+
+            host : str = cfg.host
+
+            IMAP_base : type
+            if cfg.socket in ["plain", "starttls"]:
+                port = 143
+                IMAP_base = IMAP4
+            elif cfg.socket == "ssl":
+                port = 993
+                IMAP_base = IMAP4_SSL
+
+            if cfg.port is not None:
+                port = cfg.port
+
+            if cfg.user is None:
+                return die(_("`--user` is required"))
+
+            user = cfg.user
+            cfg.user = None
+
+            if self.ptype == "file":
+                with open(value, "rb") as f:
+                    password = f.readline().decode(defenc)
+            elif self.ptype == "cmd":
+                with subprocess.Popen(value, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None, shell=True) as p:
+                    p.stdin.close() # type: ignore
+                    password = p.stdout.readline().decode(defenc) # type: ignore
+                    retcode = p.wait()
+                    if retcode != 0:
+                        die(_("`--passcmd` (`%s`) failed with non-zero exit code %d") % (args.passcmd, retcode))
+            else:
+                assert False
+
+            if password[-1:] == "\n":
+                password = password[:-1]
+            if password[-1:] == "\r":
+                password = password[:-1]
+
+            cfg.accounts.append(Account(cfg.socket, host, port, user, password, IMAP_base))
+
     agrp = parser.add_argument_group("server connection")
     grp = agrp.add_mutually_exclusive_group()
     grp.add_argument("--plain", dest="socket", action="store_const", const = "plain", help=_("connect via plain-text socket"))
@@ -732,15 +811,16 @@ def main() -> None:
     grp.add_argument("--starttls", dest="socket", action="store_const", const = "starttls", help=_("connect via plain-text socket, but then use STARTTLS command"))
     grp.set_defaults(socket = "ssl")
 
-    agrp.add_argument("--host", type=str, default = "localhost", help=_("IMAP server to connect to"))
+    agrp.add_argument("--host", type=str, help=_("IMAP server to connect to (required)"))
     agrp.add_argument("--port", type=int, help=_("port to use") + " " + _("(default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)"))
 
-    agrp = parser.add_argument_group(_("server auth"), description=_("`--user` and either of `--passfile` or `--passcmd` are required"))
-    agrp.add_argument("--user", type=str, help=_("username on the server"))
+    agrp = parser.add_argument_group(_("server auth"), description=_("either of `--passfile` or `--passcmd` are required"))
+    agrp.add_argument("--user", type=str, help=_("username on the server (required)"))
 
     grp = agrp.add_mutually_exclusive_group()
-    grp.add_argument("--passfile", type=str, help=_("file containing the password on its first line"))
-    grp.add_argument("--passcmd", type=str, help=_("shell command that returns the password as the first line of its stdout"))
+    grp.add_argument("--passfile", action=EmitAccount, default="file", help=_("file containing the password on its first line"))
+    grp.add_argument("--passcmd", action=EmitAccount, default="cmd", help=_("shell command that returns the password as the first line of its stdout"))
+    grp.set_defaults(password = None)
 
     agrp = parser.add_argument_group(_("IMAP batching settings"), description=_("larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen"))
     agrp.add_argument("--store-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `STORE` requests (default: %(default)s)"))
@@ -880,40 +960,22 @@ def main() -> None:
         print(parser.format_help(1024))
         sys.exit(0)
 
-    if args.user is None:
-        die(_("`--user` is required"))
-
-    if args.passfile is not None:
-        with open(args.passfile, "rb") as f:
-            password = f.readline().decode(defenc)
-    elif args.passcmd is not None:
-        with subprocess.Popen(args.passcmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None, shell=True) as p:
-            p.stdin.close() # type: ignore
-            password = p.stdout.readline().decode(defenc) # type: ignore
-            retcode = p.wait()
-            if retcode != 0:
-                die(_("`--passcmd` (`%s`) failed with non-zero exit code %d") % (args.passcmd, retcode))
-    else:
-        die(_("either `--passfile` or `--passcmd` is required"))
-
-    if password[-1:] == "\n":
-        password = password[:-1]
-
-    args.password = password
+    if len(args.accounts) == 0:
+        return die(_("no accounts specified, need at least one `--host`, `--user`, and either of `--passfile` or `--passcmd`"))
 
     handle_signals()
 
     try:
         args.func(args)
     except CatastrophicFailure as exc:
+        had_errors = True
         sys.stderr.write(_("error") + ": " + exc.show() + "\n")
-        had_errors = True
     except KeyboardInterrupt:
+        had_errors = True
         sys.stderr.write(_("Interrupted!") + "\n")
-        had_errors = True
     except Exception as exc:
-        traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
         had_errors = True
+        traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
 
     if had_errors:
         sys.stderr.write(_("Had errors!") + "\n")

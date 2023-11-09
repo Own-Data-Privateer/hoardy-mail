@@ -233,15 +233,15 @@ Logins to a specified server, performs specified actions on all messages matchin
   - `--starttls`
   : connect via plain-text socket, but then use STARTTLS command
   - `--host HOST`
-  : IMAP server to connect to
+  : IMAP server to connect to (required)
   - `--port PORT`
   : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
 
 - server auth:
-  `--user` and either of `--passfile` or `--passcmd` are required
+  either of `--passfile` or `--passcmd` are required
 
   - `--user USER`
-  : username on the server
+  : username on the server (required)
   - `--passfile PASSFILE`
   : file containing the password on its first line
   - `--passcmd PASSCMD`
@@ -466,6 +466,15 @@ Specifying `--folder` multiple times will perform the specified action on all sp
     imaparms --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" count
     ```
 
+  - with two accounts on the same server:
+    ```
+    imaparms --ssl --host imap.example.com \
+             --user myself@example.com --passcmd "pass show mail/myself@example.com" \
+             --user another@example.com --passcmd "pass show mail/another@example.com" \
+             count --porcelain
+
+    ```
+
 Now, assuming the following are set:
 
 ```
@@ -481,7 +490,7 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
   imaparms "${gmail_common[@]}" count --folder "[Gmail]/Trash" --older-than 7
   ```
 
-- Mark all messages in `INBOX` as UNSEEN, and then fetch all UNSEEN messages marking them SEEN as you download them, so that if the process gets interrupted you could continue from where you left off:
+- Mark all messages in `INBOX` as UNSEEN, fetch all UNSEEN messages marking them SEEN as you download them so that if the process gets interrupted you could continue from where you left off, and then run `imaparms fetch` as daemon to download updates every hour:
   ```
   # setup: do once
   imaparms "${common[@]}" mark --folder "INBOX" unseen
