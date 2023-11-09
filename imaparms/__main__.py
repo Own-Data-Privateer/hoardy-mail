@@ -196,18 +196,17 @@ def imap_date(date : time.struct_time) -> str:
 def make_search_filter(args : _t.Any) -> str:
     filters = []
 
-    if args.messages == "all":
-        pass
-    elif args.messages == "seen":
-        filters.append(f"SEEN")
-    elif args.messages == "unseen":
-        filters.append(f"UNSEEN")
-    elif args.messages == "flagged":
-        filters.append(f"FLAGGED")
-    elif args.messages == "unflagged":
-        filters.append(f"UNFLAGGED")
-    else:
-        assert False
+    if args.seen is not None:
+        if args.seen:
+            filters.append("SEEN")
+        else:
+            filters.append("UNSEEN")
+
+    if args.flagged is not None:
+        if args.flagged:
+            filters.append("FLAGGED")
+        else:
+            filters.append("UNFLAGGED")
 
     for f in args.hfrom:
         filters.append(f'FROM {imap_quote(f)}')
@@ -253,15 +252,33 @@ def imap_check(exc : _t.Any, command : str, v : _t.Tuple[str, _t.Any]) -> _t.Any
     return data
 
 def cmd_action(args : _t.Any) -> None:
-    search_filter = make_search_filter(args)
-    #print(search_filter)
-    #sys.exit(1)
+    if args.all is None and args.seen is None and args.flagged is None:
+        if args.flag_default is None:
+            pass
+        elif args.flag_default == "all":
+            args.all = True
+        elif args.flag_default == "seen":
+            args.seen = True
+        elif args.flag_default == "unseen":
+            args.seen = False
+        else:
+            assert False
 
-    if args.command == "fetch":
+    if args.command == "mark":
+        if args.all is None and args.seen is None and args.flagged is None:
+            if args.mark == "seen":
+                args.seen = False
+            elif args.mark == "unseen":
+                args.seen = True
+            elif args.mark == "flagged":
+                args.flagged = False
+            elif args.mark == "unflagged":
+                args.flagged = True
+    elif args.command == "fetch":
         if args.mark == "auto":
-            if args.messages == "unseen":
+            if args.all is None and args.seen == False and args.flagged is None:
                 args.mark = "seen"
-            elif args.messages == "unflagged":
+            elif args.all is None and args.seen is None and args.flagged == False:
                 args.mark = "flagged"
             else:
                 args.mark = "noop"
@@ -272,6 +289,11 @@ def cmd_action(args : _t.Any) -> None:
                 args.method = "gmail-trash"
             else:
                 args.method = "delete"
+
+    search_filter = make_search_filter(args)
+    #print(args)
+    #print(search_filter, args.mark)
+    #sys.exit(1)
 
     try:
         srv = connect(args)
@@ -704,29 +726,38 @@ def main() -> None:
         agrp = cmd.add_argument_group(_("debugging"))
         agrp.add_argument("--dry-run", action="store_true", help=_("don't perform any actions, only show what would be done"))
 
-    def add_filters(cmd : _t.Any, messages : _t.Optional[str]) -> None:
+    def add_filters(cmd : _t.Any, default : _t.Optional[str]) -> None:
+        cmd.set_defaults(flag_default = default)
+
         def_req = ""
         def_str = " " + _("(default)")
         def_all, def_seen, def_unseen = "", "", ""
-        if messages is None:
-            def_req = " " + _("(required)")
-        elif messages == "all":
+        if default is None:
+            def_req = " " + _("(default: depends on other arguments)")
+        elif default == "all":
             def_all = def_str
-        elif messages == "seen":
+        elif default == "seen":
             def_seen = def_str
-        elif messages == "unseen":
+        elif default == "unseen":
             def_unseen = def_str
         else:
             assert False
 
-        agrp = cmd.add_argument_group(_("message search filters") + def_req)
-        grp = agrp.add_mutually_exclusive_group(required = messages is None)
-        grp.add_argument("--all", dest="messages", action="store_const", const = "all", help=_("operate on all messages") + def_all)
-        grp.add_argument("--seen", dest="messages", action="store_const", const = "seen", help=_("operate on messages marked as SEEN") + def_seen)
-        grp.add_argument("--unseen", dest="messages", action="store_const", const = "unseen", help=_("operate on messages not marked as SEEN") + def_unseen)
-        grp.add_argument("--flagged", dest="messages", action="store_const", const = "flagged", help=_("operate on messages marked as FLAGGED"))
-        grp.add_argument("--unflagged", dest="messages", action="store_const", const = "unflagged", help=_("operate on messages not marked as FLAGGED"))
-        grp.set_defaults(messages = messages)
+        agrp = cmd.add_argument_group(_("message search filters"))
+
+        bgrp = cmd.add_argument_group(_("message flag filters") + def_req)
+        egrp = bgrp.add_mutually_exclusive_group()
+        egrp.add_argument("--all", dest="all", action="store_true", default = None, help=_("operate on all messages") + def_all)
+
+        grp = egrp.add_mutually_exclusive_group()
+        grp.add_argument("--seen", dest="seen", action="store_true", help=_("operate on messages marked as SEEN") + def_seen)
+        grp.add_argument("--unseen", dest="seen", action="store_false", help=_("operate on messages not marked as SEEN") + def_unseen)
+        grp.set_defaults(seen = None)
+
+        grp = egrp.add_mutually_exclusive_group()
+        grp.add_argument("--flagged", dest="flagged", action="store_true", help=_("operate on messages marked as FLAGGED"))
+        grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as FLAGGED"))
+        grp.set_defaults(flagged = None)
 
         agrp.add_argument("--older-than", metavar = "DAYS", type=int, help=_("operate on messages older than this many days"))
         agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help=_("operate on messages not older than this many days"))
@@ -757,11 +788,12 @@ def main() -> None:
     add_filters(cmd, None)
     add_req_folders(cmd)
     agrp = cmd.add_argument_group("marking")
+    sets_x_if = _("sets `%s` if no message search filter is specified")
     agrp.add_argument("mark", choices=["seen", "unseen", "flagged", "unflagged"], help=_("mark how") + " " + _("(required)") + f""":
-- `seen`: {_("add `SEEN` flag")}
-- `unseen`: {_("remove `SEEN` flag")}
-- `flag`: {_("add `FLAGGED` flag")}
-- `unflag`: {_("remove `FLAGGED` flag")}
+- `seen`: {_("add `SEEN` flag")}, {sets_x_if % ("--unseen",)}
+- `unseen`: {_("remove `SEEN` flag")}, {sets_x_if % ("--seen",)}
+- `flag`: {_("add `FLAGGED` flag")}, {sets_x_if % ("--unflagged",)}
+- `unflag`: {_("remove `FLAGGED` flag")}, {sets_x_if % ("--flagged",)}
 """)
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="mark")
@@ -772,7 +804,7 @@ def main() -> None:
     add_req_folders(cmd)
     agrp = cmd.add_argument_group("marking")
     agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
-- `auto`: {_('`flagged` when `--unflagged`, `--seen` when `--unseen`, `noop` otherwise')} {_("(default)")}
+- `auto`: {_('`seen` when only `--unseen` is set (default), `flagged` when only `--unflagged` is set, `noop` otherwise')}
 - `noop`: {_("do nothing")}
 - `seen`: {_("add `SEEN` flag")}
 - `unseen`: {_("remove `SEEN` flag")}

@@ -190,9 +190,19 @@ Logins to a specified server, performs specified actions on all messages matchin
     - `delete (expire)`
     : delete matching messages from specified folders
 
-### imaparms count [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME]
+### imaparms count [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME]
 
 - message search filters:
+  - `--older-than DAYS`
+  : operate on messages older than this many days
+  - `--newer-than DAYS`
+  : operate on messages not older than this many days
+  - `--from ADDRESS`
+  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
+  - `--not-from ADDRESS`
+  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
+
+- message flag filters:
   - `--all`
   : operate on all messages (default)
   - `--seen`
@@ -203,6 +213,18 @@ Logins to a specified server, performs specified actions on all messages matchin
   : operate on messages marked as FLAGGED
   - `--unflagged`
   : operate on messages not marked as FLAGGED
+
+- folder specification:
+  - `--folder NAME`
+  : mail folders to operane on; can be specified multiple times (default: all available mail folders)
+
+### imaparms mark [--dry-run] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME {seen,unseen,flagged,unflagged}
+
+- debugging:
+  - `--dry-run`
+  : don't perform any actions, only show what would be done
+
+- message search filters:
   - `--older-than DAYS`
   : operate on messages older than this many days
   - `--newer-than DAYS`
@@ -212,17 +234,7 @@ Logins to a specified server, performs specified actions on all messages matchin
   - `--not-from ADDRESS`
   : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
-- folder specification:
-  - `--folder NAME`
-  : mail folders to operane on; can be specified multiple times (default: all available mail folders)
-
-### imaparms mark [--dry-run] (--all | --seen | --unseen | --flagged | --unflagged) [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME {seen,unseen,flagged,unflagged}
-
-- debugging:
-  - `--dry-run`
-  : don't perform any actions, only show what would be done
-
-- message search filters (required):
+- message flag filters (default: depends on other arguments):
   - `--all`
   : operate on all messages
   - `--seen`
@@ -233,6 +245,26 @@ Logins to a specified server, performs specified actions on all messages matchin
   : operate on messages marked as FLAGGED
   - `--unflagged`
   : operate on messages not marked as FLAGGED
+
+- folder specification:
+  - `--folder NAME`
+  : mail folders to operate on; can be specified multiple times (required)
+
+- marking:
+  - `{seen,unseen,flagged,unflagged}`
+  : mark how (required):
+    - `seen`: add `SEEN` flag, sets `--unseen` if no message search filter is specified
+    - `unseen`: remove `SEEN` flag, sets `--seen` if no message search filter is specified
+    - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message search filter is specified
+    - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message search filter is specified
+
+### imaparms fetch [--dry-run] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+
+- debugging:
+  - `--dry-run`
+  : don't perform any actions, only show what would be done
+
+- message search filters:
   - `--older-than DAYS`
   : operate on messages older than this many days
   - `--newer-than DAYS`
@@ -242,25 +274,7 @@ Logins to a specified server, performs specified actions on all messages matchin
   - `--not-from ADDRESS`
   : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
-- folder specification:
-  - `--folder NAME`
-  : mail folders to operate on; can be specified multiple times (required)
-
-- marking:
-  - `{seen,unseen,flagged,unflagged}`
-  : mark how (required):
-    - `seen`: add `SEEN` flag
-    - `unseen`: remove `SEEN` flag
-    - `flag`: add `FLAGGED` flag
-    - `unflag`: remove `FLAGGED` flag
-
-### imaparms fetch [--dry-run] [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] --folder NAME [--mark {auto,noop,seen,unseen,flagged,unflagged}]
-
-- debugging:
-  - `--dry-run`
-  : don't perform any actions, only show what would be done
-
-- message search filters:
+- message flag filters:
   - `--all`
   : operate on all messages
   - `--seen`
@@ -271,14 +285,6 @@ Logins to a specified server, performs specified actions on all messages matchin
   : operate on messages marked as FLAGGED
   - `--unflagged`
   : operate on messages not marked as FLAGGED
-  - `--older-than DAYS`
-  : operate on messages older than this many days
-  - `--newer-than DAYS`
-  : operate on messages not older than this many days
-  - `--from ADDRESS`
-  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
-  - `--not-from ADDRESS`
-  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
 - folder specification:
   - `--folder NAME`
@@ -287,14 +293,14 @@ Logins to a specified server, performs specified actions on all messages matchin
 - marking:
   - `--mark {auto,noop,seen,unseen,flagged,unflagged}`
   : after the message was fetched:
-    - `auto`: `flagged` when `--unflagged`, `--seen` when `--unseen`, `noop` otherwise (default)
+    - `auto`: `seen` when only `--unseen` is set (default), `flagged` when only `--unflagged` is set, `noop` otherwise
     - `noop`: do nothing
     - `seen`: add `SEEN` flag
     - `unseen`: remove `SEEN` flag
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--dry-run] [--all | --seen | --unseen | --flagged | --unflagged] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder NAME
+### imaparms delete [--dry-run] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}] --folder NAME
 
 - optional arguments:
   - `--method {auto,delete,delete-noexpunge,gmail-trash}`
@@ -309,6 +315,16 @@ Logins to a specified server, performs specified actions on all messages matchin
   : don't perform any actions, only show what would be done
 
 - message search filters:
+  - `--older-than DAYS`
+  : operate on messages older than this many days
+  - `--newer-than DAYS`
+  : operate on messages not older than this many days
+  - `--from ADDRESS`
+  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
+  - `--not-from ADDRESS`
+  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
+
+- message flag filters:
   - `--all`
   : operate on all messages
   - `--seen`
@@ -319,14 +335,6 @@ Logins to a specified server, performs specified actions on all messages matchin
   : operate on messages marked as FLAGGED
   - `--unflagged`
   : operate on messages not marked as FLAGGED
-  - `--older-than DAYS`
-  : operate on messages older than this many days
-  - `--newer-than DAYS`
-  : operate on messages not older than this many days
-  - `--from ADDRESS`
-  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
-  - `--not-from ADDRESS`
-  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
 - folder specification:
   - `--folder NAME`
