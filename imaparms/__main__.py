@@ -365,68 +365,74 @@ def do_action(args : _t.Any, srv : IMAP4, search_filter : str) -> None:
     for folder in folders:
         if want_stop: raise KeyboardInterrupt()
 
-        typ, data = srv.select(imap_quote(folder))
+        do_folder_action(args, srv, search_filter, folder)
+
+def do_folder_action(args : _t.Any, srv : IMAP4, search_filter : str, folder : str) -> None:
+    typ, data = srv.select(imap_quote(folder))
+    if typ != "OK":
+        imap_error("SELECT", typ, data)
+        return
+
+    try:
+        typ, data = srv.uid("SEARCH", search_filter)
         if typ != "OK":
-            imap_error("SELECT", typ, data)
-            continue
+            imap_error("SEARCH", typ, data)
+            return
 
-        try:
-            typ, data = srv.uid("SEARCH", search_filter)
-            if typ != "OK":
-                imap_error("SEARCH", typ, data)
-                continue
+        result : _t.Optional[bytes] = data[0]
+        if result is None:
+            imap_error("SEARCH", typ, data)
+            return
+        elif result == b"":
+            message_uids = []
+        else:
+            message_uids = result.split(b" ")
 
-            result = data[0]
-            if result == b"":
-                message_uids = []
+        if args.command == "count":
+            if args.porcelain:
+                print(f"{len(message_uids)} {folder}")
             else:
-                message_uids = result.split(b" ")
+                print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
+            return
+        elif len(message_uids) == 0:
+            # nothing to do
+            print(gettext("folder `%s` has no messages matching %s") % (folder, search_filter))
+            return
 
-            if args.command == "count":
-                if args.porcelain:
-                    print(f"{len(message_uids)} {folder}")
-                else:
-                    print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
-                continue
-            elif len(message_uids) == 0:
-                # nothing to do
-                print(gettext("folder `%s` has no messages matching %s") % (folder, search_filter))
-                continue
-
-            act : str
-            actargs : _t.Any
-            if args.command == "mark":
-                act = "marking as %s %d messages matching %s from folder `%s`"
-                actargs  = (args.mark.upper(), len(message_uids), search_filter, folder)
-            elif args.command == "fetch":
-                act = "fetching %d messages matching %s from folder `%s`"
+        act : str
+        actargs : _t.Any
+        if args.command == "mark":
+            act = "marking as %s %d messages matching %s from folder `%s`"
+            actargs  = (args.mark.upper(), len(message_uids), search_filter, folder)
+        elif args.command == "fetch":
+            act = "fetching %d messages matching %s from folder `%s`"
+            actargs  = (len(message_uids), search_filter, folder)
+        elif args.command == "delete":
+            if args.method in ["delete", "delete-noexpunge"]:
+                act = "deleting %d messages matching %s from folder `%s`"
                 actargs  = (len(message_uids), search_filter, folder)
-            elif args.command == "delete":
-                if args.method in ["delete", "delete-noexpunge"]:
-                    act = "deleting %d messages matching %s from folder `%s`"
-                    actargs  = (len(message_uids), search_filter, folder)
-                elif args.method == "gmail-trash":
-                    act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
-                    actargs  = (len(message_uids), search_filter, folder)
-                else:
-                    assert False
+            elif args.method == "gmail-trash":
+                act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
+                actargs  = (len(message_uids), search_filter, folder)
             else:
                 assert False
+        else:
+            assert False
 
-            if args.dry_run:
-                print(gettext("dry-run, not " + act) % actargs)
-                continue
-            else:
-                print(gettext(act) % actargs)
+        if args.dry_run:
+            print(gettext("dry-run, not " + act) % actargs)
+            return
+        else:
+            print(gettext(act) % actargs)
 
-            if args.command == "mark":
-                do_store(args, srv, args.mark, message_uids)
-            elif args.command == "fetch":
-                do_fetch(args, srv, message_uids)
-            elif args.command == "delete":
-                do_store(args, srv, args.method, message_uids)
-        finally:
-            srv.close()
+        if args.command == "mark":
+            do_store(args, srv, args.mark, message_uids)
+        elif args.command == "fetch":
+            do_fetch(args, srv, message_uids)
+        elif args.command == "delete":
+            do_store(args, srv, args.method, message_uids)
+    finally:
+        srv.close()
 
 def do_fetch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
     fetch_num = args.fetch_number
