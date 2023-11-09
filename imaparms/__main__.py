@@ -624,6 +624,8 @@ def main() -> None:
     _ = gettext
     global had_errors
 
+    defenc = sys.getdefaultencoding()
+
     parser = argparse.BetterArgumentParser(
         prog=__package__,
         description=_("A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for performing batch operations on messages residing on IMAP4 servers.") + "\n" + \
@@ -777,11 +779,11 @@ def main() -> None:
 
     if args.passfile is not None:
         with open(args.passfile, "rb") as f:
-            password = f.readline().decode("utf-8")
+            password = f.readline().decode(defenc)
     elif args.passcmd is not None:
         with subprocess.Popen(args.passcmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None, shell=True) as p:
             p.stdin.close() # type: ignore
-            password = p.stdout.readline().decode("utf-8") # type: ignore
+            password = p.stdout.readline().decode(defenc) # type: ignore
             retcode = p.wait()
             if retcode != 0:
                 die(_("`--passcmd` (`%s`) failed with non-zero exit code %d") % (args.passcmd, retcode))
