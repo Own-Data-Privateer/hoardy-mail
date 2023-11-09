@@ -130,7 +130,7 @@ def imap_parse_attrs(data : _t.List[bytes]) -> _t.Dict[bytes, bytes]:
 #print(imap_parse_attrs(imap_parse(b'UID 123 BODY[HEADER] {128}', [b'128bytesofdata'])))
 #sys.exit(1)
 
-def connect(args : _t.Any) -> _t.Any:
+def login(args : _t.Any) -> _t.Any:
     IMAP_base : type
     if args.socket in ["plain", "starttls"]:
         port = 143
@@ -170,15 +170,23 @@ def connect(args : _t.Any) -> _t.Any:
     ssl_context.check_hostname = True
     ssl_context.load_default_certs()
 
-    if args.socket == "ssl":
-        srv = IMAP(args.host, port, ssl_context = ssl_context)
-    else:
-        srv = IMAP(args.host, port)
-        if args.starttls:
-            srv.starttls(ssl_context)
+    try:
+        if args.socket == "ssl":
+            srv = IMAP(args.host, port, ssl_context = ssl_context)
+        else:
+            srv = IMAP(args.host, port)
+            if args.starttls:
+                srv.starttls(ssl_context)
+    except Exception as exc:
+        raise CatastrophicFailure("failed to connect to host %s port %s: %s", args.host, args.port, repr(exc))
 
-    srv.login(args.user, args.password)
-    print("# " + gettext("logged in as %s to host %s port %d (%s)") % (args.user, args.host, args.port, args.socket.upper()))
+    try:
+        srv.login(args.user, args.password)
+    except Exception as exc:
+        raise CatastrophicFailure("failed to login as %s to host %s port %s: %s", args.user, args.host, args.port, repr(exc))
+
+    sys.stdout.write("# " + gettext("logged in as %s to host %s port %d (%s)") % (args.user, args.host, args.port, args.socket.upper()) + "\n")
+    sys.stdout.flush()
 
     return srv
 
@@ -251,6 +259,25 @@ def imap_check(exc : _t.Any, command : str, v : _t.Tuple[str, _t.Any]) -> _t.Any
         raise exc("%s command failed: %s %s", command, typ, repr(data))
     return data
 
+def cmd_list(args : _t.Any) -> None:
+    srv = login(args)
+    try:
+        folders = get_folders(srv)
+        for e in folders:
+            print(e)
+    finally:
+        srv.logout()
+
+def get_folders(srv : _t.Any) -> _t.List[str]:
+    res = []
+    data = imap_check(CatastrophicFailure, "LIST", srv.list())
+    for el in data:
+        tags, _, arg = imap_parse(el)
+        if b"\\Noselect" in tags:
+            continue
+        res.append(arg.decode("utf-8"))
+    return res
+
 def cmd_action(args : _t.Any) -> None:
     if args.all is None and args.seen is None and args.flagged is None:
         if args.flag_default is None:
@@ -275,6 +302,9 @@ def cmd_action(args : _t.Any) -> None:
             elif args.mark == "unflagged":
                 args.flagged = True
     elif args.command == "fetch":
+        if args.mda is None:
+            die(gettext("`--mda` is not set"))
+
         if args.mark == "auto":
             if args.all is None and args.seen == False and args.flagged is None:
                 args.mark = "seen"
@@ -295,11 +325,7 @@ def cmd_action(args : _t.Any) -> None:
     #print(search_filter, args.mark)
     #sys.exit(1)
 
-    try:
-        srv = connect(args)
-    except Exception as exc:
-        raise CatastrophicFailure("failed to connect to host %s port %s: %s", args.host, args.port, repr(exc))
-
+    srv = login(args)
     try:
         data = imap_check(CatastrophicFailure, "CAPABILITY", srv.capability())
         capabilities = data[0].split(b" ")
@@ -309,15 +335,13 @@ def cmd_action(args : _t.Any) -> None:
 
         if len(args.folders) == 0:
             assert args.command in ["count", "fetch"]
+            folders = get_folders(srv)
+        else:
+            folders = args.folders
 
-            typ, data = srv.list()
-            for el in data:
-                tags, _, arg = imap_parse(el)
-                if "\\Noselect" in tags:
-                    continue
-                args.folders.append(arg)
+        for folder in folders:
+            if want_stop: raise KeyboardInterrupt()
 
-        for folder in args.folders:
             typ, data = srv.select(imap_quote(folder))
             if typ != "OK":
                 imap_error("SELECT", typ, data)
@@ -336,7 +360,10 @@ def cmd_action(args : _t.Any) -> None:
                     message_uids = result.split(b" ")
 
                 if args.command == "count":
-                    print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
+                    if args.porcelain:
+                        print(f"{len(message_uids)} {folder}")
+                    else:
+                        print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
                     continue
                 elif len(message_uids) == 0:
                     # nothing to do
@@ -787,9 +814,15 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(title="subcommands")
 
-    cmd = subparsers.add_parser("count", aliases = ["list"], help=_("count how many matching messages each specified folder has (counts for all available folders by default)"))
+    cmd = subparsers.add_parser("list", help=_("list all available folders on the server, one per line"),
+                                description = _("Login, perform IMAP `LIST` command to get all folders, print them one per line."))
+    cmd.set_defaults(func=cmd_list)
+
+    cmd = subparsers.add_parser("count", help=_("count how many matching messages each specified folder has (counts for all available folders by default)"),
+                                description = _("Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line."))
     add_filters(cmd, "all")
     add_folders(cmd)
+    cmd.add_argument("--porcelain", action="store_true", help=_("print in a machine-readable format"))
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="count")
 
@@ -867,10 +900,6 @@ def main() -> None:
         password = password[:-1]
 
     args.password = password
-
-    if args.command == "fetch":
-        if args.mda is None:
-            die(_("`--mda` is not set"))
 
     handle_signals()
 

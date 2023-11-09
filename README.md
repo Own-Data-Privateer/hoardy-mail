@@ -208,7 +208,7 @@ That is to say, I don't use OAuth2, which is why `imaparms` does not support OAu
 
 # Usage
 
-## imaparms [--version] [-h] [--help-markdown] [--debug] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] {count,list,mark,fetch,delete,expire} ...
+## imaparms [--version] [-h] [--help-markdown] [--debug] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] {list,count,mark,fetch,delete,expire} ...
 
 A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.
 Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out.
@@ -266,8 +266,10 @@ Logins to a specified server, performs specified actions on all messages matchin
     `maildrop` from Courier Mail Server project is a good KISS default.
 
 - subcommands:
-  - `{count,list,mark,fetch,delete,expire}`
-    - `count (list)`
+  - `{list,count,mark,fetch,delete,expire}`
+    - `list`
+    : list all available folders on the server, one per line
+    - `count`
     : count how many matching messages each specified folder has (counts for all available folders by default)
     - `mark`
     : mark matching messages in specified folders in a specified way
@@ -276,7 +278,17 @@ Logins to a specified server, performs specified actions on all messages matchin
     - `delete (expire)`
     : delete matching messages from specified folders
 
-### imaparms count [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME]
+### imaparms list
+
+Login, perform IMAP `LIST` command to get all folders, print them one per line.
+
+### imaparms count [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--folder NAME] [--porcelain]
+
+Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
+
+- optional arguments:
+  - `--porcelain`
+  : print in a machine-readable format
 
 - message search filters:
   - `--older-than DAYS`
