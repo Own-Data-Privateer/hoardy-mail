@@ -569,11 +569,11 @@ def add_examples(fmt : _t.Any) -> None:
     _ = gettext
     fmt.add_text("# " + _("Notes on usage"))
 
-    fmt.add_text(_("Specifying `--folder` multiple times will perform the specified action on all specified folders."))
-
     fmt.add_text(_('Message search filters are connected by logical "AND"s so, e.g., `--from "github.com" --not-from "notifications@github.com"` will act on messages which have a `From:` header with `github.com` but without `notifications@github.com` as substrings.'))
 
-    fmt.add_text(_("Also note that `fetch` and `delete` subcommands act on `--seen` messages by default."))
+    fmt.add_text(_("Note that `fetch` and `delete` subcommands act on `--seen` messages by default."))
+
+    fmt.add_text(_("Specifying `--folder` multiple times will perform the specified action on all specified folders."))
 
     fmt.add_text("# " + _("Examples"))
 
@@ -589,85 +589,95 @@ def add_examples(fmt : _t.Any) -> None:
 
     fmt.end_section()
 
+    fmt.add_text(_("Now, assuming the following are set:"))
+    fmt.add_code("""common_no_mda=(--ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com")
+common=("${{common_no_mda[@]}}" --mda maildrop)
+gmail_common_no_mda=(--ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com")
+gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
+""")
+
+    fmt.start_section(_("Count how many messages older than 7 days are in `[Gmail]/Trash` folder"))
+    fmt.add_code(f'{__package__} "${{gmail_common[@]}}" count --folder "[Gmail]/Trash" --older-than 7')
+    fmt.end_section()
+
     fmt.start_section(_("Mark all messages in `INBOX` as UNSEEN, and then fetch all UNSEEN messages marking them SEEN as you download them, so that if the process gets interrupted you could continue from where you left off"))
-    fmt.add_code(f"""{__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark --folder "INBOX" --seen unseen
-{__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX"
+    fmt.add_code(f"""# {_("setup: do once")}
+{__package__} "${{common[@]}}" mark --folder "INBOX" unseen
+
+# {_("repeatable part")}
+{__package__} "${{common[@]}}" fetch --folder "INBOX"
 
 # {_("download updates")}
 while true; do
     sleep 3600
-    {__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX"
+    {__package__} "${{common[@]}}" fetch --folder "INBOX"
 done
 """)
     fmt.end_section()
 
-    fmt.start_section(_(f"Similarly, but use FLAGGED instead of SEEN. This allows to use this in parallel with another instance of `{__package__}` using SEEN flag, or in parallel with `fetchmail` or other similar tool"))
-    fmt.add_code(f"""{__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" mark --folder "INBOX" --flagged unflagged
-{__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" fetch --folder "INBOX" --unflagged
-
-# {_("and this will work as if nothing of the above was run")}
-fetchmail
-""")
-    fmt.end_section()
-
     fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered in the last 7 days (rounded to the start of the start day by server time), but don't change any flags"))
-    fmt.add_code(f'{__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --mda maildrop fetch --mark noop --folder "INBOX" --all --newer-than 7')
+    fmt.add_code(f'{__package__} "${{common[@]}}" fetch --folder "INBOX" --all --newer-than 7')
     fmt.end_section()
 
     fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time)"))
-    fmt.add_code(f'{__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --mda maildrop fetch --mark noop --folder "INBOX" --all --newer-than 7')
+    fmt.add_code(f'{__package__} "${{common[@]}}" fetch --folder "INBOX" --all --newer-than 0')
     fmt.end_section()
 
     fmt.start_section(_("Delete all SEEN messages older than 7 days from `INBOX` folder"))
     fmt.add_text("")
-    fmt.add_text(_(f"Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets hacked, you won't be as vulnerable."))
-    fmt.add_code(f'{__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" delete --folder "INBOX" --older-than 7')
-    fmt.add_text(_("Note that the above only removes `--seen` messages by default."))
+    fmt.add_text(_(f"Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets cracked/hacked, you won't be as vulnerable."))
+    fmt.add_code(f'{__package__} "${{common[@]}}" delete --folder "INBOX" --older-than 7')
+    fmt.add_text(_("(`--seen` is implied by default)"))
     fmt.end_section()
 
-    fmt.start_section(_("**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `--seen` messages instead"))
-    fmt.add_code(f'{__package__} --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" delete --folder "INBOX"')
-    fmt.add_text(_("Though, setting at least `--older-than 1` in case you forgot you had another fetcher running in parallel and you want to be sure you won't lose any data in case something breaks, is highly recommended anyway."))
+    fmt.start_section(_("**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all SEEN messages instead"))
+    fmt.add_code(f'{__package__} "${{common[@]}}" delete --folder "INBOX"')
+    fmt.add_text(_("Though, setting at least `--older-than 1` to make sure you won't lose any data in case something breaks is highly recommended anyway."))
     fmt.end_section()
 
-    fmt.start_section(_("Count how many messages older than 7 days are in `[Gmail]/Trash` folder"))
-    fmt.add_code(f'{__package__} --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" count --folder "[Gmail]/Trash" --older-than 7')
+    fmt.start_section(_(f"Similarly to the above, but use FLAGGED instead of SEEN. This allows to use this in parallel with another instance of `{__package__}` using the SEEN flag, e.g. if you want to backup to two different machines independently, or if you want to use `{__package__}` simultaneously in parallel with `fetchmail` or other similar tool"))
+    fmt.add_code(f"""# {_("setup: do once")}
+{__package__} "${{common[@]}}" mark --folder "INBOX" unflagged
+
+# {_("repeatable part")}
+{__package__} "${{common[@]}}" fetch --folder "INBOX" --unflagged
+
+# {_("this will work as if nothing of the above was run")}
+fetchmail
+
+# {_("in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both imaparms and fetchmail")}
+{__package__} "${{common[@]}}" delete --folder "INBOX" --older-than 7 --seen --flagged
+""")
     fmt.end_section()
 
     fmt.start_section(_("Fetch everything GMail considers to be Spam for local filtering"))
-    fmt.add_code(f"""
-mkdir -p ~/Maildir/spam/new
-mkdir -p ~/Maildir/spam/cur
-mkdir -p ~/Maildir/spam/tmp
+    fmt.add_code(f"""# {_("setup: do once")}
+mkdir -p ~/Mail/spam/{{new,cur,tmp}}
 
 cat > ~/.mailfilter-spam << EOF
-DEFAULT="$HOME/Maildir/spam"
+DEFAULT="$HOME/Mail/spam"
 EOF
 
-{__package__} --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" mark --folder "[Gmail]/Spam" --seen unseen
-{__package__} --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" --mda "maildrop ~/.mailfilter-spam" fetch --folder "[Gmail]/Spam"
+{__package__} "${{gmail_common_no_mda[@]}}" mark --folder "[Gmail]/Spam" unseen
+
+# {_("repeatable part")}
+{__package__} "${{gmail_common_no_mda[@]}}" --mda "maildrop ~/.mailfilter-spam" fetch --folder "[Gmail]/Spam"
 """)
     fmt.end_section()
 
     fmt.start_section(_("GMail-specific deletion mode: move (expire) old messages from `[Gmail]/All Mail` to `[Gmail]/Trash`"))
 
     fmt.add_text("")
-    fmt.add_text(_("Unfortunately, in GMail, deleting messages from `INBOX` does not actually delete them, nor moves them to trash, just removes them from `INBOX` while keeping them available from `[Gmail]/All Mail`."))
-    fmt.add_text(_("To work around this, this tool provides a GMail-specific deletion method that moves messages to `[Gmail]/Trash` in a GMail-specific way (this is not a repetition, it does require issuing special STORE commands to achieve this)."))
-    fmt.add_text(_("You will probably want to run it over `[Gmail]/All Mail` folder (again, after you fetched everything from there) instead of `INBOX`:"))
-
-    fmt.add_code(f'{__package__} --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --method gmail-trash --folder "[Gmail]/All Mail" --older-than 7')
-    fmt.add_text(_("which is equivalent to simply"))
-    fmt.add_code(f'{__package__} --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --folder "[Gmail]/All Mail" --older-than 7')
-    fmt.add_text(_("since `--method gmail-trash` is the default when `--host imap.gmail.com` and `--folder` is not `[Gmail]/Trash`"))
-
-    fmt.add_text(_("Also, note that the above only moves `--seen` messages by default."))
+    fmt.add_text(_("In GMail, deleting messages from `INBOX` does not actually delete them, nor moves them to trash, just removes them from `INBOX` while keeping them available from `[Gmail]/All Mail`."))
+    fmt.add_text(_("To work around this, this tool provides a GMail-specific `--method gmail-trash` that moves messages to `[Gmail]/Trash` in a GMail-specific way (this is not a repetition, it does require issuing special IMAP `STORE` commands to achieve this):"))
+    fmt.add_code(f'{__package__} "${{gmail_common[@]}}" delete --folder "[Gmail]/All Mail" --older-than 7')
+    fmt.add_text(_("(`--method gmail-trash` is implied by `--host imap.gmail.com` and `--folder` not being `[Gmail]/Trash`)"))
+    fmt.add_text(_("(`--seen` is still implied by default)"))
 
     fmt.add_text(_("Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with:"))
 
-    fmt.add_code(f'{__package__} --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --method delete --folder "[Gmail]/Trash" --all --older-than 7')
-    fmt.add_text(_("which is equivalent to simply"))
-    fmt.add_code(f'{__package__} --ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com" delete --folder "[Gmail]/Trash" --all --older-than 7')
+    fmt.add_code(f'{__package__} "${{gmail_common[@]}}" delete --folder "[Gmail]/Trash" --all --older-than 7')
+    fmt.add_text(_("(`--method delete` is implied by `--host imap.gmail.com` but `--folder` being `[Gmail]/Trash`)"))
     fmt.end_section()
 
 def main() -> None:
@@ -678,7 +688,7 @@ def main() -> None:
 
     parser = argparse.BetterArgumentParser(
         prog=__package__,
-        description=_("A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for performing batch operations on messages residing on IMAP4 servers.") + "\n" + \
+        description=_("A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.") + "\n" + \
                     _("Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out."),
         additional_sections = [add_examples],
         add_help = True,
@@ -706,10 +716,10 @@ def main() -> None:
     grp.add_argument("--passcmd", type=str, help=_("shell command that returns the password as the first line of its stdout"))
 
     agrp = parser.add_argument_group(_("IMAP batching settings"), description=_("larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen"))
-    agrp.add_argument("--store-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP STORE requests (default: %(default)s)"))
-    agrp.add_argument("--fetch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP FETCH metadata requests (default: %(default)s)"))
-    agrp.add_argument("--batch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP FETCH data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
-    agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_("batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetchen one by one; essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
+    agrp.add_argument("--store-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `STORE` requests (default: %(default)s)"))
+    agrp.add_argument("--fetch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: %(default)s)"))
+    agrp.add_argument("--batch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
+    agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_(f"batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `{__package__}` is batching (default: %(default)s)"))
 
     agrp = parser.add_argument_group(_("delivery settings"))
     agrp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
@@ -783,7 +793,8 @@ def main() -> None:
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="count")
 
-    cmd = subparsers.add_parser("mark", help=_("mark matching messages in specified folders in a specified way"))
+    cmd = subparsers.add_parser("mark", help=_("mark matching messages in specified folders in a specified way"),
+                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands."))
     add_dry_run(cmd)
     add_filters(cmd, None)
     add_req_folders(cmd)
@@ -798,7 +809,8 @@ def main() -> None:
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="mark")
 
-    cmd = subparsers.add_parser("fetch", aliases = ["mirror"], help=_("fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds"))
+    cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds"),
+                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands."))
     add_dry_run(cmd)
     add_filters(cmd, "unseen")
     add_req_folders(cmd)
@@ -814,7 +826,8 @@ def main() -> None:
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="fetch")
 
-    cmd = subparsers.add_parser("delete", aliases = ["expire"], help=_("delete matching messages from specified folders"))
+    cmd = subparsers.add_parser("delete", aliases = ["expire"], help=_("delete matching messages from specified folders"),
+                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method."))
     add_dry_run(cmd)
     add_filters(cmd, "seen")
     cmd.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help=_("delete messages how") + f""":
