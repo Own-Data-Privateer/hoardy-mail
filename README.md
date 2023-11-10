@@ -1,6 +1,6 @@
 # What?
 
-A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.
+`imaparms` is a Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.
 That is: login to a specified server, fetch or perform specified actions (count, flag/mark, delete, etc) on all messages matching specified criteria in all specified folders, logout.
 
 This tool was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) and is basically a generalized combination of the two.
@@ -109,17 +109,26 @@ See [notmuch](https://notmuchmail.org/) for my preferred KISS mail indexer and M
 Of course, you can use anything else, e.g. Thunderbird, just configure it to use the local `Maildir` as the "mail account".
 Or you could point your own local IMAP server to your `Maildir` and use any mail client that can use IMAP, but locally.
 
+## Using with `fdm`
+
+If you want to use `imaparms`' fetching method but `fdm`'s filtering to filter your mail you can simply do
+
+```
+imaparms fetch --mda fdm
+```
+
 # Comparison to
 
 ## [fetchmail](https://www.fetchmail.info/)
 
 `imaparms fetch`
 
-- fetches your mail >150 times faster by default (`fetchmail` fetches and marks messages one-by-one, incurring huge network latency overheads, `imaparms fetch` does it in (configurable) batches),
-- fetches messages out-of-order to try and maximize `messages/second` metric when it makes sense (i.e. it temporarily delays fetching of larger messages if many smaller ones can be fetched instead) so that you could efficiently index your mail in parallel with fetching,
-- only does deliveries to [MDA/LDA](https://en.wikipedia.org/wiki/Message_delivery_agent) (similar to `fetchmail --mda` option), deliveries over SMTP are not and will never be supported (if you want this you can just use [msmtp](https://marlam.de/msmtp/) as your MDA),
-- thus this tool is much simpler to use when fetching to a local `Maildir` as it needs no configuration to fetch messages as-is without modifying any headers, thus fetching the same messages twice will produce identical files (which is not true for `fetchmail`, `imaparms --mda MDA fetch` is roughly equivalent to `fetchmail --softbounce --invisible --norewrite --mda MDA`),
-- probably will not work with most broken IMAP servers (`fetchmail` has lots of workarounds for server bugs, `imaparms fetch` does not),
+- fetches your mail >150 times faster by default (`fetchmail` fetches and marks messages one-by-one, incurring huge network latency overheads, `imaparms fetch` does it in (configurable) batches);
+- fetches messages out-of-order to try and maximize `messages/second` metric when it makes sense (i.e. it temporarily delays fetching of larger messages if many smaller ones can be fetched instead) so that you could efficiently index your mail in parallel with fetching;
+- only does deliveries to [MDA/LDA](https://en.wikipedia.org/wiki/Message_delivery_agent) (similar to `fetchmail --mda` option), deliveries over SMTP are not and will never be supported (if you want this you can just use [msmtp](https://marlam.de/msmtp/) as your MDA);
+- thus this tool is much simpler to use when fetching to a local `Maildir` as it needs no configuration to fetch messages as-is without modifying any headers, thus fetching the same messages twice will produce identical files (which is not true for `fetchmail`, `imaparms --mda MDA fetch` is roughly equivalent to `fetchmail --softbounce --invisible --norewrite --mda MDA`);
+- probably will not work with most broken IMAP servers (`fetchmail` has lots of workarounds for server bugs, `imaparms fetch` does not);
+- is written in Python instead of C;
 - has other subcommands, not just `imaparms fetch`.
 
 ## [fdm](https://github.com/nicm/fdm)
@@ -128,24 +137,25 @@ Or you could point your own local IMAP server to your `Maildir` and use any mail
 
 `imaparms fetch`
 
-- uses server-side message flags to track state instead of keeping a local database of fetched UIDs,
-- fetches messages out-of-order to try and maximize `messages/second` metric,
-- does not do any filtering, offloads delivery to MDA/LDA,
+- uses server-side message flags to track state instead of keeping a local database of fetched UIDs;
+- fetches messages out-of-order to try and maximize `messages/second` metric;
+- does not do any filtering, offloads delivery to MDA/LDA;
+- is written in Python instead of C;
 - has other subcommands, not just `imaparms fetch`.
 
 ## [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire)
 
 `imaparms delete`
 
-- is written in Python instead of Perl and requires nothing but the basic Python install, no third-party libraries needed;
-- allows all UNICODE characters except `\n` in passwords/passphrases (yes, including spaces, quotes, etc),
+- allows all UNICODE characters except `\n` in passwords/passphrases (yes, including spaces, quotes, etc);
 - provides a bunch of options controlling message selection and uses `--seen` option by default for destructive actions, so you won't accidentally delete any messages you have not yet fetched even if your fetcher got stuck/crashed;
-- provides GMail-specific options,
+- provides GMail-specific options;
+- is written in Python instead of Perl and requires nothing but the basic Python install, no third-party libraries needed;
 - has other subcommands, not just `imaparms delete`.
 
 ## [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), and similar
 
-- `imaparms fetch` does deliveries from an IMAP server to your MDA instead of trying to synchronize state between some combinations of IMAP servers and local Maildirs (i.e. for `imaparms fetch` your IMAP server is always the source, never a destination),
+- `imaparms fetch` does deliveries from an IMAP server to your MDA instead of trying to synchronize state between some combinations of IMAP servers and local Maildirs (i.e. for `imaparms fetch` your IMAP server is always the source, never a destination);
 - `imaparms` has other subcommands, not just `imaparms fetch`.
 
 # Some Fun and Relevant Facts
@@ -202,7 +212,7 @@ Sorry, why did you need the phone number, again?
 Ah, well, Google now knows it and will be able track your movements by buying location data from your network operator.
 Thank you very much.
 
-In theory, as an alternative to application-specific passwords, you can setup OAuth2 update tokes automatically with [mailctl](https://github.com/pdobsan/mailctl), but Google will still ask for your phone number to set it up, and OAuth2 renewal adds another point of failure without really adding any security if you store your passwords in a password manager and use `--passcmd` option described below to feed them into `imaparms`.
+In theory, as an alternative to application-specific passwords, you can setup OAuth2 and update tokens automatically with [mailctl](https://github.com/pdobsan/mailctl), but Google will still ask for your phone number to set it up, and OAuth2 renewal adds another point of failure without really adding any security if you store your passwords in a password manager and use `--passcmd` option described below to feed them into `imaparms`.
 
 That is to say, I don't use OAuth2, which is why `imaparms` does not support OAuth2.
 
@@ -234,7 +244,7 @@ Logins to a specified server, performs specified actions on all messages matchin
     - `delete (expire)`
     : delete matching messages from specified folders
 
-### imaparms list [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND]
+### imaparms list [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND]
 
 Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
@@ -270,15 +280,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
-- folder search filters:
-  - `--all-folders`
-  : operate on all folders (default)
-  - `--folder NAME`
-  : mail folders to include; can be specified multiple times
-  - `--not-folder NAME`
-  : mail folders to exclude; can be specified multiple times
-
-- IMAP batching settings:
+- batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
 
   - `--store-number INT`
@@ -296,7 +298,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
     `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
     `maildrop` from Courier Mail Server project is a good KISS default.
 
-### imaparms count [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
+### imaparms count [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
@@ -336,15 +338,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
-- folder search filters:
-  - `--all-folders`
-  : operate on all folders (default)
-  - `--folder NAME`
-  : mail folders to include; can be specified multiple times
-  - `--not-folder NAME`
-  : mail folders to exclude; can be specified multiple times
-
-- IMAP batching settings:
+- batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
 
   - `--store-number INT`
@@ -361,6 +355,14 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
     `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
     `maildrop` from Courier Mail Server project is a good KISS default.
+
+- folder search filters:
+  - `--all-folders`
+  : operate on all folders (default)
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
 
 - message search filters:
   - `--older-than DAYS`
@@ -384,7 +386,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--unflagged`
   : operate on messages not marked as FLAGGED
 
-### imaparms mark [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] (--all-folders | --folder NAME) [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
+### imaparms mark [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
 
@@ -420,15 +422,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
-- folder search filters:
-  - `--all-folders`
-  : operate on all folders
-  - `--folder NAME`
-  : mail folders to include; can be specified multiple times (required)
-  - `--not-folder NAME`
-  : mail folders to exclude; can be specified multiple times
-
-- IMAP batching settings:
+- batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
 
   - `--store-number INT`
@@ -445,6 +439,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
     `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
     `maildrop` from Courier Mail Server project is a good KISS default.
+
+- folder search filters (required):
+  - `--all-folders`
+  : operate on all folders
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
 
 - message search filters:
   - `--older-than DAYS`
@@ -476,7 +478,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message search filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message search filter is specified
 
-### imaparms fetch [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands.
 
@@ -512,15 +514,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
-- folder search filters:
-  - `--all-folders`
-  : operate on all folders (default)
-  - `--folder NAME`
-  : mail folders to include; can be specified multiple times
-  - `--not-folder NAME`
-  : mail folders to exclude; can be specified multiple times
-
-- IMAP batching settings:
+- batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
 
   - `--store-number INT`
@@ -537,6 +531,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
     `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
     `maildrop` from Courier Mail Server project is a good KISS default.
+
+- folder search filters:
+  - `--all-folders`
+  : operate on all folders (default)
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
 
 - message search filters:
   - `--older-than DAYS`
@@ -570,7 +572,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] (--all-folders | --folder NAME) [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}]
+### imaparms delete [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
 
@@ -614,15 +616,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   - `--passcmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
-- folder search filters:
-  - `--all-folders`
-  : operate on all folders
-  - `--folder NAME`
-  : mail folders to include; can be specified multiple times (required)
-  - `--not-folder NAME`
-  : mail folders to exclude; can be specified multiple times
-
-- IMAP batching settings:
+- batching settings:
   larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
 
   - `--store-number INT`
@@ -639,6 +633,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
     `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
     `maildrop` from Courier Mail Server project is a good KISS default.
+
+- folder search filters (required):
+  - `--all-folders`
+  : operate on all folders
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
 
 - message search filters:
   - `--older-than DAYS`
