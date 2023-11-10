@@ -20,15 +20,19 @@ from gettext import gettext, ngettext
 from . import argparse
 from .exceptions import *
 
+interrupt_msg = "\n" + gettext("Gently finishing up... Press ^C again to forcefully interrupt.") + "\n"
 want_stop = False
-raise_once = False
-def sig_handler(signal : int, frame : _t.Any) -> None:
+should_raise = False
+def sig_handler(sig : int, frame : _t.Any) -> None:
     global want_stop
-    global raise_once
+    global should_raise
     want_stop = True
-    if raise_once:
-        raise_once = False
+    if should_raise:
         raise KeyboardInterrupt()
+    if sig == signal.SIGINT:
+        sys.stderr.write(interrupt_msg)
+        sys.stderr.flush()
+    should_raise = True
 
 def handle_signals() -> None:
     signal.signal(signal.SIGINT, sig_handler)
@@ -250,7 +254,7 @@ def connect(account : Account, debug : bool) -> _t.Any:
     return srv
 
 def for_each_account_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
-    global raise_once
+    global should_raise
 
     if cfg.every is None:
         for_each_account(cfg, func, *args)
@@ -261,6 +265,7 @@ def for_each_account_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _
 
     while True:
         if want_stop: raise KeyboardInterrupt()
+        should_raise = False
 
         now = time.time()
         repeat_at = now + cycle
@@ -274,7 +279,7 @@ def for_each_account_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _
         ttime = time.strftime(fmt, time.localtime(now + to_sleep))
         print("# " + gettext("sleeping until %s") % (ttime,))
 
-        raise_once = True
+        should_raise = True
         if want_stop: raise KeyboardInterrupt()
         time.sleep(to_sleep)
 
@@ -612,16 +617,16 @@ def do_fetch_batch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes], to
             imap_error("FETCH", "MDA failed to deliver message", uid)
 
     print("... " + gettext("delivered a batch of %d messages via `%s`") % (len(done_message_uids), args.mda))
-    do_store(args, srv, args.mark, done_message_uids)
+    do_store(args, srv, args.mark, done_message_uids, False)
 
-def do_store(args : _t.Any, srv : IMAP4, method : str, message_uids : _t.List[bytes]) -> None:
+def do_store(args : _t.Any, srv : IMAP4, method : str, message_uids : _t.List[bytes], interruptable : bool = True) -> None:
     if method == "noop": return
 
     marking_as = "... " + gettext("marking a batch of %d messages as %s")
 
     store_num = args.store_number
     while len(message_uids) > 0:
-        if want_stop: raise KeyboardInterrupt()
+        if interruptable and want_stop: raise KeyboardInterrupt()
 
         to_store, message_uids = message_uids[:store_num], message_uids[store_num:]
         joined = b",".join(to_store)
