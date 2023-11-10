@@ -15,6 +15,7 @@ buildPythonApplication (rec {
     filter = name: type: let baseName = baseNameOf (toString name); in
       lib.cleanSourceFilter name type && ! (
         (baseName == "default.nix") ||
+        (baseName == "dist") ||
         (baseName == "result") ||
         (baseName == "results") ||
         (baseName == "__pycache__")
