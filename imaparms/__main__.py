@@ -252,6 +252,10 @@ def connect(account : Account, debug : bool) -> _t.Any:
 def for_each_account_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
     global raise_once
 
+    if cfg.every is None:
+        for_each_account(cfg, func, *args)
+        return
+
     fmt = "[%Y-%m-%d %H:%M:%S]"
     cycle = cfg.every
 
