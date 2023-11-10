@@ -234,7 +234,7 @@ Logins to a specified server, performs specified actions on all messages matchin
     - `delete (expire)`
     : delete matching messages from specified folders
 
-### imaparms list [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND]
+### imaparms list [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND]
 
 Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
@@ -243,6 +243,10 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
   : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
+
+- polling/daemon options:
+  - `--every SECONDS`
+  : run this command, wait SECONDS seconds, repeat (until interrupted)
 
 - server connection:
   - `--plain`
@@ -292,7 +296,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
     `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
     `maildrop` from Courier Mail Server project is a good KISS default.
 
-### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
+### imaparms count [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
@@ -305,6 +309,10 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
+
+- polling/daemon options:
+  - `--every SECONDS`
+  : run this command, wait SECONDS seconds, repeat (until interrupted)
 
 - server connection:
   - `--plain`
@@ -376,7 +384,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--unflagged`
   : operate on messages not marked as FLAGGED
 
-### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] (--all-folders | --folder NAME) [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
+### imaparms mark [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] (--all-folders | --folder NAME) [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
 
@@ -385,6 +393,10 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
+
+- polling/daemon options:
+  - `--every SECONDS`
+  : run this command, wait SECONDS seconds, repeat (until interrupted)
 
 - server connection:
   - `--plain`
@@ -464,7 +476,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message search filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message search filter is specified
 
-### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--all-folders | --folder NAME] [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands.
 
@@ -473,6 +485,10 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
+
+- polling/daemon options:
+  - `--every SECONDS`
+  : run this command, wait SECONDS seconds, repeat (until interrupted)
 
 - server connection:
   - `--plain`
@@ -554,7 +570,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] (--all-folders | --folder NAME) [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}]
+### imaparms delete [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] (--all-folders | --folder NAME) [--not-folder NAME] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
 
@@ -571,6 +587,10 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   : print IMAP conversation to stderr
   - `--dry-run`
   : don't perform any actions, only show what would be done
+
+- polling/daemon options:
+  - `--every SECONDS`
+  : run this command, wait SECONDS seconds, repeat (until interrupted)
 
 - server connection:
   - `--plain`
@@ -696,11 +716,9 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
   # repeatable part
   imaparms fetch "${common[@]}" --folder "INBOX"
 
-  # download updates
-  while true; do
-      sleep 3600
-      imaparms fetch "${common[@]}" --folder "INBOX"
-  done
+  # yes, with this you can skip the previous command
+  # download updates every hour
+  imaparms fetch "${common[@]}" --folder "INBOX" --every 3600
 
   ```
 

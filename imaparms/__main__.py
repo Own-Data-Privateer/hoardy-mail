@@ -249,6 +249,31 @@ def connect(account : Account, debug : bool) -> _t.Any:
 
     return srv
 
+def for_each_account_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
+    global raise_once
+
+    fmt = "[%Y-%m-%d %H:%M:%S]"
+    cycle = cfg.every
+
+    while True:
+        if want_stop: raise KeyboardInterrupt()
+
+        now = time.time()
+        repeat_at = now + cycle
+        ftime = time.strftime(fmt, time.localtime(now))
+        print("# " + gettext("polling starts at %s") % (ftime,))
+
+        for_each_account(cfg, func, *args)
+
+        now = time.time()
+        to_sleep = max(60, repeat_at - now)
+        ttime = time.strftime(fmt, time.localtime(now + to_sleep))
+        print("# " + gettext("sleeping until %s") % (ttime,))
+
+        raise_once = True
+        if want_stop: raise KeyboardInterrupt()
+        time.sleep(to_sleep)
+
 def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
     global had_errors
     #print(cfg.accounts)
@@ -280,7 +305,7 @@ def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any
             srv = None
 
 def cmd_list(cfg : _t.Any) -> None:
-    for_each_account(cfg, do_list)
+    for_each_account_poll(cfg, do_list)
 
 def do_list(cfg : _t.Any, srv : IMAP4) -> None:
     folders = get_folders(srv)
@@ -348,7 +373,7 @@ def cmd_action(args : _t.Any) -> None:
         print("# " + gettext("searching %s") % (search_filter,))
     #sys.exit(1)
 
-    for_each_account(args, do_action, search_filter)
+    for_each_account_poll(args, do_action, search_filter)
 
 def do_action(args : _t.Any, srv : IMAP4, search_filter : str) -> None:
     data = imap_check(CatastrophicFailure, "CAPABILITY", srv.capability())
@@ -669,11 +694,9 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 # {_("repeatable part")}
 {__package__} fetch "${{common[@]}}" --folder "INBOX"
 
-# {_("download updates")}
-while true; do
-    sleep 3600
-    {__package__} fetch "${{common[@]}}" --folder "INBOX"
-done
+# {_("yes, with this you can skip the previous command")}
+# {_("download updates every hour")}
+{__package__} fetch "${{common[@]}}" --folder "INBOX" --every 3600
 """)
     fmt.end_section()
 
@@ -811,6 +834,9 @@ def main() -> None:
         agrp = cmd.add_argument_group(_("debugging"))
         agrp.add_argument("--debug", action="store_true", help=_("print IMAP conversation to stderr"))
         agrp.add_argument("--dry-run", action="store_true", help=_("don't perform any actions, only show what would be done"))
+
+        agrp = cmd.add_argument_group("polling/daemon options")
+        agrp.add_argument("--every", metavar = "SECONDS", type=int, help=_("run this command, wait SECONDS seconds, repeat (until interrupted)"))
 
         agrp = cmd.add_argument_group("server connection")
         grp = agrp.add_mutually_exclusive_group()
