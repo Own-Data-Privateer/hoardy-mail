@@ -607,13 +607,13 @@ def do_fetch_batch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes], to
         else:
             imap_error("FETCH", "MDA failed to deliver message", uid)
 
-    print("... " + gettext("delivered a batch of %d messages via %s") % (len(done_message_uids), args.mda))
+    print("... " + gettext("delivered a batch of %d messages via `%s`") % (len(done_message_uids), args.mda))
     do_store(args, srv, args.mark, done_message_uids)
 
 def do_store(args : _t.Any, srv : IMAP4, method : str, message_uids : _t.List[bytes]) -> None:
     if method == "noop": return
 
-    marking_as = "... " + gettext("marking as %s a batch of %d messages")
+    marking_as = "... " + gettext("marking a batch of %d messages as %s")
 
     store_num = args.store_number
     while len(message_uids) > 0:
@@ -622,16 +622,16 @@ def do_store(args : _t.Any, srv : IMAP4, method : str, message_uids : _t.List[by
         to_store, message_uids = message_uids[:store_num], message_uids[store_num:]
         joined = b",".join(to_store)
         if method == "seen":
-            print(marking_as % ("SEEN", len(to_store)))
+            print(marking_as % (len(to_store), "SEEN"))
             srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Seen") # type: ignore
         elif method == "unseen":
-            print(marking_as % ("UNSEEN", len(to_store)))
+            print(marking_as % (len(to_store), "UNSEEN"))
             srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Seen") # type: ignore
         elif method == "flagged":
-            print(marking_as % ("FLAGGED", len(to_store)))
+            print(marking_as % (len(to_store), "FLAGGED"))
             srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Flagged") # type: ignore
         elif method == "unflagged":
-            print(marking_as % ("UNFLAGGED", len(to_store)))
+            print(marking_as % (len(to_store), "UNFLAGGED"))
             srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Flagged") # type: ignore
         elif method in ["delete", "delete-noexpunge"]:
             print("... " + gettext("deleting a batch of %d messages") % (len(to_store),))
