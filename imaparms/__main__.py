@@ -253,7 +253,7 @@ def connect(account : Account, debug : bool) -> _t.Any:
 
     return srv
 
-def for_each_account_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
+def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
     global should_raise
 
     if cfg.every is None:
@@ -283,10 +283,12 @@ def for_each_account_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _
         if want_stop: raise KeyboardInterrupt()
         time.sleep(to_sleep)
 
-def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
+def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], check_new_mail : bool, *args : _t.Any) -> None:
     global had_errors
     #print(cfg.accounts)
     #sys.exit(1)
+
+    cfg.new_mail = 0
 
     account : Account
     for account in cfg.accounts:
@@ -313,8 +315,19 @@ def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any
                 pass
             srv = None
 
+    if not check_new_mail:
+        return
+
+    print("# " + ngettext("got %d new message", "got %d new messages", cfg.new_mail) % (cfg.new_mail,))
+
+    if cfg.new_mail > 0 and cfg.new_mail_cmd is not None:
+        print("# " + gettext("running `--new-mail-cmd`"))
+        with subprocess.Popen(cfg.new_mail_cmd, stdin=subprocess.PIPE, stdout=None, stderr=None, shell=True) as p:
+            # __exit__ will do everything we need
+            pass
+
 def cmd_list(cfg : _t.Any) -> None:
-    for_each_account_poll(cfg, do_list)
+    for_each_poll(cfg, do_list, False)
 
 def do_list(cfg : _t.Any, srv : IMAP4) -> None:
     folders = get_folders(srv)
@@ -379,7 +392,7 @@ def cmd_action(args : _t.Any) -> None:
         print("# " + gettext("searching %s") % (search_filter,))
     #sys.exit(1)
 
-    for_each_account_poll(args, do_action, search_filter)
+    for_each_poll(args, do_action, args.command == "fetch", search_filter)
 
 def do_action(args : _t.Any, srv : IMAP4, search_filter : str) -> None:
     data = imap_check(CatastrophicFailure, "CAPABILITY", srv.capability())
@@ -610,6 +623,7 @@ def do_fetch_batch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes], to
 
         if delivered:
             done_message_uids.append(uid)
+            args.new_mail += 1
         else:
             imap_error("FETCH", "MDA failed to deliver message", uid)
 
@@ -883,6 +897,7 @@ def main() -> None:
                           help=_("shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)") + "\n" + \
                                _(f"`{__package__}` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.") + "\n" + \
                                _("`maildrop` from Courier Mail Server project is a good KISS default."))
+        agrp.add_argument("--new-mail-cmd", type=str, help=_("shell command to run if any new messages were successfully delivered by the `--mda`"))
 
     def add_filters(cmd : _t.Any, all_folders_by_default : bool, default : _t.Optional[str]) -> None:
         def_fall, def_freq = "", ""
