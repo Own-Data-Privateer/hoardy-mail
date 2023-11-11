@@ -355,9 +355,6 @@ def cmd_action(args : _t.Any) -> None:
             elif args.mark == "unflagged":
                 args.flagged = True
     elif args.command == "fetch":
-        if args.mda is None:
-            die(gettext("`--mda` is not set"))
-
         if args.mark == "auto":
             if args.all is None and args.seen == False and args.flagged is None:
                 args.mark = "seen"
@@ -686,10 +683,10 @@ def add_examples(fmt : _t.Any) -> None:
     fmt.end_section()
 
     fmt.add_text(_("Now, assuming the following are set:"))
-    fmt.add_code("""common_no_mda=(--ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com")
-common=("${{common_no_mda[@]}}" --mda maildrop)
-gmail_common_no_mda=(--ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com")
-gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
+    fmt.add_code("""common=(--ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com")
+common_mda=("${{common[@]}}" --mda maildrop)
+gmail_common=(--ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com")
+gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 """)
 
     fmt.start_section(_("Count how many messages older than 7 days are in `[Gmail]/All Mail` folder"))
@@ -701,7 +698,7 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 {__package__} mark "${{common[@]}}" --folder "INBOX" unseen
 
 # {_("repeatable part")}
-{__package__} fetch "${{common[@]}}" --folder "INBOX"
+{__package__} fetch "${{common_mda[@]}}" --folder "INBOX"
 """)
     fmt.end_section()
 
@@ -710,16 +707,16 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 {__package__} mark "${{common[@]}}" --folder "INBOX" unseen
 
 # {_("repeatable part")}
-{__package__} fetch "${{common[@]}}" --folder "INBOX" --every 3600
+{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --every 3600
 """)
     fmt.end_section()
 
     fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered in the last 7 days (rounded to the start of the start day by server time), but don't change any flags"))
-    fmt.add_code(f'{__package__} fetch "${{common[@]}}" --folder "INBOX" --all --newer-than 7')
+    fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --all --newer-than 7')
     fmt.end_section()
 
     fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time)"))
-    fmt.add_code(f'{__package__} fetch "${{common[@]}}" --folder "INBOX" --all --newer-than 0')
+    fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --all --newer-than 0')
     fmt.end_section()
 
     fmt.start_section(_("Delete all `SEEN` messages older than 7 days from `INBOX` folder"))
@@ -739,7 +736,7 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 {__package__} mark "${{common[@]}}" --folder "INBOX" unflagged
 
 # {_("repeatable part")}
-{__package__} fetch "${{common[@]}}" --folder "INBOX" --unflagged
+{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --unflagged
 
 # {_("this will work as if nothing of the above was run")}
 fetchmail
@@ -757,10 +754,10 @@ cat > ~/.mailfilter-spam << EOF
 DEFAULT="$HOME/Mail/spam"
 EOF
 
-{__package__} mark "${{gmail_common_no_mda[@]}}" --folder "[Gmail]/Spam" unseen
+{__package__} mark "${{gmail_common[@]}}" --folder "[Gmail]/Spam" unseen
 
 # {_("repeatable part")}
-{__package__} fetch "${{gmail_common_no_mda[@]}}" --mda "maildrop ~/.mailfilter-spam" --folder "[Gmail]/Spam"
+{__package__} fetch "${{gmail_common_mda[@]}}" --mda "maildrop ~/.mailfilter-spam" --folder "[Gmail]/Spam"
 """)
     fmt.end_section()
 
@@ -879,8 +876,10 @@ def main() -> None:
         agrp.add_argument("--batch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
         agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_(f"batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `{__package__}` is batching (default: %(default)s)"))
 
+    def add_delivery(cmd : _t.Any) -> None:
         agrp = cmd.add_argument_group(_("delivery settings"))
         agrp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
+                          required=True,
                           help=_("shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)") + "\n" + \
                                _(f"`{__package__}` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.") + "\n" + \
                                _("`maildrop` from Courier Mail Server project is a good KISS default."))
@@ -977,6 +976,7 @@ def main() -> None:
     cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands."))
     add_common(cmd)
+    add_delivery(cmd)
     add_filters(cmd, True, "unseen")
     agrp = cmd.add_argument_group("marking")
     agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
