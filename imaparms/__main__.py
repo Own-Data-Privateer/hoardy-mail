@@ -692,19 +692,24 @@ gmail_common_no_mda=(--ssl --host imap.gmail.com --user myself@gmail.com --passc
 gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 """)
 
-    fmt.start_section(_("Count how many messages older than 7 days are in `[Gmail]/Trash` folder"))
-    fmt.add_code(f'{__package__} count "${{gmail_common[@]}}" --folder "[Gmail]/Trash" --older-than 7')
+    fmt.start_section(_("Count how many messages older than 7 days are in `[Gmail]/All Mail` folder"))
+    fmt.add_code(f'{__package__} count "${{gmail_common[@]}}" --folder "[Gmail]/All Mail" --older-than 7')
     fmt.end_section()
 
-    fmt.start_section(_(f"Mark all messages in `INBOX` as UNSEEN, fetch all UNSEEN messages marking them SEEN as you download them so that if the process gets interrupted you could continue from where you left off, and then run `{__package__} fetch` as daemon to download updates every hour"))
+    fmt.start_section(_(f"Mark all messages in `INBOX` as not `SEEN`, fetch all not `SEEN` messages marking them `SEEN` as you download them so that if the process gets interrupted you could continue from where you left off"))
     fmt.add_code(f"""# {_("setup: do once")}
 {__package__} mark "${{common[@]}}" --folder "INBOX" unseen
 
 # {_("repeatable part")}
 {__package__} fetch "${{common[@]}}" --folder "INBOX"
+""")
+    fmt.end_section()
 
-# {_("yes, with this you can skip the previous command")}
-# {_("download updates every hour")}
+    fmt.start_section(_(f"Similarly to the above, but run `{__package__} fetch` as a daemon to download updates every hour"))
+    fmt.add_code(f"""# {_("setup: do once")}
+{__package__} mark "${{common[@]}}" --folder "INBOX" unseen
+
+# {_("repeatable part")}
 {__package__} fetch "${{common[@]}}" --folder "INBOX" --every 3600
 """)
     fmt.end_section()
@@ -717,19 +722,19 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
     fmt.add_code(f'{__package__} fetch "${{common[@]}}" --folder "INBOX" --all --newer-than 0')
     fmt.end_section()
 
-    fmt.start_section(_("Delete all SEEN messages older than 7 days from `INBOX` folder"))
+    fmt.start_section(_("Delete all `SEEN` messages older than 7 days from `INBOX` folder"))
     fmt.add_text("")
     fmt.add_text(_(f"Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets cracked/hacked, you won't be as vulnerable."))
     fmt.add_code(f'{__package__} delete "${{common[@]}}" --folder "INBOX" --older-than 7')
     fmt.add_text(_("(`--seen` is implied by default)"))
     fmt.end_section()
 
-    fmt.start_section(_("**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all SEEN messages instead"))
+    fmt.start_section(_("**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `SEEN` messages instead"))
     fmt.add_code(f'{__package__} delete "${{common[@]}}" --folder "INBOX"')
-    fmt.add_text(_("Though, setting at least `--older-than 1` to make sure you won't lose any data in case something breaks is highly recommended anyway."))
+    fmt.add_text(_(f"Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `{__package__}` or another IMAP client that changes message flags (`{__package__}` will abort if it notices another client doing it, but better be safe than sorry), is highly recommended anyway."))
     fmt.end_section()
 
-    fmt.start_section(_(f"Similarly to the above, but use FLAGGED instead of SEEN. This allows to use this in parallel with another instance of `{__package__}` using the SEEN flag, e.g. if you want to backup to two different machines independently, or if you want to use `{__package__}` simultaneously in parallel with `fetchmail` or other similar tool"))
+    fmt.start_section(_(f"Similarly to the above, but use `FLAGGED` instead of `SEEN`. This allows to use this in parallel with another instance of `{__package__}` using the `SEEN` flag, e.g. if you want to backup to two different machines independently, or if you want to use `{__package__}` simultaneously in parallel with `fetchmail` or other similar tool"))
     fmt.add_code(f"""# {_("setup: do once")}
 {__package__} mark "${{common[@]}}" --folder "INBOX" unflagged
 
@@ -739,7 +744,7 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 # {_("this will work as if nothing of the above was run")}
 fetchmail
 
-# {_("in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both imaparms and fetchmail")}
+# {_(f"in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both {__package__} and fetchmail")}
 {__package__} delete "${{common[@]}}" --folder "INBOX" --older-than 7 --seen --flagged
 """)
     fmt.end_section()
@@ -759,14 +764,17 @@ EOF
 """)
     fmt.end_section()
 
-    fmt.start_section(_("GMail-specific deletion mode: move (expire) old messages from `[Gmail]/All Mail` to `[Gmail]/Trash`"))
+    fmt.start_section(_("Fetch everything from all folders, except `INBOX` and `[Gmail]/Trash` (because messages in GMail `INBOX` are included `[Gmail]/All Mail`)"))
+    fmt.add_code(f'{__package__} fetch "${{gmail_common_mda[@]}}" --all-folders --not-folder "INBOX" --not-folder "[Gmail]/Trash"')
+    fmt.end_section()
+
+    fmt.start_section(_("GMail-specific deletion mode: move (expire) old messages to `[Gmail]/Trash` and then delete them"))
 
     fmt.add_text("")
     fmt.add_text(_("In GMail, deleting messages from `INBOX` does not actually delete them, nor moves them to trash, just removes them from `INBOX` while keeping them available from `[Gmail]/All Mail`."))
     fmt.add_text(_("To work around this, this tool provides a GMail-specific `--method gmail-trash` that moves messages to `[Gmail]/Trash` in a GMail-specific way (this is not a repetition, it does require issuing special IMAP `STORE` commands to achieve this):"))
     fmt.add_code(f'{__package__} delete "${{gmail_common[@]}}" --folder "[Gmail]/All Mail" --older-than 7')
-    fmt.add_text(_("(`--method gmail-trash` is implied by `--host imap.gmail.com` and `--folder` not being `[Gmail]/Trash`)"))
-    fmt.add_text(_("(`--seen` is still implied by default)"))
+    fmt.add_text(_("(`--method gmail-trash` is implied by `--host imap.gmail.com` and `--folder` not being `[Gmail]/Trash`, `--seen` is still implied by default)"))
 
     fmt.add_text(_("Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with:"))
 
@@ -916,13 +924,13 @@ def main() -> None:
         egrp.add_argument("--all", dest="all", action="store_true", default = None, help=_("operate on all messages") + def_all)
 
         grp = egrp.add_mutually_exclusive_group()
-        grp.add_argument("--seen", dest="seen", action="store_true", help=_("operate on messages marked as SEEN") + def_seen)
-        grp.add_argument("--unseen", dest="seen", action="store_false", help=_("operate on messages not marked as SEEN") + def_unseen)
+        grp.add_argument("--seen", dest="seen", action="store_true", help=_("operate on messages marked as `SEEN`") + def_seen)
+        grp.add_argument("--unseen", dest="seen", action="store_false", help=_("operate on messages not marked as `SEEN`") + def_unseen)
         grp.set_defaults(seen = None)
 
         grp = egrp.add_mutually_exclusive_group()
-        grp.add_argument("--flagged", dest="flagged", action="store_true", help=_("operate on messages marked as FLAGGED"))
-        grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as FLAGGED"))
+        grp.add_argument("--flagged", dest="flagged", action="store_true", help=_("operate on messages marked as `FLAGGED`"))
+        grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as `FLAGGED`"))
         grp.set_defaults(flagged = None)
 
         agrp.add_argument("--older-than", metavar = "DAYS", type=int, help=_("operate on messages older than this many days"))

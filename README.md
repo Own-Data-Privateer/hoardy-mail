@@ -40,9 +40,69 @@ I.e. if you are really paranoid, you could use that feature to check files produ
   python3 -m imaparms.__main__ --help
   ```
 
-## Fetch + backup + expire workflow
+## Backup all your email
 
-... using `maildrop` MDA from [Courier Mail Server project](https://www.courier-mta.org/), which is the simplest commodity MDA I know of:
+`imaparms` is not intended as a **backup** utility, `imaparms` is intended as a better replacement for `fetchmail`+`IMAPExpire` combination, with `imaparms` you are supposed to backup your `Maildir` with some third-party tool instead.
+If you want to keep a synchronized copy of your mail locally and on your mail server you should use [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), or something similar instead.
+
+`imaparms` can, however, be used for efficient local backups of your mail if you are willing to sacrifice either `SEEN` or `FLAGGED` IMAP flag to `imaparms` for it to use it to store its state on the server.
+And using `imaparms` for backups is illustrative, so a couple of examples follow.
+
+All examples on this page use `maildrop` MDA from [Courier Mail Server project](https://www.courier-mta.org/), which is the simplest commodity MDA with the simplest setup I know of.
+But, of course, you can use anything else.
+E.g., [fdm](https://github.com/nicm/fdm) can function as an MDA, and it is also pretty simple to setup.
+
+### Backup inefficiently
+
+The following will fetch all messages from all the folders on the server (without changing message flags on the server side) and feed them to `maildrop` which will just put them all into `~/Mail/backup` `Maildir`.
+
+```
+# setup: do once
+mkdir -p ~/Mail/backup/{new,cur,tmp}
+
+cat > ~/.mailfilter << EOF
+DEFAULT="$HOME/Mail/backup"
+EOF
+
+# backup all your mail from GMail
+read password
+echo "$password" > ./password.txt
+imaparms fetch --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --mda maildrop --all-folders --all
+rm ./password.txt
+```
+
+For GMail you will have to create and use application-specific password, which requires enabling 2FA, [see below for more info](#gmail).
+
+Also, if you have a lot of mail, this will be very inefficient, as it will try to re-download everything again if it ever gets interrupted.
+
+### Backup efficiently
+
+To make the above efficient you have to sacrifice either `SEEN` or `FLAGGED` IMAP flags to allow `imaparms` to track which messages are yet to be fetched, i.e. either:
+
+```
+# mark all messages as UNSEEN
+imaparms mark --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --all-folders unseen
+
+# fetch UNSEEN and mark as SEEN as you go
+# this can be interrrupted and restarted and it will continue from where it left off
+imaparms mark --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --all-folders --unseen
+```
+
+or
+
+```
+# mark all messages as UNFLAGGED
+imaparms mark --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --all-folders unflagged
+
+# similarly
+imaparms mark --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --all-folders --unflagged
+```
+
+This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `imaparms --unseen`, or flag (star) it there while using `imaparms --unflagged`, `imaparms` will ignore the message on the next `fetch`.
+
+## Fetch, Backup, Expire
+
+My preferred workflow described [above](#why) looks like this:
 
 ```
 common=(--ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --mda maildrop)
@@ -67,7 +127,9 @@ rsync -aHAXiv ~/Mail /disk/backup
 imaparms delete "${common[@]}" --folder "INBOX" --seen --older-than 3
 ```
 
-The paranoid version looks something like this:
+## Fetch, Backup, Expire: The Paranoid Version
+
+The paranoid/double-backup workflow described [above](#why) that uses `fetchmail` in parallel can be implemented like this:
 
 ```
 secondary_common=(--ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com" --mda "maildrop ~/.mailfilter-secondary")
@@ -101,6 +163,8 @@ rsync -aHAXiv ~/Mail /disk/backup
 imaparms delete "${secondary_common[@]}" --folder "INBOX" --seen --flagged --older-than 3
 ```
 
+## See also
+
 See the [usage section](#usage) for explanation of used command line options.
 
 See the [examples section](#examples) for more examples.
@@ -108,14 +172,6 @@ See the [examples section](#examples) for more examples.
 See [notmuch](https://notmuchmail.org/) for my preferred KISS mail indexer and Mail User Agent (MUA).
 Of course, you can use anything else, e.g. Thunderbird, just configure it to use the local `Maildir` as the "mail account".
 Or you could point your own local IMAP server to your `Maildir` and use any mail client that can use IMAP, but locally.
-
-## Using with `fdm`
-
-If you want to use `imaparms`' fetching method but `fdm`'s filtering to filter your mail you can simply do
-
-```
-imaparms fetch --mda fdm
-```
 
 # Comparison to
 
@@ -191,7 +247,7 @@ That is to say, as a long-term defense measure, this tool is probably useless.
 All your mail will get leaked eventually, regardless.
 Short-term and against random exploitations of your mail servers, this thing is perfect, IMHO.
 
-# GMail: Some Fun and Relevant Facts
+# <span id="gmail"/>GMail: Some Fun and Relevant Facts
 
 GMail docs say that IMAP and SMTP are "legacy protocols" and are "insecure".
 Which, sure, they could be, if you reuse passwords.
@@ -378,13 +434,13 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--all`
   : operate on all messages (default)
   - `--seen`
-  : operate on messages marked as SEEN
+  : operate on messages marked as `SEEN`
   - `--unseen`
-  : operate on messages not marked as SEEN
+  : operate on messages not marked as `SEEN`
   - `--flagged`
-  : operate on messages marked as FLAGGED
+  : operate on messages marked as `FLAGGED`
   - `--unflagged`
-  : operate on messages not marked as FLAGGED
+  : operate on messages not marked as `FLAGGED`
 
 ### imaparms mark [--debug] [--dry-run] [--every SECONDS] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--mda COMMAND] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
 
@@ -462,13 +518,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   - `--all`
   : operate on all messages
   - `--seen`
-  : operate on messages marked as SEEN
+  : operate on messages marked as `SEEN`
   - `--unseen`
-  : operate on messages not marked as SEEN
+  : operate on messages not marked as `SEEN`
   - `--flagged`
-  : operate on messages marked as FLAGGED
+  : operate on messages marked as `FLAGGED`
   - `--unflagged`
-  : operate on messages not marked as FLAGGED
+  : operate on messages not marked as `FLAGGED`
 
 - marking:
   - `{seen,unseen,flagged,unflagged}`
@@ -554,13 +610,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--all`
   : operate on all messages
   - `--seen`
-  : operate on messages marked as SEEN
+  : operate on messages marked as `SEEN`
   - `--unseen`
-  : operate on messages not marked as SEEN (default)
+  : operate on messages not marked as `SEEN` (default)
   - `--flagged`
-  : operate on messages marked as FLAGGED
+  : operate on messages marked as `FLAGGED`
   - `--unflagged`
-  : operate on messages not marked as FLAGGED
+  : operate on messages not marked as `FLAGGED`
 
 - marking:
   - `--mark {auto,noop,seen,unseen,flagged,unflagged}`
@@ -656,13 +712,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   - `--all`
   : operate on all messages
   - `--seen`
-  : operate on messages marked as SEEN (default)
+  : operate on messages marked as `SEEN` (default)
   - `--unseen`
-  : operate on messages not marked as SEEN
+  : operate on messages not marked as `SEEN`
   - `--flagged`
-  : operate on messages marked as FLAGGED
+  : operate on messages marked as `FLAGGED`
   - `--unflagged`
-  : operate on messages not marked as FLAGGED
+  : operate on messages not marked as `FLAGGED`
 
 ## Notes on usage
 
@@ -705,12 +761,12 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 
 ```
 
-- Count how many messages older than 7 days are in `[Gmail]/Trash` folder:
+- Count how many messages older than 7 days are in `[Gmail]/All Mail` folder:
   ```
-  imaparms count "${gmail_common[@]}" --folder "[Gmail]/Trash" --older-than 7
+  imaparms count "${gmail_common[@]}" --folder "[Gmail]/All Mail" --older-than 7
   ```
 
-- Mark all messages in `INBOX` as UNSEEN, fetch all UNSEEN messages marking them SEEN as you download them so that if the process gets interrupted you could continue from where you left off, and then run `imaparms fetch` as daemon to download updates every hour:
+- Mark all messages in `INBOX` as not `SEEN`, fetch all not `SEEN` messages marking them `SEEN` as you download them so that if the process gets interrupted you could continue from where you left off:
   ```
   # setup: do once
   imaparms mark "${common[@]}" --folder "INBOX" unseen
@@ -718,8 +774,14 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
   # repeatable part
   imaparms fetch "${common[@]}" --folder "INBOX"
 
-  # yes, with this you can skip the previous command
-  # download updates every hour
+  ```
+
+- Similarly to the above, but run `imaparms fetch` as a daemon to download updates every hour:
+  ```
+  # setup: do once
+  imaparms mark "${common[@]}" --folder "INBOX" unseen
+
+  # repeatable part
   imaparms fetch "${common[@]}" --folder "INBOX" --every 3600
 
   ```
@@ -734,7 +796,7 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
   imaparms fetch "${common[@]}" --folder "INBOX" --all --newer-than 0
   ```
 
-- Delete all SEEN messages older than 7 days from `INBOX` folder:
+- Delete all `SEEN` messages older than 7 days from `INBOX` folder:
 
   Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets cracked/hacked, you won't be as vulnerable.
 
@@ -744,14 +806,14 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 
   (`--seen` is implied by default)
 
-- **DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all SEEN messages instead:
+- **DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `SEEN` messages instead:
   ```
   imaparms delete "${common[@]}" --folder "INBOX"
   ```
 
-  Though, setting at least `--older-than 1` to make sure you won't lose any data in case something breaks is highly recommended anyway.
+  Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `imaparms` or another IMAP client that changes message flags (`imaparms` will abort if it notices another client doing it, but better be safe than sorry), is highly recommended anyway.
 
-- Similarly to the above, but use FLAGGED instead of SEEN. This allows to use this in parallel with another instance of `imaparms` using the SEEN flag, e.g. if you want to backup to two different machines independently, or if you want to use `imaparms` simultaneously in parallel with `fetchmail` or other similar tool:
+- Similarly to the above, but use `FLAGGED` instead of `SEEN`. This allows to use this in parallel with another instance of `imaparms` using the `SEEN` flag, e.g. if you want to backup to two different machines independently, or if you want to use `imaparms` simultaneously in parallel with `fetchmail` or other similar tool:
   ```
   # setup: do once
   imaparms mark "${common[@]}" --folder "INBOX" unflagged
@@ -783,7 +845,12 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
 
   ```
 
-- GMail-specific deletion mode: move (expire) old messages from `[Gmail]/All Mail` to `[Gmail]/Trash`:
+- Fetch everything from all folders, except `INBOX` and `[Gmail]/Trash` (because messages in GMail `INBOX` are included `[Gmail]/All Mail`):
+  ```
+  imaparms fetch "${gmail_common_mda[@]}" --all-folders --not-folder "INBOX" --not-folder "[Gmail]/Trash"
+  ```
+
+- GMail-specific deletion mode: move (expire) old messages to `[Gmail]/Trash` and then delete them:
 
   In GMail, deleting messages from `INBOX` does not actually delete them, nor moves them to trash, just removes them from `INBOX` while keeping them available from `[Gmail]/All Mail`.
 
@@ -793,9 +860,7 @@ gmail_common=("${{gmail_common_no_mda[@]}}" --mda maildrop)
   imaparms delete "${gmail_common[@]}" --folder "[Gmail]/All Mail" --older-than 7
   ```
 
-  (`--method gmail-trash` is implied by `--host imap.gmail.com` and `--folder` not being `[Gmail]/Trash`)
-
-  (`--seen` is still implied by default)
+  (`--method gmail-trash` is implied by `--host imap.gmail.com` and `--folder` not being `[Gmail]/Trash`, `--seen` is still implied by default)
 
   Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with:
 
