@@ -6,6 +6,7 @@
 
 import dataclasses as _dc
 import os
+import random
 import signal
 import ssl
 import subprocess
@@ -265,6 +266,17 @@ def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -
     fmt = "[%Y-%m-%d %H:%M:%S]"
     cycle = cfg.every
 
+    to_sleep = random.randint(0, cfg.every_add_random)
+    if to_sleep > 0:
+        now = time.time()
+        ttime = time.strftime(fmt, time.localtime(now + to_sleep))
+        print("# " + gettext("sleeping until %s") % (ttime,))
+
+        try:
+            time.sleep(to_sleep)
+        except KeyboardInterrupt:
+            return
+
     while True:
         old_errors = cfg.errors
 
@@ -283,7 +295,7 @@ def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -
                               "poll finished at %s, there were %d new errors",
                               new_errors) % (ntime, new_errors))
 
-        to_sleep = max(60, repeat_at - now)
+        to_sleep = max(60, repeat_at - now + random.randint(0, cfg.every_add_random))
         ttime = time.strftime(fmt, time.localtime(now + to_sleep))
         print("# " + gettext("sleeping until %s") % (ttime,))
 
@@ -883,9 +895,6 @@ def main() -> None:
         agrp.add_argument("--debug", action="store_true", help=_("print IMAP conversation to stderr"))
         agrp.add_argument("--dry-run", action="store_true", help=_("don't perform any actions, only show what would be done"))
 
-        agrp = cmd.add_argument_group("polling/daemon options")
-        agrp.add_argument("--every", metavar = "SECONDS", type=int, help=_("run this command, wait SECONDS seconds, repeat (until interrupted)"))
-
         agrp = cmd.add_argument_group("server connection")
         grp = agrp.add_mutually_exclusive_group()
         grp.add_argument("--plain", dest="socket", action="store_const", const = "plain", help=_("connect via plain-text socket"))
@@ -909,6 +918,14 @@ def main() -> None:
         agrp.add_argument("--fetch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: %(default)s)"))
         agrp.add_argument("--batch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
         agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_(f"batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `{__package__}` is batching (default: %(default)s)"))
+
+        agrp = cmd.add_argument_group("polling/daemon options")
+        agrp.add_argument("--every", metavar = "SECONDS", type=int, help=_("repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way)") + ";\n" + \
+                                                                         _("i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle") + ";\n" + \
+                                                                         _("this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle"))
+        agrp.add_argument("--every-add-random", metavar = "ADD", default = 60, type=int, help=_("sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: %(default)s)") + ";\n" + \
+                                                                                             _("if you set in large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers") + ";\n" + \
+                                                                                             _(f"if you run `{__package__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
 
     def add_delivery(cmd : _t.Any) -> None:
         agrp = cmd.add_argument_group(_("delivery settings"))
