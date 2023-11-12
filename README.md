@@ -331,9 +331,9 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
   - `--user USER`
   : username on the server (required)
-  - `--passfile PASSFILE`
+  - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
-  - `--passcmd PASSCMD`
+  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
 - batching settings:
@@ -383,9 +383,9 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
 
   - `--user USER`
   : username on the server (required)
-  - `--passfile PASSFILE`
+  - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
-  - `--passcmd PASSCMD`
+  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
 - batching settings:
@@ -461,9 +461,9 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
 
   - `--user USER`
   : username on the server (required)
-  - `--passfile PASSFILE`
+  - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
-  - `--passcmd PASSCMD`
+  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
 - batching settings:
@@ -547,9 +547,9 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
 
   - `--user USER`
   : username on the server (required)
-  - `--passfile PASSFILE`
+  - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
-  - `--passcmd PASSCMD`
+  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
 - batching settings:
@@ -651,9 +651,9 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
 
   - `--user USER`
   : username on the server (required)
-  - `--passfile PASSFILE`
+  - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
-  - `--passcmd PASSCMD`
+  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
   : shell command that returns the password as the first line of its stdout
 
 - batching settings:

@@ -880,8 +880,8 @@ def main() -> None:
         agrp.add_argument("--user", type=str, help=_("username on the server (required)"))
 
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--passfile", action=EmitAccount, default="file", help=_("file containing the password on its first line"))
-        grp.add_argument("--passcmd", action=EmitAccount, default="cmd", help=_("shell command that returns the password as the first line of its stdout"))
+        grp.add_argument("--passfile", "--pass-file", action=EmitAccount, default="file", help=_("file containing the password on its first line"))
+        grp.add_argument("--passcmd", "--pass-cmd", action=EmitAccount, default="cmd", help=_("shell command that returns the password as the first line of its stdout"))
         grp.set_defaults(password = None)
 
         agrp = cmd.add_argument_group(_("batching settings"), description=_("larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen"))
