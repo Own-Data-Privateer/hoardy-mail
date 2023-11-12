@@ -22,7 +22,7 @@ from .exceptions import *
 
 interrupt_msg = "\n" + gettext("Gently finishing up... Press ^C again to forcefully interrupt.") + "\n"
 want_stop = False
-should_raise = False
+should_raise = True
 def sig_handler(sig : int, frame : _t.Any) -> None:
     global want_stop
     global should_raise
@@ -182,26 +182,30 @@ def make_search_filter(args : _t.Any) -> str:
         return "(" + " ".join(filters) + ")"
 
 def die(desc : str, code : int = 1) -> None:
-    _ = gettext
-    sys.stderr.write(_("error") + ": " + desc + "\n")
+    sys.stderr.write(gettext("error") + ": " + desc + "\n")
+    sys.stderr.flush()
     sys.exit(code)
 
-had_errors = False
-def imap_error(command : str, desc : str, data : _t.Any = None) -> None:
-    _ = gettext
-    global had_errors
-    had_errors = True
+def error(desc : str) -> None:
+    sys.stderr.write(gettext("error") + ": " + desc + "\n")
+    sys.stderr.flush()
+
+class AccountFailure(Failure): pass
+class FolderFailure(AccountFailure): pass
+
+def imap_exc(exc : _t.Any, command : str, typ : str, data : _t.Any) -> _t.Any:
+    return exc(gettext("IMAP %s command failed: %s %s"), command, typ, repr(data))
+
+def imap_error(command : str, typ : str, data : _t.Any = None) -> _t.Any:
     if data is None:
-        sys.stderr.write(_("error") + ": " + (_("%s command failed") + ": %s") % (command, desc) + "\n")
+        return error(gettext("IMAP %s command failed: %s") % (command, typ, repr(data)))
     else:
-        sys.stderr.write(_("error") + ": " + (_("%s command failed") + ": %s %s") % (command, desc, repr(data)) + "\n")
+        return error(gettext("IMAP %s command failed: %s %s") % (command, typ, repr(data)))
 
 def imap_check(exc : _t.Any, command : str, v : _t.Tuple[str, _t.Any]) -> _t.Any:
-    global had_errors
     typ, data = v
     if typ != "OK":
-        had_errors = True
-        raise exc("%s command failed: %s %s", command, typ, repr(data))
+        raise imap_exc(exc, command, typ, data)
     return data
 
 @_dc.dataclass
@@ -249,13 +253,11 @@ def connect(account : Account, debug : bool) -> _t.Any:
             if account.socket == "starttls":
                 srv.starttls(ssl_context)
     except Exception as exc:
-        raise CatastrophicFailure("failed to connect to host %s port %s: %s", account.host, account.port, repr(exc))
+        raise AccountFailure("failed to connect to host %s port %s: %s", account.host, account.port, repr(exc))
 
     return srv
 
 def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
-    global should_raise
-
     if cfg.every is None:
         for_each_account(cfg, func, *args)
         return
@@ -264,27 +266,41 @@ def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -
     cycle = cfg.every
 
     while True:
-        if want_stop: raise KeyboardInterrupt()
-        should_raise = False
+        old_errors = cfg.errors
 
         now = time.time()
         repeat_at = now + cycle
         ftime = time.strftime(fmt, time.localtime(now))
-        print("# " + gettext("polling starts at %s") % (ftime,))
+        print("# " + gettext("poll starts at %s") % (ftime,))
 
         for_each_account(cfg, func, *args)
 
         now = time.time()
+        ntime = time.strftime(fmt, time.localtime(now))
+        new_errors = cfg.errors - old_errors
+
+        print("# " + ngettext("poll finished at %s, there was %d new error",
+                              "poll finished at %s, there were %d new errors",
+                              new_errors) % (ntime, new_errors))
+
         to_sleep = max(60, repeat_at - now)
         ttime = time.strftime(fmt, time.localtime(now + to_sleep))
         print("# " + gettext("sleeping until %s") % (ttime,))
 
-        should_raise = True
-        if want_stop: raise KeyboardInterrupt()
-        time.sleep(to_sleep)
+        try:
+            time.sleep(to_sleep)
+        except KeyboardInterrupt:
+            return
 
-def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], check_new_mail : bool, *args : _t.Any) -> None:
-    global had_errors
+def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
+    global should_raise
+    should_raise = False
+    try:
+        for_each_account_(cfg, func, *args)
+    finally:
+        should_raise = True
+
+def for_each_account_(cfg : _t.Any, func : _t.Callable[..., None], check_new_mail : bool, *args : _t.Any) -> None:
     #print(cfg.accounts)
     #sys.exit(1)
 
@@ -298,16 +314,16 @@ def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], check_new_mail
             srv = connect(account, cfg.debug)
             typ, data = srv._simple_command("LOGIN", imap_quote(account.user), imap_quote(account.password))
             if typ != "OK":
-                raise CatastrophicFailure("failed to login as %s to host %s port %d: %s", account.user, account.host, account.port, repr(data))
+                raise AccountFailure("failed to login as %s to host %s port %d: %s", account.user, account.host, account.port, repr(data))
             srv.state = "AUTH"
 
             sys.stdout.write("# " + gettext("logged in as %s to host %s port %d (%s)") % (account.user, account.host, account.port, account.socket.upper()) + "\n")
             sys.stdout.flush()
 
             func(cfg, srv, *args)
-        except CatastrophicFailure as exc:
-            had_errors = True
-            sys.stderr.write(gettext("error") + ": " + exc.show() + "\n")
+        except AccountFailure as exc:
+            cfg.errors += 1
+            error(exc.show())
         finally:
             try:
                 srv.logout()
@@ -336,7 +352,7 @@ def do_list(cfg : _t.Any, srv : IMAP4) -> None:
 
 def get_folders(srv : IMAP4) -> _t.List[str]:
     res = []
-    data = imap_check(Failure, "LIST", srv.list())
+    data = imap_check(AccountFailure, "LIST", srv.list())
     for el in data:
         tags, _, arg = imap_parse(el)
         if b"\\Noselect" in tags:
@@ -395,11 +411,11 @@ def cmd_action(args : _t.Any) -> None:
     for_each_poll(args, do_action, args.command == "fetch", search_filter)
 
 def do_action(args : _t.Any, srv : IMAP4, search_filter : str) -> None:
-    data = imap_check(CatastrophicFailure, "CAPABILITY", srv.capability())
+    data = imap_check(AccountFailure, "CAPABILITY", srv.capability())
     capabilities = data[0].split(b" ")
     #print(capabilities)
     if b"IMAP4rev1" not in capabilities:
-        raise CatastrophicFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", args.host, args.port)
+        raise AccountFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", args.host, args.port)
 
     if args.all_folders and len(args.folders) == 0:
         folders = get_folders(srv)
@@ -409,24 +425,25 @@ def do_action(args : _t.Any, srv : IMAP4, search_filter : str) -> None:
     for folder in filter(lambda f: f not in args.not_folders, folders):
         if want_stop: raise KeyboardInterrupt()
 
-        do_folder_action(args, srv, search_filter, folder)
+        try:
+            do_folder_action(args, srv, search_filter, folder)
+        except FolderFailure as exc:
+            args.errors += 1
+            error(exc.show())
 
 def do_folder_action(args : _t.Any, srv : IMAP4, search_filter : str, folder : str) -> None:
     typ, data = srv.select(imap_quote(folder))
     if typ != "OK":
-        imap_error("SELECT", typ, data)
-        return
+        raise imap_exc(FolderFailure, "SELECT", typ, data)
 
     try:
         typ, data = srv.uid("SEARCH", search_filter)
         if typ != "OK":
-            imap_error("SEARCH", typ, data)
-            return
+            raise imap_exc(FolderFailure, "SEARCH", typ, data)
 
         result : _t.Optional[bytes] = data[0]
         if result is None:
-            imap_error("SEARCH", typ, data)
-            return
+            raise imap_exc(FolderFailure, "SEARCH", typ, data)
         elif result == b"":
             message_uids = []
         else:
@@ -489,6 +506,7 @@ def do_fetch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
         to_fetch_set : _t.Set[bytes] = set(to_fetch)
         typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)") # type: ignore
         if typ != "OK":
+            args.errors += 1
             imap_error("FETCH", typ, data)
             continue
 
@@ -509,6 +527,7 @@ def do_fetch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
             to_fetch_set.remove(uid)
 
         if len(to_fetch_set) > 0:
+            args.errors += 1
             imap_error("FETCH", "did not get enough elements")
             continue
 
@@ -544,7 +563,8 @@ def fetch_check_untagged(args : _t.Any, attrs : _t.Dict[bytes, bytes]) -> None:
             raise KeyError()
     except KeyError:
         sys.stderr.write("attrs dump: %s" % (repr(attrs),) + "\n")
-        raise Failure("another client is performing unknown conflicting actions in parallel with us, aborting")
+        sys.stderr.flush()
+        raise AccountFailure("another client is performing unknown conflicting actions in parallel with us, aborting")
 
     # This is an untagged response generated by the server because
     # another client changed some flags.
@@ -553,10 +573,9 @@ def fetch_check_untagged(args : _t.Any, attrs : _t.Dict[bytes, bytes]) -> None:
        (args.mark == "unseen" and b"\\Seen" not in flags) or \
        (args.mark == "flagged" and b"\\Flagged" in flags) or \
        (args.mark == "unflagged" and b"\\Flagged" not in flags):
-        raise Failure("another client is marking messages with conflicting flags in parallel with us, aborting")
+        raise AccountFailure("another client is marking messages with potentially conflicting flags in parallel with us, aborting")
 
 def do_fetch_batch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes], total_size : int) -> None:
-    global had_errors
     if want_stop: raise KeyboardInterrupt()
 
     if len(message_uids) == 0: return
@@ -565,6 +584,7 @@ def do_fetch_batch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes], to
     joined = b",".join(message_uids)
     typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])") # type: ignore
     if typ != "OK":
+        args.errors += 1
         imap_error("FETCH", typ, data)
         return
 
@@ -625,7 +645,8 @@ def do_fetch_batch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes], to
             done_message_uids.append(uid)
             args.new_mail += 1
         else:
-            imap_error("FETCH", "MDA failed to deliver message", uid)
+            args.errors += 1
+            error(_("`--mda` failed to deliver message %s") % (uid,))
 
     print("... " + gettext("delivered a batch of %d messages via `%s`") % (len(done_message_uids), args.mda))
     do_store(args, srv, args.mark, done_message_uids, False)
@@ -795,7 +816,6 @@ EOF
 
 def main() -> None:
     _ = gettext
-    global had_errors
 
     defenc = sys.getdefaultencoding()
 
@@ -1029,21 +1049,24 @@ def main() -> None:
         return die(_("no accounts specified, need at least one `--host`, `--user`, and either of `--passfile` or `--passcmd`"))
 
     handle_signals()
+    args.errors = 0
 
     try:
         args.func(args)
     except CatastrophicFailure as exc:
-        had_errors = True
-        sys.stderr.write(_("error") + ": " + exc.show() + "\n")
+        args.errors += 1
+        error(exc.show())
     except KeyboardInterrupt:
-        had_errors = True
-        sys.stderr.write(_("Interrupted!") + "\n")
+        args.errors += 1
+        error(_("Interrupted!"))
     except Exception as exc:
-        had_errors = True
+        args.errors += 1
         traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+        error(_("A bug!"))
 
-    if had_errors:
-        sys.stderr.write(_("Had errors!") + "\n")
+    if args.errors > 0:
+        sys.stderr.write(ngettext("There was %d error!", "There were %d errors!", args.errors) % (args.errors,) + "\n")
+        sys.stderr.flush()
         sys.exit(1)
     sys.exit(0)
 
