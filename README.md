@@ -354,7 +354,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
     if you set in large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
-### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
+### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
@@ -422,9 +422,17 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
 
 - message search filters:
   - `--older-than DAYS`
-  : operate on messages older than this many days
+  : operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc
   - `--newer-than DAYS`
-  : operate on messages not older than this many days
+  : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
+  - `--older-than-timestamp-in PATH`
+  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  - `--newer-than-timestamp-in PATH`
+  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  - `--older-than-mtime-of PATH`
+  : operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  - `--newer-than-mtime-of PATH`
+  : operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
   - `--from ADDRESS`
   : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
   - `--not-from ADDRESS`
@@ -442,7 +450,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--unflagged`
   : operate on messages not marked as `FLAGGED`
 
-### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
+### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
 
@@ -506,9 +514,17 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
 
 - message search filters:
   - `--older-than DAYS`
-  : operate on messages older than this many days
+  : operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc
   - `--newer-than DAYS`
-  : operate on messages not older than this many days
+  : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
+  - `--older-than-timestamp-in PATH`
+  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  - `--newer-than-timestamp-in PATH`
+  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  - `--older-than-mtime-of PATH`
+  : operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  - `--newer-than-mtime-of PATH`
+  : operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
   - `--from ADDRESS`
   : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
   - `--not-from ADDRESS`
@@ -534,7 +550,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message search filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message search filter is specified
 
-### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands.
 
@@ -606,9 +622,17 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
 
 - message search filters:
   - `--older-than DAYS`
-  : operate on messages older than this many days
+  : operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc
   - `--newer-than DAYS`
-  : operate on messages not older than this many days
+  : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
+  - `--older-than-timestamp-in PATH`
+  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  - `--newer-than-timestamp-in PATH`
+  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  - `--older-than-mtime-of PATH`
+  : operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  - `--newer-than-mtime-of PATH`
+  : operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
   - `--from ADDRESS`
   : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
   - `--not-from ADDRESS`
@@ -636,7 +660,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}]
+### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
 
@@ -708,9 +732,17 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
 
 - message search filters:
   - `--older-than DAYS`
-  : operate on messages older than this many days
+  : operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc
   - `--newer-than DAYS`
-  : operate on messages not older than this many days
+  : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
+  - `--older-than-timestamp-in PATH`
+  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  - `--newer-than-timestamp-in PATH`
+  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  - `--older-than-mtime-of PATH`
+  : operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  - `--newer-than-mtime-of PATH`
+  : operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
   - `--from ADDRESS`
   : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
   - `--not-from ADDRESS`
@@ -794,7 +826,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 
   ```
 
-- Fetch all messages from `INBOX` folder that were delivered in the last 7 days (rounded to the start of the start day by server time), but don't change any flags:
+- Fetch all messages from `INBOX` folder that were delivered in the last 7 days (the resulting date is rounded down to the start of the day by server time), but don't change any flags:
   ```
   imaparms fetch "${common_mda[@]}" --folder "INBOX" --all --newer-than 7
   ```

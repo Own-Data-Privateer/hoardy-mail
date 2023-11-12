@@ -5,6 +5,7 @@
 # This file can be distributed under the terms of the GNU GPL, version 3 or later.
 
 import dataclasses as _dc
+import decimal
 import os
 import random
 import signal
@@ -20,6 +21,8 @@ from gettext import gettext, ngettext
 
 from . import argparse
 from .exceptions import *
+
+defenc = sys.getdefaultencoding()
 
 interrupt_msg = "\n" + gettext("Gently finishing up... Press ^C again to forcefully interrupt.") + "\n"
 want_stop = False
@@ -177,13 +180,43 @@ def make_search_filter(args : _t.Any) -> str:
     for f in args.hnotfrom:
         filters.append(f'NOT FROM {imap_quote(f)}')
 
-    now = int(time.time())
+    def read_timestamp(path : str) -> int:
+        with open(path, "rb") as f:
+            try:
+                data = f.readline().decode(defenc).strip()
+                # converting via Decimal to preserve all 9 digits after the dot
+                return int(decimal.Decimal(data) * 10**9)
+            except Exception:
+                raise Failure("failed to decode a timestamp from the first line of %s", path)
+
+    now = time.time_ns()
+
+    older_than = []
     if args.older_than is not None:
-        date = time.gmtime(now - args.older_than * 86400)
+        older_than.append(now - args.older_than * 86400 * 10**9)
+
+    for path in args.older_than_timestamp_in:
+        older_than.append(read_timestamp(os.path.expanduser(path)))
+
+    for path in args.older_than_mtime_of:
+        older_than.append(os.stat(os.path.expanduser(path)).st_mtime_ns)
+
+    if len(older_than) > 0:
+        date = time.gmtime(min(older_than) / 10**9)
         filters.append(f"BEFORE {imap_date(date)}")
 
+    newer_than = []
     if args.newer_than is not None:
-        date = time.gmtime(now - args.newer_than * 86400)
+        newer_than.append(now - args.newer_than * 86400 * 10**9)
+
+    for path in args.newer_than_timestamp_in:
+        newer_than.append(read_timestamp(os.path.expanduser(path)) + 86400 * 10**9)
+
+    for path in args.newer_than_mtime_of:
+        newer_than.append(os.stat(os.path.expanduser(path)).st_mtime_ns + 86400 * 10**9)
+
+    if len(newer_than) > 0:
+        date = time.gmtime(max(newer_than) / 10**9)
         filters.append(f"NOT BEFORE {imap_date(date)}")
 
     if len(filters) == 0:
@@ -779,7 +812,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 """)
     fmt.end_section()
 
-    fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered in the last 7 days (rounded to the start of the start day by server time), but don't change any flags"))
+    fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered in the last 7 days (the resulting date is rounded down to the start of the day by server time), but don't change any flags"))
     fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --all --newer-than 7')
     fmt.end_section()
 
@@ -849,8 +882,6 @@ EOF
 
 def main() -> None:
     _ = gettext
-
-    defenc = sys.getdefaultencoding()
 
     parser = argparse.BetterArgumentParser(
         prog=__package__,
@@ -1005,8 +1036,14 @@ def main() -> None:
         grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as `FLAGGED`"))
         grp.set_defaults(flagged = None)
 
-        agrp.add_argument("--older-than", metavar = "DAYS", type=int, help=_("operate on messages older than this many days"))
-        agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help=_("operate on messages not older than this many days"))
+        agrp.add_argument("--older-than", metavar = "DAYS", type=int, help=_("operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc"))
+        agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help=_("operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc"))
+
+        agrp.add_argument("--older-than-timestamp-in", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)"))
+        agrp.add_argument("--newer-than-timestamp-in", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)"))
+
+        agrp.add_argument("--older-than-mtime-of", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)"))
+        agrp.add_argument("--newer-than-mtime-of", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)"))
 
         agrp.add_argument("--from", dest="hfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that have this string as substring of their header's FROM field; can be specified multiple times"))
         agrp.add_argument("--not-from", dest="hnotfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times"))
