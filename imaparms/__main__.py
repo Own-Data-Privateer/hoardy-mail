@@ -35,9 +35,18 @@ def sig_handler(sig : int, frame : _t.Any) -> None:
         sys.stderr.flush()
     should_raise = True
 
+class SleepInterrupt(BaseException): pass
+
+should_unsleep = False
+def sig_unsleep(sig : int, frame : _t.Any) -> None:
+    global should_unsleep
+    if should_unsleep:
+        raise SleepInterrupt()
+
 def handle_signals() -> None:
     signal.signal(signal.SIGINT, sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
+    signal.signal(signal.SIGUSR1, sig_unsleep)
 
 def imap_parse_data(data : bytes, literals : _t.List[bytes] = [], top_level : bool = True) -> _t.Tuple[_t.Any, bytes]:
     "Parse IMAP response string into a tree of strings."
@@ -258,6 +267,18 @@ def connect(account : Account, debug : bool) -> _t.Any:
 
     return srv
 
+def unsleep(seconds : _t.Union[int, float]) -> None:
+    global should_unsleep
+
+    should_unsleep = True
+    try:
+        time.sleep(seconds)
+    except SleepInterrupt:
+        sys.stdout.write("# " + gettext("received SIGUSR1") + "\n")
+        sys.stdout.flush()
+    finally:
+        should_unsleep = False
+
 def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
     if cfg.every is None:
         for_each_account(cfg, func, *args)
@@ -273,7 +294,7 @@ def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -
         print("# " + gettext("sleeping until %s") % (ttime,))
 
         try:
-            time.sleep(to_sleep)
+            unsleep(to_sleep)
         except KeyboardInterrupt:
             return
 
@@ -300,7 +321,7 @@ def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -
         print("# " + gettext("sleeping until %s") % (ttime,))
 
         try:
-            time.sleep(to_sleep)
+            unsleep(to_sleep)
         except KeyboardInterrupt:
             return
 
