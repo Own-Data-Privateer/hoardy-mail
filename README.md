@@ -40,19 +40,19 @@ I.e. if you are really paranoid, you could use that feature to check files produ
   python3 -m imaparms.__main__ --help
   ```
 
-## Backup all your email
+## How to: fetch all your mail from GMail
 
-`imaparms` is not intended as a **backup** utility, `imaparms` is intended as a better replacement for `fetchmail`+`IMAPExpire` combination, with `imaparms` you are supposed to backup your `Maildir` with some third-party tool instead.
+`imaparms` is not intended as a *backup* utility, `imaparms` is intended as a better replacement for `fetchmail`+`IMAPExpire` combination, with `imaparms` you are supposed to backup your `Maildir` with a third-party tool.
 If you want to keep a synchronized copy of your mail locally and on your mail server you should use [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), or something similar instead.
 
-`imaparms` can, however, be used for efficient local backups of your mail if you are willing to sacrifice either `SEEN` or `FLAGGED` IMAP flag to `imaparms` for it to use it to store its state on the server.
-And using `imaparms` for backups is illustrative, so a couple of examples follow.
+`imaparms` can, however, be used for efficient local mirroring of your IMAP data if you are willing to sacrifice either `SEEN` or `FLAGGED` IMAP flag to `imaparms` for it to use it to store its state on the server.
+And using `imaparms` for mirroring is illustrative, so a couple of examples follow.
 
 All examples on this page use `maildrop` MDA from [Courier Mail Server project](https://www.courier-mta.org/), which is the simplest commodity MDA with the simplest setup I know of.
 But, of course, you can use anything else.
 E.g., [fdm](https://github.com/nicm/fdm) can function as an MDA, and it is also pretty simple to setup.
 
-### Backup inefficiently
+### Backup all your email from GMail
 
 The following will fetch all messages from all the folders on the server (without changing message flags on the server side) and feed them to `maildrop` which will just put them all into `~/Mail/backup` `Maildir`.
 
@@ -72,7 +72,7 @@ For GMail you will have to create and use application-specific password, which r
 
 Also, if you have a lot of mail, this will be very inefficient, as it will try to re-download everything again if it ever gets interrupted.
 
-### Backup efficiently
+### ... efficiently
 
 To make the above efficient you have to sacrifice either `SEEN` or `FLAGGED` IMAP flags to allow `imaparms` to track which messages are yet to be fetched, i.e. either:
 
@@ -82,7 +82,7 @@ imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-
 
 # fetch UNSEEN and mark as SEEN as you go
 # this can be interrrupted and restarted and it will continue from where it left off
-imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders --unseen
+imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda maildrop --folder "[Gmail]/All Mail" --unseen
 ```
 
 or
@@ -92,12 +92,12 @@ or
 imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders unflagged
 
 # similarly
-imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders --unflagged
+imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda maildrop --folder "[Gmail]/All Mail" --unflagged
 ```
 
 This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `imaparms --unseen`, or flag (star) it there while using `imaparms --unflagged`, `imaparms` will ignore the message on the next `fetch`.
 
-## Fetch, Backup, Expire
+## How to: implement "fetch + backup + expire" workflow
 
 My preferred workflow described [above](#why) looks like this:
 
@@ -124,7 +124,7 @@ rsync -aHAXiv ~/Mail /disk/backup
 imaparms delete "${common[@]}" --folder "INBOX" --seen --older-than 3
 ```
 
-## Fetch, Backup, Expire: The Paranoid Version
+## How to: implement the paranoid version of "fetch + backup + expire" workflow
 
 The paranoid/double-backup workflow described [above](#why) that uses `fetchmail` in parallel can be implemented like this:
 
@@ -252,14 +252,14 @@ But them implying that everything except their own web-mail UI is "insecure" is 
 I.e. you can borrow someone's phone, unlock it (passcode? peek over their shoulder or just get some video surveillance footage of them typing it in public; fingerprint? they leave their fingerprints all over the device itself, dust with some flour, take a photo, apply some simple filters, 3D-print the result, this actually takes ~3 minutes to do if you know what you are doing), ask Google to authenticate via prompt.
 Done, you can login to everything with no password needed.
 And Google appears to give no way to disable Google prompts if your account has an attached Android device.
-Though, you can make Google prompts ask for a password too, but that feature need special setup.
+Though, you can make Google prompts ask for a password too, but that feature needs special setup.
 Meanwhile, "legacy" passwords are not secure, apparently?
 
 So to use `imaparms` with GMail you will have to enable 2FA in your account settings and then add an application-specific password for IMAP access.
 I.e., instead of generating a random password and giving it to Google (while storing it in a password manager that feeds it to `imaparms`), you ask Google to generate a random password for you and use that with `imaparms`.
 
 To enable 2FA, even for very old accounts that never used anything phone or Android-related, for no rational reasons, GMail requires specifying a working phone number that can receive SMS.
-Which you can then simply remove after you copied your OTP secret into an authentificator of your choice.
+Which you can then simply remove after you copied your OTP secret into an authenticator of your choice.
 Sorry, why did you need the phone number, again?
 
 Ah, well, Google now knows it and will be able track your movements by buying location data from your network operator.
@@ -319,8 +319,8 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
   - `--port PORT`
   : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
 
-- server auth:
-  either of `--passfile` or `--passcmd` are required
+- authentication to the server:
+  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
 
   - `--user USER`
   : username on the server (required)
@@ -350,7 +350,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
     this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
   - `--every-add-random ADD`
   : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set in large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
+    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 ### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
@@ -379,8 +379,8 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--port PORT`
   : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
 
-- server auth:
-  either of `--passfile` or `--passcmd` are required
+- authentication to the server:
+  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
 
   - `--user USER`
   : username on the server (required)
@@ -410,7 +410,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
     this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
   - `--every-add-random ADD`
   : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set in large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
+    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - folder search filters:
@@ -473,8 +473,8 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   - `--port PORT`
   : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
 
-- server auth:
-  either of `--passfile` or `--passcmd` are required
+- authentication to the server:
+  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
 
   - `--user USER`
   : username on the server (required)
@@ -504,7 +504,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
   - `--every-add-random ADD`
   : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set in large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
+    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - folder search filters (required):
@@ -548,14 +548,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
 - marking:
   - `{seen,unseen,flagged,unflagged}`
   : mark how (required):
-    - `seen`: add `SEEN` flag, sets `--unseen` if no message search filter is specified
-    - `unseen`: remove `SEEN` flag, sets `--seen` if no message search filter is specified
-    - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message search filter is specified
-    - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message search filter is specified
+    - `seen`: add `SEEN` flag, sets `--unseen` if no message flag filter is specified
+    - `unseen`: remove `SEEN` flag, sets `--seen` if no message flag filter is specified
+    - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message flag filter is specified
+    - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message flag filter is specified
 
 ### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
-Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands.
+Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands.
 
 - debugging:
   - `--debug`
@@ -575,8 +575,8 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--port PORT`
   : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
 
-- server auth:
-  either of `--passfile` or `--passcmd` are required
+- authentication to the server:
+  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
 
   - `--user USER`
   : username on the server (required)
@@ -606,7 +606,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
   - `--every-add-random ADD`
   : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set in large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
+    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - delivery settings:
@@ -695,8 +695,8 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   - `--port PORT`
   : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
 
-- server auth:
-  either of `--passfile` or `--passcmd` are required
+- authentication to the server:
+  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
 
   - `--user USER`
   : username on the server (required)
@@ -726,7 +726,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
     this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
   - `--every-add-random ADD`
   : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set in large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
+    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - folder search filters (required):
@@ -789,7 +789,7 @@ Specifying `--folder` multiple times will perform the specified action on all sp
     imaparms count --ssl --host imap.example.com --user myself@example.com --passfile /path/to/file/containing/myself@example.com.password
     ```
 
-  - with the password taken from the output of password-store util:
+  - with the password taken from the output of password-store utility:
     ```
     imaparms count --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com"
     ```
@@ -825,6 +825,22 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 
   # repeatable part
   imaparms fetch "${common_mda[@]}" --folder "INBOX"
+
+  ```
+
+- Similarly to the above, but use `FLAGGED` instead of `SEEN`. This allows to use this in parallel with another instance of `imaparms` using the `SEEN` flag, e.g. if you want to backup to two different machines independently, or if you want to use `imaparms` simultaneously in parallel with `fetchmail` or other similar tool:
+  ```
+  # setup: do once
+  imaparms mark "${common[@]}" --folder "INBOX" unflagged
+
+  # repeatable part
+  imaparms fetch "${common_mda[@]}" --folder "INBOX" --all --unflagged
+
+  # this will work as if nothing of the above was run
+  fetchmail
+
+  # in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both imaparms and fetchmail
+  imaparms delete "${common[@]}" --folder "INBOX" --older-than 7 --seen --flagged
 
   ```
 
@@ -864,22 +880,6 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   ```
 
   Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `imaparms` or another IMAP client that changes message flags (`imaparms` will abort if it notices another client doing it, but better be safe than sorry), is highly recommended anyway.
-
-- Similarly to the above, but use `FLAGGED` instead of `SEEN`. This allows to use this in parallel with another instance of `imaparms` using the `SEEN` flag, e.g. if you want to backup to two different machines independently, or if you want to use `imaparms` simultaneously in parallel with `fetchmail` or other similar tool:
-  ```
-  # setup: do once
-  imaparms mark "${common[@]}" --folder "INBOX" unflagged
-
-  # repeatable part
-  imaparms fetch "${common_mda[@]}" --folder "INBOX" --unflagged
-
-  # this will work as if nothing of the above was run
-  fetchmail
-
-  # in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both imaparms and fetchmail
-  imaparms delete "${common[@]}" --folder "INBOX" --older-than 7 --seen --flagged
-
-  ```
 
 - Fetch everything GMail considers to be Spam for local filtering:
   ```

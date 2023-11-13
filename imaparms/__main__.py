@@ -793,7 +793,7 @@ def add_examples(fmt : _t.Any) -> None:
     fmt.add_code(f'{__package__} count --ssl --host imap.example.com --user myself@example.com --passfile /path/to/file/containing/myself@example.com.password')
     fmt.end_section()
 
-    fmt.start_section(_("with the password taken from the output of password-store util"))
+    fmt.start_section(_("with the password taken from the output of password-store utility"))
     fmt.add_code(f'{__package__} count --ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com"')
     fmt.end_section()
 
@@ -827,6 +827,21 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 """)
     fmt.end_section()
 
+    fmt.start_section(_(f"Similarly to the above, but use `FLAGGED` instead of `SEEN`. This allows to use this in parallel with another instance of `{__package__}` using the `SEEN` flag, e.g. if you want to backup to two different machines independently, or if you want to use `{__package__}` simultaneously in parallel with `fetchmail` or other similar tool"))
+    fmt.add_code(f"""# {_("setup: do once")}
+{__package__} mark "${{common[@]}}" --folder "INBOX" unflagged
+
+# {_("repeatable part")}
+{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --all --unflagged
+
+# {_("this will work as if nothing of the above was run")}
+fetchmail
+
+# {_(f"in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both {__package__} and fetchmail")}
+{__package__} delete "${{common[@]}}" --folder "INBOX" --older-than 7 --seen --flagged
+""")
+    fmt.end_section()
+
     fmt.start_section(_(f"Similarly to the above, but run `{__package__} fetch` as a daemon to download updates every hour"))
     fmt.add_code(f"""# {_("setup: do once")}
 {__package__} mark "${{common[@]}}" --folder "INBOX" unseen
@@ -854,21 +869,6 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
     fmt.start_section(_("**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `SEEN` messages instead"))
     fmt.add_code(f'{__package__} delete "${{common[@]}}" --folder "INBOX"')
     fmt.add_text(_(f"Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `{__package__}` or another IMAP client that changes message flags (`{__package__}` will abort if it notices another client doing it, but better be safe than sorry), is highly recommended anyway."))
-    fmt.end_section()
-
-    fmt.start_section(_(f"Similarly to the above, but use `FLAGGED` instead of `SEEN`. This allows to use this in parallel with another instance of `{__package__}` using the `SEEN` flag, e.g. if you want to backup to two different machines independently, or if you want to use `{__package__}` simultaneously in parallel with `fetchmail` or other similar tool"))
-    fmt.add_code(f"""# {_("setup: do once")}
-{__package__} mark "${{common[@]}}" --folder "INBOX" unflagged
-
-# {_("repeatable part")}
-{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --unflagged
-
-# {_("this will work as if nothing of the above was run")}
-fetchmail
-
-# {_(f"in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both {__package__} and fetchmail")}
-{__package__} delete "${{common[@]}}" --folder "INBOX" --older-than 7 --seen --flagged
-""")
     fmt.end_section()
 
     fmt.start_section(_("Fetch everything GMail considers to be Spam for local filtering"))
@@ -983,7 +983,7 @@ def main() -> None:
         agrp.add_argument("--host", type=str, help=_("IMAP server to connect to (required)"))
         agrp.add_argument("--port", type=int, help=_("port to use") + " " + _("(default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)"))
 
-        agrp = cmd.add_argument_group(_("server auth"), description=_("either of `--passfile` or `--passcmd` are required"))
+        agrp = cmd.add_argument_group(_("authentication to the server"), description=_("either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times"))
         agrp.add_argument("--user", type=str, help=_("username on the server (required)"))
 
         grp = agrp.add_mutually_exclusive_group()
@@ -1003,7 +1003,7 @@ def main() -> None:
                                                                          _("i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle") + ";\n" + \
                                                                          _("this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle"))
         agrp.add_argument("--every-add-random", metavar = "ADD", default = 60, type=int, help=_("sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: %(default)s)") + ";\n" + \
-                                                                                             _("if you set in large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers") + ";\n" + \
+                                                                                             _("if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers") + ";\n" + \
                                                                                              _(f"if you run `{__package__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
 
     def add_delivery(cmd : _t.Any) -> None:
@@ -1100,7 +1100,7 @@ def main() -> None:
     add_common(cmd)
     add_filters(cmd, False, None)
     agrp = cmd.add_argument_group("marking")
-    sets_x_if = _("sets `%s` if no message search filter is specified")
+    sets_x_if = _("sets `%s` if no message flag filter is specified")
     agrp.add_argument("mark", choices=["seen", "unseen", "flagged", "unflagged"], help=_("mark how") + " " + _("(required)") + f""":
 - `seen`: {_("add `SEEN` flag")}, {sets_x_if % ("--unseen",)}
 - `unseen`: {_("remove `SEEN` flag")}, {sets_x_if % ("--seen",)}
@@ -1111,7 +1111,7 @@ def main() -> None:
     cmd.set_defaults(command="mark")
 
     cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds"),
-                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands."))
+                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands."))
     add_common(cmd)
     add_delivery(cmd)
     add_filters(cmd, True, "unseen")
