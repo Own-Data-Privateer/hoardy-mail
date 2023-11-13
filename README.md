@@ -65,10 +65,7 @@ DEFAULT="$HOME/Mail/backup"
 EOF
 
 # backup all your mail from GMail
-read password
-echo "$password" > ./password.txt
-imaparms fetch --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --mda maildrop --all-folders --all
-rm ./password.txt
+imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda maildrop --all-folders --all
 ```
 
 For GMail you will have to create and use application-specific password, which requires enabling 2FA, [see below for more info](#gmail).
@@ -81,21 +78,21 @@ To make the above efficient you have to sacrifice either `SEEN` or `FLAGGED` IMA
 
 ```
 # mark all messages as UNSEEN
-imaparms mark --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --all-folders unseen
+imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders unseen
 
 # fetch UNSEEN and mark as SEEN as you go
 # this can be interrrupted and restarted and it will continue from where it left off
-imaparms mark --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --all-folders --unseen
+imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders --unseen
 ```
 
 or
 
 ```
 # mark all messages as UNFLAGGED
-imaparms mark --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --all-folders unflagged
+imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders unflagged
 
 # similarly
-imaparms mark --host imap.gmail.com --user user@gmail.com --passfile ./password.txt --all-folders --unflagged
+imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders --unflagged
 ```
 
 This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `imaparms --unseen`, or flag (star) it there while using `imaparms --unflagged`, `imaparms` will ignore the message on the next `fetch`.
@@ -300,7 +297,7 @@ Logins to a specified server, performs specified actions on all messages matchin
     - `delete (expire)`
     : delete matching messages from specified folders
 
-### imaparms list [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD]
+### imaparms list [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD]
 
 Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
@@ -327,6 +324,8 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
   - `--user USER`
   : username on the server (required)
+  - `--pass-pinentry`
+  : read the password via `pinentry`
   - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
   - `--passcmd PASSCMD, --pass-cmd PASSCMD`
@@ -354,7 +353,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
     if you set in large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
-### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
+### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--porcelain]
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
@@ -385,6 +384,8 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
 
   - `--user USER`
   : username on the server (required)
+  - `--pass-pinentry`
+  : read the password via `pinentry`
   - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
   - `--passcmd PASSCMD, --pass-cmd PASSCMD`
@@ -450,7 +451,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--unflagged`
   : operate on messages not marked as `FLAGGED`
 
-### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
+### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] {seen,unseen,flagged,unflagged}
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
 
@@ -477,6 +478,8 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
 
   - `--user USER`
   : username on the server (required)
+  - `--pass-pinentry`
+  : read the password via `pinentry`
   - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
   - `--passcmd PASSCMD, --pass-cmd PASSCMD`
@@ -550,7 +553,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message search filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message search filter is specified
 
-### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--all-folders | --folder NAME] [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeded in a specified way by issuing IMAP `STORE` commands.
 
@@ -577,6 +580,8 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
 
   - `--user USER`
   : username on the server (required)
+  - `--pass-pinentry`
+  : read the password via `pinentry`
   - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
   - `--passcmd PASSCMD, --pass-cmd PASSCMD`
@@ -660,7 +665,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}]
+### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--method {auto,delete,delete-noexpunge,gmail-trash}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
 
@@ -695,6 +700,8 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
 
   - `--user USER`
   : username on the server (required)
+  - `--pass-pinentry`
+  : read the password via `pinentry`
   - `--passfile PASSFILE, --pass-file PASSFILE`
   : file containing the password on its first line
   - `--passcmd PASSCMD, --pass-cmd PASSCMD`
@@ -771,6 +778,11 @@ Specifying `--folder` multiple times will perform the specified action on all sp
 ## Examples
 
 - List all available IMAP folders and count how many messages they contain:
+
+  - with the password taken from `pinentry`:
+    ```
+    imaparms count --ssl --host imap.example.com --user myself@example.com --pass-pinentry
+    ```
 
   - with the password taken from the first line of the given file:
     ```

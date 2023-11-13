@@ -51,6 +51,23 @@ def handle_signals() -> None:
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGUSR1, sig_unsleep)
 
+def pinentry(host : str, user : str) -> str:
+    with subprocess.Popen(["pinentry"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as p:
+        def check(beginning : str) -> str:
+            res = p.stdout.readline().decode(defenc) # type: ignore
+            if not res.endswith("\n") or not res.startswith(beginning):
+                raise Failure("pinentry conversation failed")
+            return res[len(beginning):-1]
+        check("OK ")
+        def opt(what : str, beginning : str) -> str:
+            p.stdin.write(what.encode(defenc) + b"\n") # type: ignore
+            p.stdin.flush() # type: ignore
+            return check(beginning)
+        opt("SETDESC " + gettext("Please enter the passphrase for user %s on host %s") % (user, host), "OK")
+        opt("SETPROMPT " + gettext("Passphrase:"), "OK")
+        pin = opt("GETPIN", "D ")
+        return pin
+
 def imap_parse_data(data : bytes, literals : _t.List[bytes] = [], top_level : bool = True) -> _t.Tuple[_t.Any, bytes]:
     "Parse IMAP response string into a tree of strings."
     acc : _t.List[bytes] = []
@@ -766,6 +783,10 @@ def add_examples(fmt : _t.Any) -> None:
 
     fmt.start_section(_("List all available IMAP folders and count how many messages they contain"))
 
+    fmt.start_section(_("with the password taken from `pinentry`"))
+    fmt.add_code(f'{__package__} count --ssl --host imap.example.com --user myself@example.com --pass-pinentry')
+    fmt.end_section()
+
     fmt.start_section(_("with the password taken from the first line of the given file"))
     fmt.add_code(f'{__package__} count --ssl --host imap.example.com --user myself@example.com --passfile /path/to/file/containing/myself@example.com.password')
     fmt.end_section()
@@ -921,7 +942,9 @@ def main() -> None:
             user = cfg.user
             cfg.user = None
 
-            if self.ptype == "file":
+            if self.ptype == "pinentry":
+                password = pinentry(host, user)
+            elif self.ptype == "file":
                 with open(value, "rb") as f:
                     password = f.readline().decode(defenc)
             elif self.ptype == "cmd":
@@ -962,6 +985,7 @@ def main() -> None:
         agrp.add_argument("--user", type=str, help=_("username on the server (required)"))
 
         grp = agrp.add_mutually_exclusive_group()
+        grp.add_argument("--pass-pinentry", nargs=0, action=EmitAccount, default="pinentry", help=_("read the password via `pinentry`"))
         grp.add_argument("--passfile", "--pass-file", action=EmitAccount, default="file", help=_("file containing the password on its first line"))
         grp.add_argument("--passcmd", "--pass-cmd", action=EmitAccount, default="cmd", help=_("shell command that returns the password as the first line of its stdout"))
         grp.set_defaults(password = None)
@@ -1114,7 +1138,11 @@ def main() -> None:
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="delete")
 
-    args = parser.parse_args(sys.argv[1:])
+    try:
+        args = parser.parse_args(sys.argv[1:])
+    except CatastrophicFailure as exc:
+        error(exc.show())
+        sys.exit(1)
 
     if args.help_markdown:
         parser.set_formatter_class(argparse.MarkdownBetterHelpFormatter)
