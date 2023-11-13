@@ -486,6 +486,7 @@ def do_action(args : _t.Any, srv : IMAP4, search_filter : str) -> None:
     if args.all_folders and len(args.folders) == 0:
         folders = get_folders(srv)
     else:
+        args.all_folders = False
         folders = args.folders
 
     for folder in filter(lambda f: f not in args.not_folders, folders):
@@ -929,7 +930,7 @@ def main() -> None:
                     password = p.stdout.readline().decode(defenc) # type: ignore
                     retcode = p.wait()
                     if retcode != 0:
-                        die(_("`--passcmd` (`%s`) failed with non-zero exit code %d") % (args.passcmd, retcode))
+                        die(_("`--passcmd` (`%s`) failed with non-zero exit code %d") % (value, retcode))
             else:
                 assert False
 
