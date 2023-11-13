@@ -337,16 +337,23 @@ def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -
     fmt = "[%Y-%m-%d %H:%M:%S]"
     cycle = cfg.every
 
+    def do_sleep(ttime : str) -> None:
+        print("# " + gettext("sleeping until %s, send SIGUSR1 or hit ^C to start immediately, hit ^C twice to abort") % (ttime,))
+        try:
+            unsleep(to_sleep)
+        except KeyboardInterrupt:
+            global want_stop
+            want_stop = False
+
+            # give user the time to abort
+            print("# " + gettext("starting in a little bit, last chance to abort..."))
+            unsleep(1)
+
     to_sleep = random.randint(0, cfg.every_add_random)
     if to_sleep > 0:
         now = time.time()
         ttime = time.strftime(fmt, time.localtime(now + to_sleep))
-        print("# " + gettext("sleeping until %s") % (ttime,))
-
-        try:
-            unsleep(to_sleep)
-        except KeyboardInterrupt:
-            return
+        do_sleep(ttime)
 
     while True:
         old_errors = cfg.errors
@@ -368,12 +375,7 @@ def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -
 
         to_sleep = max(60, repeat_at - now + random.randint(0, cfg.every_add_random))
         ttime = time.strftime(fmt, time.localtime(now + to_sleep))
-        print("# " + gettext("sleeping until %s") % (ttime,))
-
-        try:
-            unsleep(to_sleep)
-        except KeyboardInterrupt:
-            return
+        do_sleep(ttime)
 
 def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
     global should_raise
