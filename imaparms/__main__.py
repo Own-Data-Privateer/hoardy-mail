@@ -488,9 +488,9 @@ def cmd_action(args : _t.Any) -> None:
     search_filter = make_search_filter(args)
 
     if "mark" in args:
-        print("# " + gettext("searching %s and marking %s") % (search_filter, args.mark))
+        print("# " + gettext(f"searching %s, performing {args.command}, marking them as %s") % (search_filter, args.mark.upper()))
     else:
-        print("# " + gettext("searching %s") % (search_filter,))
+        print("# " + gettext(f"searching %s, performing {args.command}") % (search_filter,))
     #sys.exit(1)
 
     for_each_poll(args, do_action, args.command == "fetch", search_filter)
