@@ -1023,15 +1023,28 @@ def main() -> None:
             def_freq = " " + _("(required)")
 
         agrp = cmd.add_argument_group(_("folder search filters") + def_freq)
+
         egrp = agrp.add_mutually_exclusive_group(required = not all_folders_by_default)
         egrp.add_argument("--all-folders", action="store_true", default = all_folders_by_default,
                           help=_("operate on all folders") + def_fall)
         egrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=[],
                           help=_("mail folders to include; can be specified multiple times"))
+
         agrp.add_argument("--not-folder", metavar = "NAME", dest="not_folders", action="append", type=str, default=[],
                           help=_("mail folders to exclude; can be specified multiple times"))
 
-        cmd.set_defaults(flag_default = default)
+        agrp = cmd.add_argument_group(_("message search filters"))
+        agrp.add_argument("--older-than", metavar = "DAYS", type=int, help=_("operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc"))
+        agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help=_("operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc"))
+
+        agrp.add_argument("--older-than-timestamp-in", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)"))
+        agrp.add_argument("--newer-than-timestamp-in", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)"))
+
+        agrp.add_argument("--older-than-mtime-of", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)"))
+        agrp.add_argument("--newer-than-mtime-of", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)"))
+
+        agrp.add_argument("--from", dest="hfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that have this string as substring of their header's FROM field; can be specified multiple times"))
+        agrp.add_argument("--not-from", dest="hnotfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times"))
 
         def_req = ""
         def_str = " " + _("(default)")
@@ -1047,10 +1060,10 @@ def main() -> None:
         else:
             assert False
 
-        agrp = cmd.add_argument_group(_("message search filters"))
+        agrp = cmd.add_argument_group(_("message flag filters") + def_req)
+        cmd.set_defaults(flag_default = default)
 
-        bgrp = cmd.add_argument_group(_("message flag filters") + def_req)
-        egrp = bgrp.add_mutually_exclusive_group()
+        egrp = agrp.add_mutually_exclusive_group()
         egrp.add_argument("--all", dest="all", action="store_true", default = None, help=_("operate on all messages") + def_all)
 
         grp = egrp.add_mutually_exclusive_group()
@@ -1062,18 +1075,6 @@ def main() -> None:
         grp.add_argument("--flagged", dest="flagged", action="store_true", help=_("operate on messages marked as `FLAGGED`"))
         grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as `FLAGGED`"))
         grp.set_defaults(flagged = None)
-
-        agrp.add_argument("--older-than", metavar = "DAYS", type=int, help=_("operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc"))
-        agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help=_("operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc"))
-
-        agrp.add_argument("--older-than-timestamp-in", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)"))
-        agrp.add_argument("--newer-than-timestamp-in", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)"))
-
-        agrp.add_argument("--older-than-mtime-of", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)"))
-        agrp.add_argument("--newer-than-mtime-of", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)"))
-
-        agrp.add_argument("--from", dest="hfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that have this string as substring of their header's FROM field; can be specified multiple times"))
-        agrp.add_argument("--not-from", dest="hnotfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times"))
 
     def no_cmd(args : _t.Any) -> None:
         parser.print_help(sys.stderr)
