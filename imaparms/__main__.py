@@ -447,20 +447,8 @@ def get_folders(srv : IMAP4) -> _t.List[str]:
     return res
 
 def cmd_action(cfg : Namespace) -> None:
-    if cfg.all is None and cfg.seen is None and cfg.flagged is None:
-        if cfg.flag_default is None:
-            pass
-        elif cfg.flag_default == "all":
-            cfg.all = True
-        elif cfg.flag_default == "seen":
-            cfg.seen = True
-        elif cfg.flag_default == "unseen":
-            cfg.seen = False
-        else:
-            assert False
-
     if cfg.command == "mark":
-        if cfg.all is None and cfg.seen is None and cfg.flagged is None:
+        if cfg.seen is None and cfg.flagged is None:
             if cfg.mark == "seen":
                 cfg.seen = False
             elif cfg.mark == "unseen":
@@ -471,9 +459,9 @@ def cmd_action(cfg : Namespace) -> None:
                 cfg.flagged = True
     elif cfg.command == "fetch":
         if cfg.mark == "auto":
-            if cfg.all is None and cfg.seen == False and cfg.flagged is None:
+            if cfg.seen == False and cfg.flagged is None:
                 cfg.mark = "seen"
-            elif cfg.all is None and cfg.seen is None and cfg.flagged == False:
+            elif cfg.seen is None and cfg.flagged == False:
                 cfg.mark = "flagged"
             else:
                 cfg.mark = "noop"
@@ -836,7 +824,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 {__package__} mark "${{common[@]}}" --folder "INBOX" unflagged
 
 # {_("repeatable part")}
-{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --all --unflagged
+{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --any-seen --unflagged
 
 # {_("this will work as if nothing of the above was run")}
 fetchmail
@@ -856,11 +844,11 @@ fetchmail
     fmt.end_section()
 
     fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered in the last 7 days (the resulting date is rounded down to the start of the day by server time), but don't change any flags"))
-    fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --all --newer-than 7')
+    fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --any-seen --newer-than 7')
     fmt.end_section()
 
     fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time)"))
-    fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --all --newer-than 0')
+    fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder "INBOX" --any-seen --newer-than 0')
     fmt.end_section()
 
     fmt.start_section(_("Delete all `SEEN` messages older than 7 days from `INBOX` folder"))
@@ -904,7 +892,7 @@ EOF
 
     fmt.add_text(_("Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with:"))
 
-    fmt.add_code(f'{__package__} delete "${{gmail_common[@]}}" --folder "[Gmail]/Trash" --all --older-than 7')
+    fmt.add_code(f'{__package__} delete "${{gmail_common[@]}}" --folder "[Gmail]/Trash" --any-seen --older-than 7')
     fmt.add_text(_("(`--method delete` is implied by `--host imap.gmail.com` but `--folder` being `[Gmail]/Trash`)"))
     fmt.end_section()
 
@@ -1028,7 +1016,7 @@ def main() -> None:
         agrp.add_argument("--not-folder", metavar = "NAME", dest="not_folders", action="append", type=str, default=[],
                           help=_("mail folders to exclude; can be specified multiple times"))
 
-    def add_filters(cmd : _t.Any, default : _t.Optional[str]) -> None:
+    def add_filters(cmd : _t.Any, default : _t.Union[_t.Optional[bool], str]) -> None:
         agrp = cmd.add_argument_group(_("message search filters"))
         agrp.add_argument("--older-than", metavar = "DAYS", type=int, help=_("operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc"))
         agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help=_("operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc"))
@@ -1046,28 +1034,26 @@ def main() -> None:
         def_str = " " + _("(default)")
         def_all, def_seen, def_unseen = "", "", ""
         if default is None:
-            def_req = " " + _("(default: depends on other arguments)")
-        elif default == "all":
             def_all = def_str
-        elif default == "seen":
+        elif default == True:
             def_seen = def_str
-        elif default == "unseen":
+        elif default == False:
             def_unseen = def_str
+        elif default == "depends":
+            def_req = " " + _("(default: depends on other arguments)")
         else:
             assert False
 
         agrp = cmd.add_argument_group(_("message flag filters") + def_req)
-        cmd.set_defaults(flag_default = default)
 
-        egrp = agrp.add_mutually_exclusive_group()
-        egrp.add_argument("--all", dest="all", action="store_true", default = None, help=_("operate on all messages") + def_all)
-
-        grp = egrp.add_mutually_exclusive_group()
+        grp = agrp.add_mutually_exclusive_group()
+        grp.add_argument("--any-seen", dest="seen", action="store_const", const = None, help=_("operate on both `SEEN` and not `SEEN` messages") + def_all)
         grp.add_argument("--seen", dest="seen", action="store_true", help=_("operate on messages marked as `SEEN`") + def_seen)
         grp.add_argument("--unseen", dest="seen", action="store_false", help=_("operate on messages not marked as `SEEN`") + def_unseen)
-        grp.set_defaults(seen = None)
+        grp.set_defaults(seen = default)
 
-        grp = egrp.add_mutually_exclusive_group()
+        grp = agrp.add_mutually_exclusive_group()
+        grp.add_argument("--any-flagged", dest="flagged", action="store_const", const = None, help=_("operate on both `FLAGGED` and not `FLAGGED` messages") + def_str)
         grp.add_argument("--flagged", dest="flagged", action="store_true", help=_("operate on messages marked as `FLAGGED`"))
         grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as `FLAGGED`"))
         grp.set_defaults(flagged = None)
@@ -1097,7 +1083,7 @@ def main() -> None:
                                 description = _("Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line."))
     add_common(cmd)
     add_folders(cmd, True)
-    add_filters(cmd, "all")
+    add_filters(cmd, None)
     cmd.add_argument("--porcelain", action="store_true", help=_("print in a machine-readable format"))
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="count")
@@ -1106,7 +1092,7 @@ def main() -> None:
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands."))
     add_common(cmd)
     add_folders(cmd, False)
-    add_filters(cmd, None)
+    add_filters(cmd, "depends")
     agrp = cmd.add_argument_group("marking")
     sets_x_if = _("sets `%s` if no message flag filter is specified")
     agrp.add_argument("mark", choices=["seen", "unseen", "flagged", "unflagged"], help=_("mark how") + " " + _("(required)") + f""":
@@ -1123,7 +1109,7 @@ def main() -> None:
     add_common(cmd)
     add_folders(cmd, True)
     add_delivery(cmd)
-    add_filters(cmd, "unseen")
+    add_filters(cmd, False)
     agrp = cmd.add_argument_group("marking")
     agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
 - `auto`: {_('`seen` when only `--unseen` is set (default), `flagged` when only `--unflagged` is set, `noop` otherwise')}
@@ -1140,7 +1126,7 @@ def main() -> None:
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method."))
     add_common(cmd)
     add_folders(cmd, False)
-    add_filters(cmd, "seen")
+    add_filters(cmd, True)
     agrp = cmd.add_argument_group(_("deletion method"))
     agrp.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help=_("delete messages how") + f""":
 - `auto`: {_('`gmail-trash` when `--host imap.gmail.com` and the current folder is not `[Gmail]/Trash`, `delete` otherwise')} {_("(default)")}

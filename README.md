@@ -16,7 +16,7 @@ Which is to say, the main use case I made this for is as follows:
 - you run this tool's `imaparms delete` subcommand to expire old already-fetched messages from the original mail server (I prefer to expire messages `--older-than` some number of intervals between backups, just to be safe, but if you do backups directly after the `fetch`, or you like to live dangerously, you could delete old messages immediately), so that
 - when/if your account get cracked/hacked the attacker only gets your unfetched mail (+ configurable amount of yet to be removed messages), which is much better than them getting the whole last 20 years or whatever of your correspondence. (If your personal computer gets compromised enough, attackers will eventually get everything anyway, so deleting old mail from servers does not make things worse. But see some more thoughts on this below.)
 
-Also, you can run `imaparms fetch` with `--unflagged` command line option instead of the implied `--unseen` option, which will make it use the `FLAGGED` IMAP flag instead of the `SEEN` IMAP flag to track state, allowing you to run it simultaneously with tools that use the `SEEN` flag, like `fetchmail`, and then simply delete duplicated files.
+Also, you can run `imaparms fetch` with `--any-seen --unflagged` command line options instead of the implied `--unseen --any-flagged` options, which will make it use the `FLAGGED` IMAP flag instead of the `SEEN` IMAP flag to track state, allowing you to run it simultaneously with tools that use the `SEEN` flag, like `fetchmail`, and then simply delete duplicated files.
 I.e. if you are really paranoid, you could use that feature to check files produced by `fetchmail` and `imaparms fetch` against each other, see below.
 
 # Quickstart
@@ -65,7 +65,7 @@ DEFAULT="$HOME/Mail/backup"
 EOF
 
 # backup all your mail from GMail
-imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda maildrop --all-folders --all
+imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda maildrop --all-folders --any-seen
 ```
 
 For GMail you will have to create and use application-specific password, which requires enabling 2FA, [see below for more info](#gmail).
@@ -92,10 +92,10 @@ or
 imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders unflagged
 
 # similarly
-imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda maildrop --folder "[Gmail]/All Mail" --unflagged
+imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda maildrop --folder "[Gmail]/All Mail" --any-seen --unflagged
 ```
 
-This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `imaparms --unseen`, or flag (star) it there while using `imaparms --unflagged`, `imaparms` will ignore the message on the next `fetch`.
+This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `--unseen`, or flag (star) it there while using `--unflagged`, `imaparms` will ignore the message on the next `fetch`.
 
 ## How to: implement "fetch + backup + expire" workflow
 
@@ -145,7 +145,7 @@ imaparms mark "${secondary_common[@]}" --folder "INBOX" unflagged
 fetchmail --mda maildrop -d 900
 
 # fetch using the FLAGGED flag for tracking state
-imaparms fetch "${secondary_common[@]}" --mda "maildrop ~/.mailfilter-secondary" --folder "INBOX" --unflagged
+imaparms fetch "${secondary_common[@]}" --mda "maildrop ~/.mailfilter-secondary" --folder "INBOX" --any-seen --unflagged
 
 # deduplicate
 jdupes -o time -O -rdN Mail/INBOX Mail/INBOX.secondary
@@ -353,7 +353,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
     if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
-### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--porcelain]
+### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--porcelain]
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
@@ -440,18 +440,20 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
 - message flag filters:
-  - `--all`
-  : operate on all messages (default)
+  - `--any-seen`
+  : operate on both `SEEN` and not `SEEN` messages (default)
   - `--seen`
   : operate on messages marked as `SEEN`
   - `--unseen`
   : operate on messages not marked as `SEEN`
+  - `--any-flagged`
+  : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
   : operate on messages marked as `FLAGGED`
   - `--unflagged`
   : operate on messages not marked as `FLAGGED`
 
-### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--all | [--seen | --unseen |] [--flagged | --unflagged]] {seen,unseen,flagged,unflagged}
+### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] {seen,unseen,flagged,unflagged}
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
 
@@ -534,12 +536,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
 - message flag filters (default: depends on other arguments):
-  - `--all`
-  : operate on all messages
+  - `--any-seen`
+  : operate on both `SEEN` and not `SEEN` messages
   - `--seen`
   : operate on messages marked as `SEEN`
   - `--unseen`
   : operate on messages not marked as `SEEN`
+  - `--any-flagged`
+  : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
   : operate on messages marked as `FLAGGED`
   - `--unflagged`
@@ -553,7 +557,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message flag filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message flag filter is specified
 
-### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands.
 
@@ -644,12 +648,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
 - message flag filters:
-  - `--all`
-  : operate on all messages
+  - `--any-seen`
+  : operate on both `SEEN` and not `SEEN` messages
   - `--seen`
   : operate on messages marked as `SEEN`
   - `--unseen`
   : operate on messages not marked as `SEEN` (default)
+  - `--any-flagged`
+  : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
   : operate on messages marked as `FLAGGED`
   - `--unflagged`
@@ -665,7 +671,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--method {auto,delete,delete-noexpunge,gmail-trash}]
+### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--method {auto,delete,delete-noexpunge,gmail-trash}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
 
@@ -748,12 +754,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
 
 - message flag filters:
-  - `--all`
-  : operate on all messages
+  - `--any-seen`
+  : operate on both `SEEN` and not `SEEN` messages
   - `--seen`
   : operate on messages marked as `SEEN` (default)
   - `--unseen`
   : operate on messages not marked as `SEEN`
+  - `--any-flagged`
+  : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
   : operate on messages marked as `FLAGGED`
   - `--unflagged`
@@ -834,7 +842,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   imaparms mark "${common[@]}" --folder "INBOX" unflagged
 
   # repeatable part
-  imaparms fetch "${common_mda[@]}" --folder "INBOX" --all --unflagged
+  imaparms fetch "${common_mda[@]}" --folder "INBOX" --any-seen --unflagged
 
   # this will work as if nothing of the above was run
   fetchmail
@@ -856,12 +864,12 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 
 - Fetch all messages from `INBOX` folder that were delivered in the last 7 days (the resulting date is rounded down to the start of the day by server time), but don't change any flags:
   ```
-  imaparms fetch "${common_mda[@]}" --folder "INBOX" --all --newer-than 7
+  imaparms fetch "${common_mda[@]}" --folder "INBOX" --any-seen --newer-than 7
   ```
 
 - Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time):
   ```
-  imaparms fetch "${common_mda[@]}" --folder "INBOX" --all --newer-than 0
+  imaparms fetch "${common_mda[@]}" --folder "INBOX" --any-seen --newer-than 0
   ```
 
 - Delete all `SEEN` messages older than 7 days from `INBOX` folder:
@@ -917,7 +925,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with:
 
   ```
-  imaparms delete "${gmail_common[@]}" --folder "[Gmail]/Trash" --all --older-than 7
+  imaparms delete "${gmail_common[@]}" --folder "[Gmail]/Trash" --any-seen --older-than 7
   ```
 
   (`--method delete` is implied by `--host imap.gmail.com` but `--folder` being `[Gmail]/Trash`)
