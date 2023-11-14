@@ -476,14 +476,6 @@ def cmd_action(args : _t.Any) -> None:
                 args.mark = "flagged"
             else:
                 args.mark = "noop"
-    elif args.command == "delete":
-        if args.method == "auto":
-            if args.host in ["imap.gmail.com"] and \
-               args.folders != ["[Gmail]/Trash"]:
-                args.method = "gmail-trash"
-                args.not_folders.append("[Gmail]/Trash")
-            else:
-                args.method = "delete"
 
     search_filter = make_search_filter(args)
 
@@ -549,6 +541,7 @@ def do_folder_action(args : _t.Any, account : Account, srv : IMAP4,
 
         act : str
         actargs : _t.Any
+        method = None
         if command == "mark":
             act = "marking as %s %d messages matching %s from folder `%s`"
             actargs  = (args.mark.upper(), len(message_uids), search_filter, folder)
@@ -556,10 +549,18 @@ def do_folder_action(args : _t.Any, account : Account, srv : IMAP4,
             act = "fetching %d messages matching %s from folder `%s`"
             actargs  = (len(message_uids), search_filter, folder)
         elif command == "delete":
-            if args.method in ["delete", "delete-noexpunge"]:
+            if args.method == "auto":
+                if account.host == "imap.gmail.com" and folder != "[Gmail]/Trash":
+                    method = "gmail-trash"
+                else:
+                    method = "delete"
+            else:
+                method = args.method
+
+            if method in ["delete", "delete-noexpunge"]:
                 act = "deleting %d messages matching %s from folder `%s`"
                 actargs  = (len(message_uids), search_filter, folder)
-            elif args.method == "gmail-trash":
+            elif method == "gmail-trash":
                 act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
                 actargs  = (len(message_uids), search_filter, folder)
             else:
@@ -578,7 +579,8 @@ def do_folder_action(args : _t.Any, account : Account, srv : IMAP4,
         elif command == "fetch":
             do_fetch(args, account, srv, message_uids)
         elif command == "delete":
-            do_store(args, account, srv, args.method, message_uids)
+            assert method is not None
+            do_store(args, account, srv, method, message_uids)
     finally:
         srv.close()
 
@@ -1134,10 +1136,10 @@ def main() -> None:
     add_common(cmd)
     add_filters(cmd, False, "seen")
     cmd.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help=_("delete messages how") + f""":
-- `auto`: {_('`gmail-trash` when `--host imap.gmail.com` and `--folder` is not (single) `[Gmail]/Trash`, `delete` otherwise')} {_("(default)")}
+- `auto`: {_('`gmail-trash` when `--host imap.gmail.com` and the current folder is not `[Gmail]/Trash`, `delete` otherwise')} {_("(default)")}
 - `delete`: {_('mark messages as deleted and then use IMAP `EXPUNGE` command, i.e. this does what you would expect a "delete" command to do, works for most IMAP servers')}
 - `delete-noexpunge`: {_('mark messages as deleted but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly')}
-- `gmail-trash`: {_(f'move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `{__package__} delete --method delete --folder "[Gmail]/Trash"` them after, or you could just leave them there and GMail will delete them in 30 days)')}
+- `gmail-trash`: {_(f'move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `{__package__} delete --folder "[Gmail]/Trash"` (which will default to `--method delete`) them after, or you could just leave them there and GMail will delete them in 30 days)')}
 """)
     cmd.set_defaults(func=cmd_action)
     cmd.set_defaults(command="delete")
