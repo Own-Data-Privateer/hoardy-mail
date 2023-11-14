@@ -427,13 +427,13 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--newer-than DAYS`
   : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
   - `--older-than-timestamp-in PATH`
-  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
   - `--newer-than-timestamp-in PATH`
-  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
   - `--older-than-mtime-of PATH`
-  : operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  : operate on messages older than mtime of this PATH, rounded as above (can be specified multiple times)
   - `--newer-than-mtime-of PATH`
-  : operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  : operate on messages newer than mtime of this PATH, rounded as above (can be specified multiple times)
   - `--from ADDRESS`
   : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
   - `--not-from ADDRESS`
@@ -523,13 +523,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   - `--newer-than DAYS`
   : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
   - `--older-than-timestamp-in PATH`
-  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
   - `--newer-than-timestamp-in PATH`
-  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
   - `--older-than-mtime-of PATH`
-  : operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  : operate on messages older than mtime of this PATH, rounded as above (can be specified multiple times)
   - `--newer-than-mtime-of PATH`
-  : operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  : operate on messages newer than mtime of this PATH, rounded as above (can be specified multiple times)
   - `--from ADDRESS`
   : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
   - `--not-from ADDRESS`
@@ -635,13 +635,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--newer-than DAYS`
   : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
   - `--older-than-timestamp-in PATH`
-  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
   - `--newer-than-timestamp-in PATH`
-  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
   - `--older-than-mtime-of PATH`
-  : operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  : operate on messages older than mtime of this PATH, rounded as above (can be specified multiple times)
   - `--newer-than-mtime-of PATH`
-  : operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  : operate on messages newer than mtime of this PATH, rounded as above (can be specified multiple times)
   - `--from ADDRESS`
   : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
   - `--not-from ADDRESS`
@@ -741,13 +741,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   - `--newer-than DAYS`
   : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
   - `--older-than-timestamp-in PATH`
-  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
   - `--newer-than-timestamp-in PATH`
-  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorder on the first line of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
   - `--older-than-mtime-of PATH`
-  : operate on messages older than mtime of this PATH, **which will be rounded down to the start of the day** (can be specified multiple times)
+  : operate on messages older than mtime of this PATH, rounded as above (can be specified multiple times)
   - `--newer-than-mtime-of PATH`
-  : operate on messages newer than mtime of this PATH, which will be rounded **up** to the start of **the next day** (can be specified multiple times)
+  : operate on messages newer than mtime of this PATH, rounded as above (can be specified multiple times)
   - `--from ADDRESS`
   : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
   - `--not-from ADDRESS`
