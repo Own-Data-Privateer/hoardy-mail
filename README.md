@@ -553,7 +553,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message flag filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message flag filter is specified
 
-### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--all-folders | --folder NAME] [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--all | [--seen | --unseen |] [--flagged | --unflagged]] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands.
 
@@ -609,14 +609,6 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
-- delivery settings:
-  - `--mda COMMAND`
-  : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
-    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
-    `maildrop` from Courier Mail Server project is a good KISS default.
-  - `--new-mail-cmd NEW_MAIL_CMD`
-  : shell command to run if any new messages were successfully delivered by the `--mda`
-
 - folder search filters:
   - `--all-folders`
   : operate on all folders (default)
@@ -624,6 +616,14 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   : mail folders to include; can be specified multiple times
   - `--not-folder NAME`
   : mail folders to exclude; can be specified multiple times
+
+- delivery settings:
+  - `--mda COMMAND`
+  : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
+    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
+    `maildrop` from Courier Mail Server project is a good KISS default.
+  - `--new-mail-cmd NEW_MAIL_CMD`
+  : shell command to run if any new messages were successfully delivered by the `--mda`
 
 - message search filters:
   - `--older-than DAYS`

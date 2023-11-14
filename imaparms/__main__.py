@@ -1009,15 +1009,6 @@ def main() -> None:
                                                                                              _("if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers") + ";\n" + \
                                                                                              _(f"if you run `{__package__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
 
-    def add_delivery(cmd : _t.Any) -> None:
-        agrp = cmd.add_argument_group(_("delivery settings"))
-        agrp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
-                          required=True,
-                          help=_("shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)") + "\n" + \
-                               _(f"`{__package__}` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.") + "\n" + \
-                               _("`maildrop` from Courier Mail Server project is a good KISS default."))
-        agrp.add_argument("--new-mail-cmd", type=str, help=_("shell command to run if any new messages were successfully delivered by the `--mda`"))
-
     def add_folders(cmd : _t.Any, all_by_default : bool) -> None:
         def_fall, def_freq = "", ""
         if all_by_default:
@@ -1080,6 +1071,15 @@ def main() -> None:
         grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as `FLAGGED`"))
         grp.set_defaults(flagged = None)
 
+    def add_delivery(cmd : _t.Any) -> None:
+        agrp = cmd.add_argument_group(_("delivery settings"))
+        agrp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
+                          required=True,
+                          help=_("shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)") + "\n" + \
+                               _(f"`{__package__}` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.") + "\n" + \
+                               _("`maildrop` from Courier Mail Server project is a good KISS default."))
+        agrp.add_argument("--new-mail-cmd", type=str, help=_("shell command to run if any new messages were successfully delivered by the `--mda`"))
+
     def no_cmd(args : _t.Any) -> None:
         parser.print_help(sys.stderr)
         sys.exit(2)
@@ -1120,8 +1120,8 @@ def main() -> None:
     cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands."))
     add_common(cmd)
-    add_delivery(cmd)
     add_folders(cmd, True)
+    add_delivery(cmd)
     add_filters(cmd, "unseen")
     agrp = cmd.add_argument_group("marking")
     agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
