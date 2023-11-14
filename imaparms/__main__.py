@@ -329,9 +329,9 @@ def unsleep(seconds : _t.Union[int, float]) -> None:
     finally:
         should_unsleep = False
 
-def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
+def for_each_poll(cfg : _t.Any, *args : _t.Any) -> None:
     if cfg.every is None:
-        for_each_account(cfg, func, *args)
+        for_each_account(cfg, *args)
         return
 
     fmt = "[%Y-%m-%d %H:%M:%S]"
@@ -363,7 +363,7 @@ def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -
         ftime = time.strftime(fmt, time.localtime(now))
         print("# " + gettext("poll starts at %s") % (ftime,))
 
-        for_each_account(cfg, func, *args)
+        for_each_account(cfg, *args)
 
         now = time.time()
         ntime = time.strftime(fmt, time.localtime(now))
@@ -377,15 +377,15 @@ def for_each_poll(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -
         ttime = time.strftime(fmt, time.localtime(now + to_sleep))
         do_sleep(ttime)
 
-def for_each_account(cfg : _t.Any, func : _t.Callable[..., None], *args : _t.Any) -> None:
+def for_each_account(cfg : _t.Any, *args : _t.Any) -> None:
     global should_raise
     should_raise = False
     try:
-        for_each_account_(cfg, func, *args)
+        for_each_account_(cfg, *args)
     finally:
         should_raise = True
 
-def for_each_account_(cfg : _t.Any, func : _t.Callable[..., None], check_new_mail : bool, *args : _t.Any) -> None:
+def for_each_account_(cfg : _t.Any, run_new_mail_cmd : bool, func : _t.Callable[..., None], *args : _t.Any) -> None:
     #print(cfg.accounts)
     #sys.exit(1)
 
@@ -405,7 +405,7 @@ def for_each_account_(cfg : _t.Any, func : _t.Callable[..., None], check_new_mai
             sys.stdout.write("# " + gettext("logged in as %s to host %s port %d (%s)") % (account.user, account.host, account.port, account.socket.upper()) + "\n")
             sys.stdout.flush()
 
-            func(cfg, srv, *args)
+            func(cfg, account, srv, *args)
         except AccountFailure as exc:
             cfg.errors += 1
             error(exc.show())
@@ -416,7 +416,7 @@ def for_each_account_(cfg : _t.Any, func : _t.Callable[..., None], check_new_mai
                 pass
             srv = None
 
-    if not check_new_mail:
+    if not run_new_mail_cmd:
         return
 
     print("# " + ngettext("got %d new message", "got %d new messages", cfg.new_mail) % (cfg.new_mail,))
@@ -428,9 +428,9 @@ def for_each_account_(cfg : _t.Any, func : _t.Callable[..., None], check_new_mai
             pass
 
 def cmd_list(cfg : _t.Any) -> None:
-    for_each_poll(cfg, do_list, False)
+    for_each_poll(cfg, False, do_list)
 
-def do_list(cfg : _t.Any, srv : IMAP4) -> None:
+def do_list(cfg : _t.Any, account : Account, srv : IMAP4) -> None:
     folders = get_folders(srv)
     for e in folders:
         print(e)
@@ -493,31 +493,32 @@ def cmd_action(args : _t.Any) -> None:
         print("# " + gettext(f"searching %s, performing {args.command}") % (search_filter,))
     #sys.exit(1)
 
-    for_each_poll(args, do_action, args.command == "fetch", search_filter)
+    for_each_poll(args, args.command == "fetch", for_each_folder, do_folder_action, args.command, search_filter)
 
-def do_action(args : _t.Any, srv : IMAP4, search_filter : str) -> None:
+def for_each_folder(cfg : _t.Any, account : Account, srv : IMAP4, func : _t.Callable[..., None], *args : _t.Any) -> None:
     data = imap_check(AccountFailure, "CAPABILITY", srv.capability())
     capabilities = data[0].split(b" ")
     #print(capabilities)
     if b"IMAP4rev1" not in capabilities:
-        raise AccountFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", args.host, args.port)
+        raise AccountFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", cfg.host, cfg.port)
 
-    if args.all_folders and len(args.folders) == 0:
+    if cfg.all_folders and len(cfg.folders) == 0:
         folders = get_folders(srv)
     else:
-        args.all_folders = False
-        folders = args.folders
+        cfg.all_folders = False
+        folders = cfg.folders
 
-    for folder in filter(lambda f: f not in args.not_folders, folders):
+    for folder in filter(lambda f: f not in cfg.not_folders, folders):
         if want_stop: raise KeyboardInterrupt()
 
         try:
-            do_folder_action(args, srv, search_filter, folder)
+            func(cfg, account, srv, folder, *args)
         except FolderFailure as exc:
-            args.errors += 1
+            cfg.errors += 1
             error(exc.show())
 
-def do_folder_action(args : _t.Any, srv : IMAP4, search_filter : str, folder : str) -> None:
+def do_folder_action(args : _t.Any, account : Account, srv : IMAP4,
+                     folder : str, command : str, search_filter : str) -> None:
     typ, data = srv.select(imap_quote(folder))
     if typ != "OK":
         raise imap_exc(FolderFailure, "SELECT", typ, data)
@@ -535,7 +536,7 @@ def do_folder_action(args : _t.Any, srv : IMAP4, search_filter : str, folder : s
         else:
             message_uids = result.split(b" ")
 
-        if args.command == "count":
+        if command == "count":
             if args.porcelain:
                 print(f"{len(message_uids)} {folder}")
             else:
@@ -548,13 +549,13 @@ def do_folder_action(args : _t.Any, srv : IMAP4, search_filter : str, folder : s
 
         act : str
         actargs : _t.Any
-        if args.command == "mark":
+        if command == "mark":
             act = "marking as %s %d messages matching %s from folder `%s`"
             actargs  = (args.mark.upper(), len(message_uids), search_filter, folder)
-        elif args.command == "fetch":
+        elif command == "fetch":
             act = "fetching %d messages matching %s from folder `%s`"
             actargs  = (len(message_uids), search_filter, folder)
-        elif args.command == "delete":
+        elif command == "delete":
             if args.method in ["delete", "delete-noexpunge"]:
                 act = "deleting %d messages matching %s from folder `%s`"
                 actargs  = (len(message_uids), search_filter, folder)
@@ -572,16 +573,16 @@ def do_folder_action(args : _t.Any, srv : IMAP4, search_filter : str, folder : s
         else:
             print(gettext(act) % actargs)
 
-        if args.command == "mark":
-            do_store(args, srv, args.mark, message_uids)
-        elif args.command == "fetch":
-            do_fetch(args, srv, message_uids)
-        elif args.command == "delete":
-            do_store(args, srv, args.method, message_uids)
+        if command == "mark":
+            do_store(args, account, srv, args.mark, message_uids)
+        elif command == "fetch":
+            do_fetch(args, account, srv, message_uids)
+        elif command == "delete":
+            do_store(args, account, srv, args.method, message_uids)
     finally:
         srv.close()
 
-def do_fetch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
+def do_fetch(args : _t.Any, account : Account, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
     fetch_num = args.fetch_number
     batch : _t.List[bytes] = []
     batch_total = 0
@@ -635,12 +636,12 @@ def do_fetch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
                 batch_total += size
                 batch.append(uid)
 
-            do_fetch_batch(args, srv, batch, batch_total)
+            do_fetch_batch(args, account, srv, batch, batch_total)
             batch = []
             batch_total = 0
             new = leftovers
 
-    do_fetch_batch(args, srv, batch, batch_total)
+    do_fetch_batch(args, account, srv, batch, batch_total)
 
 def fetch_check_untagged(args : _t.Any, attrs : _t.Dict[bytes, bytes]) -> None:
     try:
@@ -661,7 +662,7 @@ def fetch_check_untagged(args : _t.Any, attrs : _t.Dict[bytes, bytes]) -> None:
        (args.mark == "unflagged" and b"\\Flagged" not in flags):
         raise AccountFailure("another client is marking messages with potentially conflicting flags in parallel with us, aborting")
 
-def do_fetch_batch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes], total_size : int) -> None:
+def do_fetch_batch(args : _t.Any, account : Account, srv : IMAP4, message_uids : _t.List[bytes], total_size : int) -> None:
     if want_stop: raise KeyboardInterrupt()
 
     if len(message_uids) == 0: return
@@ -735,9 +736,9 @@ def do_fetch_batch(args : _t.Any, srv : IMAP4, message_uids : _t.List[bytes], to
             error(_("`--mda` failed to deliver message %s") % (uid,))
 
     print("... " + gettext("delivered a batch of %d messages via `%s`") % (len(done_message_uids), args.mda))
-    do_store(args, srv, args.mark, done_message_uids, False)
+    do_store(args, account, srv, args.mark, done_message_uids, False)
 
-def do_store(args : _t.Any, srv : IMAP4, method : str, message_uids : _t.List[bytes], interruptable : bool = True) -> None:
+def do_store(args : _t.Any, account : Account, srv : IMAP4, method : str, message_uids : _t.List[bytes], interruptable : bool = True) -> None:
     if method == "noop": return
 
     marking_as = "... " + gettext("marking a batch of %d messages as %s")
