@@ -271,7 +271,7 @@ That is to say, I don't use OAuth2, which is why `imaparms` does not support OAu
 
 # Usage
 
-## imaparms [--version] [-h] [--help-markdown] {list,count,mark,fetch,delete,for-each} ...
+## imaparms [--version] [-h] [--markdown] [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] {list,count,mark,fetch,delete,for-each} ...
 
 A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.
 Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out.
@@ -281,8 +281,64 @@ Logins to a specified server, performs specified actions on all messages matchin
   : show program's version number and exit
   - `-h, --help`
   : show this help message and exit
-  - `--help-markdown`
-  : show this help message formatted in Markdown and exit
+  - `--markdown`
+  : show help messages formatted in Markdown
+
+- debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
+  - `--dry-run`
+  : connect to the servers, but don't perform any actions, just show what would be done
+  - `--very-dry-run`
+  : print an interpretation of the given command line arguments and do nothing else
+
+- server connection:
+  can be specified multiple times
+
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket (default)
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to (required)
+  - `--port PORT`
+  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
+
+- authentication to the server:
+  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
+
+  - `--user USER`
+  : username on the server (required)
+  - `--pass-pinentry`
+  : read the password via `pinentry`
+  - `--passfile PASSFILE, --pass-file PASSFILE`
+  : file containing the password on its first line
+  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
+
+- batching settings:
+  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
+
+  - `--store-number INT`
+  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
+  - `--fetch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
+  - `--batch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
+  - `--batch-size INT`
+  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
+
+- polling/daemon options:
+  - `--every SECONDS`
+  : repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way);
+    i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle;
+    this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
+  - `--every-add-random ADD`
+  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
+    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
+    if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - subcommands:
   - `{list,count,mark,fetch,delete,for-each}`
@@ -299,129 +355,17 @@ Logins to a specified server, performs specified actions on all messages matchin
     - `for-each`
     : perform multiple other subcommands while sharing a single server connection
 
-### imaparms list [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD]
+### imaparms list
 
 Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
-- debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
-  - `--dry-run`
-  : connect to the servers, but don't perform any actions, just show what would be done
-  - `--very-dry-run`
-  : print an interpretation of the given command line arguments and do nothing else
-
-- server connection:
-  can be specified multiple times
-
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket (default)
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to (required)
-  - `--port PORT`
-  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
-
-- authentication to the server:
-  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
-
-  - `--user USER`
-  : username on the server (required)
-  - `--pass-pinentry`
-  : read the password via `pinentry`
-  - `--passfile PASSFILE, --pass-file PASSFILE`
-  : file containing the password on its first line
-  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
-
-- batching settings:
-  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
-
-  - `--store-number INT`
-  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
-  - `--fetch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
-  - `--batch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
-  - `--batch-size INT`
-  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
-
-- polling/daemon options:
-  - `--every SECONDS`
-  : repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way);
-    i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle;
-    this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
-  - `--every-add-random ADD`
-  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
-    if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
-
-### imaparms count [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--porcelain]
+### imaparms count [--all-folders | --folder NAME] [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--porcelain]
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
 - optional arguments:
   - `--porcelain`
   : print in a machine-readable format
-
-- debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
-  - `--dry-run`
-  : connect to the servers, but don't perform any actions, just show what would be done
-  - `--very-dry-run`
-  : print an interpretation of the given command line arguments and do nothing else
-
-- server connection:
-  can be specified multiple times
-
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket (default)
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to (required)
-  - `--port PORT`
-  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
-
-- authentication to the server:
-  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
-
-  - `--user USER`
-  : username on the server (required)
-  - `--pass-pinentry`
-  : read the password via `pinentry`
-  - `--passfile PASSFILE, --pass-file PASSFILE`
-  : file containing the password on its first line
-  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
-
-- batching settings:
-  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
-
-  - `--store-number INT`
-  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
-  - `--fetch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
-  - `--batch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
-  - `--batch-size INT`
-  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
-
-- polling/daemon options:
-  - `--every SECONDS`
-  : repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way);
-    i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle;
-    this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
-  - `--every-add-random ADD`
-  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
-    if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - folder search filters:
   - `--all-folders`
@@ -463,65 +407,9 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--unflagged`
   : operate on messages not marked as `FLAGGED`
 
-### imaparms mark [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] {seen,unseen,flagged,unflagged}
+### imaparms mark (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] {seen,unseen,flagged,unflagged}
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
-
-- debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
-  - `--dry-run`
-  : connect to the servers, but don't perform any actions, just show what would be done
-  - `--very-dry-run`
-  : print an interpretation of the given command line arguments and do nothing else
-
-- server connection:
-  can be specified multiple times
-
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket (default)
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to (required)
-  - `--port PORT`
-  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
-
-- authentication to the server:
-  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
-
-  - `--user USER`
-  : username on the server (required)
-  - `--pass-pinentry`
-  : read the password via `pinentry`
-  - `--passfile PASSFILE, --pass-file PASSFILE`
-  : file containing the password on its first line
-  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
-
-- batching settings:
-  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
-
-  - `--store-number INT`
-  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
-  - `--fetch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
-  - `--batch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
-  - `--batch-size INT`
-  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
-
-- polling/daemon options:
-  - `--every SECONDS`
-  : repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way);
-    i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle;
-    this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
-  - `--every-add-random ADD`
-  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
-    if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - folder search filters (required):
   - `--all-folders`
@@ -571,65 +459,9 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message flag filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message flag filter is specified
 
-### imaparms fetch [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] --mda COMMAND [--new-mail-cmd CMD] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--all-folders | --folder NAME] [--not-folder NAME] --mda COMMAND [--new-mail-cmd CMD] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands.
-
-- debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
-  - `--dry-run`
-  : connect to the servers, but don't perform any actions, just show what would be done
-  - `--very-dry-run`
-  : print an interpretation of the given command line arguments and do nothing else
-
-- server connection:
-  can be specified multiple times
-
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket (default)
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to (required)
-  - `--port PORT`
-  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
-
-- authentication to the server:
-  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
-
-  - `--user USER`
-  : username on the server (required)
-  - `--pass-pinentry`
-  : read the password via `pinentry`
-  - `--passfile PASSFILE, --pass-file PASSFILE`
-  : file containing the password on its first line
-  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
-
-- batching settings:
-  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
-
-  - `--store-number INT`
-  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
-  - `--fetch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
-  - `--batch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
-  - `--batch-size INT`
-  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
-
-- polling/daemon options:
-  - `--every SECONDS`
-  : repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way);
-    i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle;
-    this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
-  - `--every-add-random ADD`
-  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
-    if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - folder search filters:
   - `--all-folders`
@@ -689,65 +521,9 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--method {auto,delete,delete-noexpunge,gmail-trash}]
+### imaparms delete (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--method {auto,delete,delete-noexpunge,gmail-trash}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
-
-- debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
-  - `--dry-run`
-  : connect to the servers, but don't perform any actions, just show what would be done
-  - `--very-dry-run`
-  : print an interpretation of the given command line arguments and do nothing else
-
-- server connection:
-  can be specified multiple times
-
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket (default)
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to (required)
-  - `--port PORT`
-  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
-
-- authentication to the server:
-  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
-
-  - `--user USER`
-  : username on the server (required)
-  - `--pass-pinentry`
-  : read the password via `pinentry`
-  - `--passfile PASSFILE, --pass-file PASSFILE`
-  : file containing the password on its first line
-  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
-
-- batching settings:
-  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
-
-  - `--store-number INT`
-  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
-  - `--fetch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
-  - `--batch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
-  - `--batch-size INT`
-  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
-
-- polling/daemon options:
-  - `--every SECONDS`
-  : repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way);
-    i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle;
-    this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
-  - `--every-add-random ADD`
-  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
-    if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - folder search filters (required):
   - `--all-folders`
@@ -797,7 +573,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
     - `delete-noexpunge`: mark messages as deleted but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly
     - `gmail-trash`: move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `imaparms delete --folder "[Gmail]/Trash"` (which will default to `--method delete`) them after, or you could just leave them there and GMail will delete them in 30 days)
 
-### imaparms for-each [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] ARG [ARG ...]
+### imaparms for-each [--all-folders | --folder NAME] [--not-folder NAME] ARG [ARG ...]
 
 For each account: login, perform other subcommands given in `ARG`s, logout.
 
@@ -813,62 +589,6 @@ E.g., if you have several `fetch --new-mail-cmd CMD` as subcommands of `for-each
 - positional arguments:
   - `ARG`
   : arguments, these will be split by `;` and parsed into other subcommands
-
-- debugging:
-  - `--debug`
-  : print IMAP conversation to stderr
-  - `--dry-run`
-  : connect to the servers, but don't perform any actions, just show what would be done
-  - `--very-dry-run`
-  : print an interpretation of the given command line arguments and do nothing else
-
-- server connection:
-  can be specified multiple times
-
-  - `--plain`
-  : connect via plain-text socket
-  - `--ssl`
-  : connect over SSL socket (default)
-  - `--starttls`
-  : connect via plain-text socket, but then use STARTTLS command
-  - `--host HOST`
-  : IMAP server to connect to (required)
-  - `--port PORT`
-  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
-
-- authentication to the server:
-  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
-
-  - `--user USER`
-  : username on the server (required)
-  - `--pass-pinentry`
-  : read the password via `pinentry`
-  - `--passfile PASSFILE, --pass-file PASSFILE`
-  : file containing the password on its first line
-  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
-  : shell command that returns the password as the first line of its stdout
-
-- batching settings:
-  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
-
-  - `--store-number INT`
-  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
-  - `--fetch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
-  - `--batch-number INT`
-  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
-  - `--batch-size INT`
-  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
-
-- polling/daemon options:
-  - `--every SECONDS`
-  : repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way);
-    i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle;
-    this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
-  - `--every-add-random ADD`
-  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
-    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
-    if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
 - folder search filters (this will set as defaults for subcommands):
   - `--all-folders`

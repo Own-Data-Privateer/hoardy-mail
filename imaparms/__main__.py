@@ -971,7 +971,7 @@ EOF
     fmt.add_text(_("Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash`."))
     fmt.end_section()
 
-def main() -> None:
+def make_argparser(real : bool = True) -> _t.Any:
     _ = gettext
 
     parser = argparse.BetterArgumentParser(
@@ -980,9 +980,9 @@ def main() -> None:
                     _("Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out."),
         additional_sections = [add_examples],
         allow_abbrev = False,
-        add_help = True,
         add_version = True)
-    parser.add_argument("--help-markdown", action="store_true", help=_("show this help message formatted in Markdown and exit"))
+    parser.add_argument("-h", "--help", action="store_true", help=_("show this help message and exit"))
+    parser.add_argument("--markdown", action="store_true", help=_("show help messages formatted in Markdown"))
 
     class EmitAccount(argparse.Action):
         def __init__(self, option_strings : str, dest : str, default : _t.Any = None, **kwargs : _t.Any) -> None:
@@ -1076,6 +1076,9 @@ def main() -> None:
                                                                                              _(f"if you run `{__package__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
         return cmd
 
+    if not real:
+        add_common(parser)
+
     def add_folders(cmd : _t.Any, all_by_default : _t.Optional[bool]) -> _t.Any:
         def_fall, def_freq = "", ""
         if all_by_default is None:
@@ -1166,12 +1169,12 @@ def main() -> None:
 
     cmd = subparsers.add_parser("list", help=_("list all available folders on the server, one per line"),
                                 description = _("Login, perform IMAP `LIST` command to get all folders, print them one per line."))
-    add_common(cmd)
+    if real: add_common(cmd)
     cmd.set_defaults(func=cmd_list)
 
     cmd = subparsers.add_parser("count", help=_("count how many matching messages each specified folder has"),
                                 description = _("Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line."))
-    add_common(cmd)
+    if real: add_common(cmd)
     add_folders(cmd, True)
     def add_count(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(command="count")
@@ -1183,7 +1186,7 @@ def main() -> None:
 
     cmd = subparsers.add_parser("mark", help=_("mark matching messages in specified folders in a specified way"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands."))
-    add_common(cmd)
+    if real: add_common(cmd)
     add_folders(cmd, False)
     def add_mark(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(command="mark")
@@ -1202,7 +1205,7 @@ def main() -> None:
 
     cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands."))
-    add_common(cmd)
+    if real: add_common(cmd)
     add_folders(cmd, True)
     def add_fetch(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(command="fetch")
@@ -1223,7 +1226,7 @@ def main() -> None:
 
     cmd = subparsers.add_parser("delete", help=_("delete matching messages from specified folders"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method."))
-    add_common(cmd)
+    if real: add_common(cmd)
     add_folders(cmd, False)
     def add_delete(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(command="delete")
@@ -1238,8 +1241,6 @@ def main() -> None:
         return cmd
     add_delete(cmd)
     cmd.set_defaults(func=cmd_action)
-
-    state = State()
 
     def cmd_for_each(cfg : Namespace, state : State) -> None:
         # generate parser for our cfg
@@ -1295,10 +1296,17 @@ Run with `--very-dry-run` to see the interpretation of the given command line.
 All generated hooks are deduplicated and run after all other subcommands are done.
 E.g., if you have several `fetch --new-mail-cmd CMD` as subcommands of `for-each`, then `CMD` *will be run **once** after all other subcommands finish*.
 """))
-    add_common(cmd)
+    if real: add_common(cmd)
     add_folders(cmd, None)
     cmd.add_argument("rest", metavar="ARG", nargs="+", type=str, help=_("arguments, these will be split by `;` and parsed into other subcommands"))
     cmd.set_defaults(func=cmd_for_each)
+
+    return parser
+
+def main() -> None:
+    _ = gettext
+
+    parser = make_argparser()
 
     try:
         cfg = parser.parse_args(sys.argv[1:])
@@ -1306,13 +1314,19 @@ E.g., if you have several `fetch --new-mail-cmd CMD` as subcommands of `for-each
         error(exc.show())
         sys.exit(1)
 
-    if cfg.help_markdown:
-        parser.set_formatter_class(argparse.MarkdownBetterHelpFormatter)
-        print(parser.format_help(1024))
+    if cfg.help:
+        parser = make_argparser(False)
+        if cfg.markdown:
+            parser.set_formatter_class(argparse.MarkdownBetterHelpFormatter)
+            print(parser.format_help(1024))
+        else:
+            print(parser.format_help())
         sys.exit(0)
 
     if len(cfg.accounts) == 0:
         return die(_("no accounts specified, need at least one `--host`, `--user`, and either of `--passfile` or `--passcmd`"))
+
+    state = State()
 
     handle_signals()
 
