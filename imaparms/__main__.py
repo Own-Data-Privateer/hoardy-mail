@@ -492,86 +492,86 @@ def for_each_folder(cfg : Namespace, account : Account, srv : IMAP4, func : _t.C
     for folder in filter(lambda f: f not in cfg.not_folders, folders):
         if want_stop: raise KeyboardInterrupt()
 
+        typ, data = srv.select(imap_quote(folder))
+        if typ != "OK":
+            imap_error("SELECT", typ, data)
+            continue
+
         try:
             func(cfg, account, srv, folder, *args)
         except FolderFailure as exc:
             cfg.errors += 1
             error(exc.show())
+        finally:
+            srv.close()
 
 def do_folder_action(cfg : Namespace, account : Account, srv : IMAP4,
                      folder : str, command : str, search_filter : str) -> None:
-    typ, data = srv.select(imap_quote(folder))
+    typ, data = srv.uid("SEARCH", search_filter)
     if typ != "OK":
-        raise imap_exc(FolderFailure, "SELECT", typ, data)
+        raise imap_exc(FolderFailure, "SEARCH", typ, data)
 
-    try:
-        typ, data = srv.uid("SEARCH", search_filter)
-        if typ != "OK":
-            raise imap_exc(FolderFailure, "SEARCH", typ, data)
+    result : _t.Optional[bytes] = data[0]
+    if result is None:
+        raise imap_exc(FolderFailure, "SEARCH", typ, data)
+    elif result == b"":
+        message_uids = []
+    else:
+        message_uids = result.split(b" ")
 
-        result : _t.Optional[bytes] = data[0]
-        if result is None:
-            raise imap_exc(FolderFailure, "SEARCH", typ, data)
-        elif result == b"":
-            message_uids = []
+    if command == "count":
+        if cfg.porcelain:
+            print(f"{len(message_uids)} {folder}")
         else:
-            message_uids = result.split(b" ")
+            print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
+        return
+    elif len(message_uids) == 0:
+        # nothing to do
+        print(gettext("folder `%s` has no messages matching %s") % (folder, search_filter))
+        return
 
-        if command == "count":
-            if cfg.porcelain:
-                print(f"{len(message_uids)} {folder}")
+    act : str
+    actargs : _t.Any
+    method = None
+    if command == "mark":
+        act = "marking as %s %d messages matching %s from folder `%s`"
+        actargs  = (cfg.mark.upper(), len(message_uids), search_filter, folder)
+    elif command == "fetch":
+        act = "fetching %d messages matching %s from folder `%s`"
+        actargs  = (len(message_uids), search_filter, folder)
+    elif command == "delete":
+        if cfg.method == "auto":
+            if account.host == "imap.gmail.com" and folder != "[Gmail]/Trash":
+                method = "gmail-trash"
             else:
-                print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
-            return
-        elif len(message_uids) == 0:
-            # nothing to do
-            print(gettext("folder `%s` has no messages matching %s") % (folder, search_filter))
-            return
+                method = "delete"
+        else:
+            method = cfg.method
 
-        act : str
-        actargs : _t.Any
-        method = None
-        if command == "mark":
-            act = "marking as %s %d messages matching %s from folder `%s`"
-            actargs  = (cfg.mark.upper(), len(message_uids), search_filter, folder)
-        elif command == "fetch":
-            act = "fetching %d messages matching %s from folder `%s`"
+        if method in ["delete", "delete-noexpunge"]:
+            act = "deleting %d messages matching %s from folder `%s`"
             actargs  = (len(message_uids), search_filter, folder)
-        elif command == "delete":
-            if cfg.method == "auto":
-                if account.host == "imap.gmail.com" and folder != "[Gmail]/Trash":
-                    method = "gmail-trash"
-                else:
-                    method = "delete"
-            else:
-                method = cfg.method
-
-            if method in ["delete", "delete-noexpunge"]:
-                act = "deleting %d messages matching %s from folder `%s`"
-                actargs  = (len(message_uids), search_filter, folder)
-            elif method == "gmail-trash":
-                act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
-                actargs  = (len(message_uids), search_filter, folder)
-            else:
-                assert False
+        elif method == "gmail-trash":
+            act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
+            actargs  = (len(message_uids), search_filter, folder)
         else:
             assert False
+    else:
+        assert False
 
-        if cfg.dry_run:
-            print(gettext("dry-run, not " + act) % actargs)
-            return
-        else:
-            print(gettext(act) % actargs)
+    if cfg.dry_run:
+        print(gettext("dry-run, not " + act) % actargs)
+        return
+    else:
+        print(gettext(act) % actargs)
 
-        if command == "mark":
-            do_store(cfg, account, srv, cfg.mark, message_uids)
-        elif command == "fetch":
-            do_fetch(cfg, account, srv, message_uids)
-        elif command == "delete":
-            assert method is not None
-            do_store(cfg, account, srv, method, message_uids)
-    finally:
-        srv.close()
+    if command == "mark":
+        do_store(cfg, account, srv, cfg.mark, message_uids)
+    elif command == "fetch":
+        do_fetch(cfg, account, srv, message_uids)
+    elif command == "delete":
+        assert method is not None
+        do_store(cfg, account, srv, method, message_uids)
 
 def do_fetch(cfg : Namespace, account : Account, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
     fetch_num = cfg.fetch_number
