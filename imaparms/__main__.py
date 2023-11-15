@@ -933,7 +933,7 @@ fetchmail
 mkdir -p ~/Mail/spam/{{new,cur,tmp}}
 
 cat > ~/.mailfilter-spam << EOF
-DEFAULT="$HOME/Mail/spam"
+DEFAULT="\\$HOME/Mail/spam"
 EOF
 
 {__package__} mark "${{gmail_common[@]}}" --folder "[Gmail]/Spam" unseen
@@ -976,7 +976,7 @@ def make_argparser(real : bool = True) -> _t.Any:
 
     parser = argparse.BetterArgumentParser(
         prog=__package__,
-        description=_("A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.") + "\n" + \
+        description=_("A handy Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.") + "\n" + \
                     _("Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out."),
         additional_sections = [add_examples],
         allow_abbrev = False,

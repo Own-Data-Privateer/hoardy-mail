@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 name = "imaparms"
 version = "1.9"
 authors = [{ name = "Jan Malakhovski", email = "oxij@oxij.org" }]
-description = "Swiss army knife tool for interacting with IMAP4 servers"
+description = "A handy Keep It Stupid Simple Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
 classifiers = [
@@ -23,10 +23,15 @@ classifiers = [
     "Environment :: Console",
 ]
 keywords = [
-    "IMAP",
-    "Mail",
-    "archive",
-    "download",
+    "IMAP", "IMAP4",
+    "mail", "email", "e-mail",
+    "mail delivery agent", "MDA", "LDA",
+    "fetchmail", "fdm",
+    "fetch", "archive", "download",
+    "delete", "expire",
+    "mark", "star",
+    "mark as seen", "mark as unseen",
+    "mark as flagged", "mark as unflagged",
 ]
 dependencies = [
     'importlib-metadata; python_version<"3.8"',

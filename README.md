@@ -1,20 +1,23 @@
 # What?
 
-`imaparms` is a Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.
+`imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
 That is: login to a specified server, fetch or perform specified actions (count, flag/mark, delete, etc) on all messages matching specified criteria in all specified folders, logout.
 
 This tool was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) and is basically a generalized combination of the two.
 
 # Why?
 
-I used to use and (usually privately, but sometimes not) patch both `fetchmail` and `IMAPExpire` for years before getting tired of it and deciding it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and fix all the issues making it inconvenient and unsafe to run `IMAPExpire` immediately after `fetchmail` finishes fetching mail.
-
+`imaparms` is intended to be used as a IMAP-server-to-local-`Maildir` [Mail Delivery Agent](https://en.wikipedia.org/wiki/Message_delivery_agent) (MDA, aka Local Delivery Agent, LDA, when used to deliver to the same machine) that keeps the IMAP server in question store as little mail as possible while preventing data loss.
 Which is to say, the main use case I made this for is as follows:
 
-- you periodically fetch and backup/archive your mail to a local `Maildir` (or `mbox`) with this tool's `imaparms fetch` subcommand (which does what `fetchmail --softbounce --invisible --norewrite --mda MDA` does but >150x faster) or a similar tool (like [fdm](https://github.com/nicm/fdm)), then
+- you periodically fetch your mail to a local `Maildir` (or `mbox`) with this tool's `imaparms fetch` subcommand (which does what `fetchmail --softbounce --invisible --norewrite --mda MDA` does but >150x faster), then
 - you backup your `Maildir` with `rsync`/`git`/`bup`/etc to make at least one other copy somewhere, and then, after your backup succeeds,
-- you run this tool's `imaparms delete` subcommand to expire old already-fetched messages from the original mail server (I prefer to expire messages `--older-than` some number of intervals between backups, just to be safe, but if you do backups directly after the `fetch`, or you like to live dangerously, you could delete old messages immediately), so that
+- you run this tool's `imaparms delete` subcommand to expire old already-fetched messages from the server (I prefer to expire messages `--older-than` some number of intervals between backups, just to be safe, but if you do backups directly after the `fetch`, or you like to live dangerously, you could delete old messages immediately), so that
 - when/if your account get cracked/hacked the attacker only gets your unfetched mail (+ configurable amount of yet to be removed messages), which is much better than them getting the whole last 20 years or whatever of your correspondence. (If your personal computer gets compromised enough, attackers will eventually get everything anyway, so deleting old mail from servers does not make things worse. But see some more thoughts on this below.)
+
+I used to use and (usually privately, but sometimes not) patch both `fetchmail` and `IMAPExpire` for years before getting tired of it and deciding it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and fix all the issues making it inconvenient and unsafe to run `IMAPExpire` immediately after `fetchmail` finishes fetching mail.
+
+Since bootstrapping into either of these setups requires some querying into actual IMAP folder names and mass changes to flags on IMAP server-side, `imaparms` provides subcommands for that too.
 
 Also, you can run `imaparms fetch` with `--any-seen --unflagged` command line options instead of the implied `--unseen --any-flagged` options, which will make it use the `FLAGGED` IMAP flag instead of the `SEEN` IMAP flag to track state, allowing you to run it simultaneously with tools that use the `SEEN` flag, like `fetchmail`, and then simply delete duplicated files.
 I.e. if you are really paranoid, you could use that feature to check files produced by `fetchmail` and `imaparms fetch` against each other, see below.
@@ -24,45 +27,49 @@ I.e. if you are really paranoid, you could use that feature to check files produ
 ## Installation
 
 - Install with:
-  ```
+  ``` {.bash}
   pip install imaparms
   ```
   and run as
-  ```
+  ``` {.bash}
   imaparms --help
   ```
 - Alternatively, install it via Nix
-  ```
+  ``` {.bash}
   nix-env -i -f ./default.nix
   ```
 - Alternatively, run without installing:
-  ```
+  ``` {.bash}
   python3 -m imaparms.__main__ --help
   ```
 
 ## How to: fetch all your mail from GMail
 
-`imaparms` is not intended as a *backup* utility, `imaparms` is intended as a better replacement for `fetchmail`+`IMAPExpire` combination, with `imaparms` you are supposed to backup your `Maildir` with a third-party tool.
-If you want to keep a synchronized copy of your mail locally and on your mail server you should use [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), or something similar instead.
+`imaparms` is not *intended* as a *backup* utility (it is intended as a better replacement for `fetchmail`+`IMAPExpire` combination), but it can be used as one if you are willing to sacrifice either of `SEEN` or `FLAGGED` ("starred") IMAP flags for it.
 
-`imaparms` can, however, be used for efficient local mirroring of your IMAP data if you are willing to sacrifice either `SEEN` or `FLAGGED` IMAP flag to `imaparms` for it to use it to store its state on the server.
-And using `imaparms` for mirroring is illustrative, so a couple of examples follow.
+(If you want to keep a synchronized copy of your mail locally and on your mail server without sacrificing any flags, you should use [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), or something similar instead.)
 
-All examples on this page use `maildrop` MDA from [Courier Mail Server project](https://www.courier-mta.org/), which is the simplest commodity MDA with the simplest setup I know of.
+However, using `imaparms` for backups/mirroring is illustrative, so a couple of examples follow.
+
+All examples on this page use `maildrop` MDA/LDA from [Courier Mail Server project](https://www.courier-mta.org/), which is the simplest commodity LDA with the simplest setup I know of.
 But, of course, you can use anything else.
-E.g., [fdm](https://github.com/nicm/fdm) can function as an MDA, and it is also pretty simple to setup.
+E.g., [fdm](https://github.com/nicm/fdm) can function as an LDA, and it is also pretty simple to setup.
 
 ### Backup all your email from GMail
 
 The following will fetch all messages from all the folders on the server (without changing message flags on the server side) and feed them to `maildrop` which will just put them all into `~/Mail/backup` `Maildir`.
 
-```
+``` {.bash}
 # setup: do once
 mkdir -p ~/Mail/backup/{new,cur,tmp}
 
 cat > ~/.mailfilter << EOF
-DEFAULT="$HOME/Mail/backup"
+DEFAULT="\$HOME/Mail/backup"
 EOF
+```
+
+``` {.bash}
+# repeatable part
 
 # backup all your mail from GMail
 imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda maildrop --all-folders --any-seen
@@ -76,9 +83,9 @@ Also, if you have a lot of mail, this will be very inefficient, as it will try t
 
 To make the above efficient you have to sacrifice either `SEEN` or `FLAGGED` IMAP flags to allow `imaparms` to track which messages are yet to be fetched, i.e. either:
 
-```
+``` {.bash}
 # mark all messages as UNSEEN
-imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders unseen
+imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --folder "[Gmail]/All Mail" unseen
 
 # fetch UNSEEN and mark as SEEN as you go
 # this can be interrrupted and restarted and it will continue from where it left off
@@ -87,77 +94,127 @@ imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda
 
 or
 
-```
+``` {.bash}
 # mark all messages as UNFLAGGED
-imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --all-folders unflagged
+imaparms mark --host imap.gmail.com --user user@gmail.com --pass-pinentry --folder "[Gmail]/All Mail" unflagged
 
 # similarly
 imaparms fetch --host imap.gmail.com --user user@gmail.com --pass-pinentry --mda maildrop --folder "[Gmail]/All Mail" --any-seen --unflagged
 ```
 
-This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `--unseen`, or flag (star) it there while using `--unflagged`, `imaparms` will ignore the message on the next `fetch`.
+This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `--unseen`, or mark it as flagged ("star") it there while using `--unflagged`, `imaparms` will ignore the message on the next `fetch`.
 
 ## How to: implement "fetch + backup + expire" workflow
 
-My preferred workflow described [above](#why) looks like this:
+The intended workflow described [above](#why) looks like this:
 
-```
-common=(--ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com")
-
+``` {.bash}
 # setup: do once
 mkdir -p ~/Mail/INBOX/{new,cur,tmp}
+mkdir -p ~/Mail/spam/{new,cur,tmp}
+echo 0 > ~/.rsync-last-mail-backup-timestamp
 
 cat > ~/.mailfilter << EOF
-DEFAULT="$HOME/Mail/INBOX"
+DEFAULT="\$HOME/Mail/INBOX"
 EOF
 
-# fetch
-imaparms fetch "${common[@]}" --mda maildrop --folder "INBOX" --unseen
+cat > ~/.mailfilter-spam << EOF
+DEFAULT="\$HOME/Mail/spam"
+EOF
 
-# now you can index it or whatever
+cat > ~/bin/new-mail-hook << EOF
+#!/bin/sh -e
+# index new mail
 notmuch new
 
-# backup
-rsync -aHAXiv ~/Mail /disk/backup
+# auto-tagging rules go here
 
-# expire old mail from the server
-imaparms delete "${common[@]}" --folder "INBOX" --seen --older-than 3
+# backup
+backup_start=\$(date +%s)
+if rsync -aHAX ~/Mail /disk/backup ; then
+    echo "\$backup_start" > ~/.rsync-last-mail-backup-timestamp
+fi
+EOF
+chmod +x ~/bin/new-mail-hook
+```
+
+``` {.bash}
+# repeatable part
+
+# optionally, if needed
+# imaparms mark ... --folder "[Gmail]/All Mail" unseen
+
+# every hour, fetch new and expire old mail from two GMail accounts
+imaparms for-each --every 3600 \
+    --host imap.gmail.com \
+      --user account1@gmail.com --passcmd "pass show mail/account1@gmail.com" \
+      --user account2@gmail.com --passcmd "pass show mail/account2@gmail.com" \
+  -- \
+    fetch --folder "[Gmail]/All Mail" --mda maildrop --new-mail-cmd new-mail-hook \; \
+    fetch --folder "[Gmail]/Spam" --mda "maildrop ~/.mailfilter-spam" \; \
+    delete --folder "[Gmail]/All Mail" --folder "[Gmail]/Spam" --folder "[Gmail]/Trash" \
+      --older-than-timestamp-in ~/.rsync-last-mail-backup-timestamp \
+      --older-than 7
+
+# note how new spam does not invoke `new-mail-hook`
+```
+
+You can check your command lines by running with `--very-dry-run` option, for the command above it prints:
+
+```
+# every 3600 seconds, for each of
+... user account1@gmail.com on host imap.gmail.com port 993 (SSL)
+... user account2@gmail.com on host imap.gmail.com port 993 (SSL)
+# do
+... in '[Gmail]/All Mail': search (UNSEEN), perform fetch, mark them as SEEN
+... in '[Gmail]/Spam': search (UNSEEN), perform fetch, mark them as SEEN
+... in '[Gmail]/All Mail', '[Gmail]/Spam', '[Gmail]/Trash': search (SEEN BEFORE 1-Jan-1970) {dynamic}, perform delete
 ```
 
 ## How to: implement the paranoid version of "fetch + backup + expire" workflow
 
 The paranoid/double-backup workflow described [above](#why) that uses `fetchmail` in parallel can be implemented like this:
 
-```
-secondary_common=(--ssl --host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com")
-
+``` {.bash}
 # setup: do once
+
+# include the setup from above
+
 mkdir -p ~/Mail/INBOX.secondary/{new,cur,tmp}
 
 cat > ~/.mailfilter-secondary << EOF
-DEFAULT="$HOME/Mail/INBOX.secondary"
+DEFAULT="\$HOME/Mail/INBOX.secondary"
 EOF
 
-# ... prepare by unflagging all messages
+cat > ~/bin/new-mail-hook-dedup << EOF
+#!/bin/sh -e
+# deduplicate
+jdupes -o time -O -rdN ~/Mail/INBOX ~/Mail/INBOX.secondary
+
+# continue as usual
+exec ~/bin/new-mail-hook
+EOF
+chmod +x ~/bin/new-mail-hook-dedup
+```
+
+``` {.bash}
+# repeatable part
+secondary_common=(--host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com")
+
+# prepare by unflagging all messages
 imaparms mark "${secondary_common[@]}" --folder "INBOX" unflagged
 
-# run fetchmail daemon as usual
-fetchmail --mda maildrop -d 900
+# run fetchmail daemon as usual, fetching new mail into the secondary maildir every hour
+fetchmail --mda "maildrop ~/.mailfilter-secondary" -d 3600
 
-# fetch using the FLAGGED flag for tracking state
-imaparms fetch "${secondary_common[@]}" --mda "maildrop ~/.mailfilter-secondary" --folder "INBOX" --any-seen --unflagged
-
-# deduplicate
-jdupes -o time -O -rdN Mail/INBOX Mail/INBOX.secondary
-
-# index
-notmuch new
-
-# backup
-rsync -aHAXiv ~/Mail /disk/backup
-
-# expire old messages fetched by both fetchmail and this
-imaparms delete "${secondary_common[@]}" --folder "INBOX" --seen --flagged --older-than 3
+# every 15 minutes, fetch new mail using FLAGGED for tracking state,
+# expire messages marked both SEEN (by fetchmail) and FLAGGED (by imaparms)
+imaparms for-each --every 900 "${secondary_common[@]}" --folder "INBOX" \
+  -- \
+    fetch --mda maildrop --new-mail-cmd new-mail-hook-dedup --any-seen --unflagged \; \
+    delete --seen --flagged \
+      --older-than-timestamp-in ~/.rsync-last-mail-backup-timestamp \
+      --older-than 7
 ```
 
 ## See also
@@ -208,7 +265,7 @@ Or you could point your own local IMAP server to your `Maildir` and use any mail
 
 ## [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), and similar
 
-- `imaparms fetch` does deliveries from an IMAP server to your MDA instead of trying to synchronize state between some combinations of IMAP servers and local Maildirs (i.e. for `imaparms fetch` your IMAP server is always the source, never a destination);
+- `imaparms fetch` does deliveries from an IMAP server to your MDA instead of trying to synchronize state between some combinations of IMAP servers and local `Maildir`s (i.e. for `imaparms fetch` your IMAP server is always the source, never a destination);
 - `imaparms` has other subcommands, not just `imaparms fetch`.
 
 # Some Fun and Relevant Facts
@@ -273,7 +330,7 @@ That is to say, I don't use OAuth2, which is why `imaparms` does not support OAu
 
 ## imaparms [--version] [-h] [--markdown] [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] {list,count,mark,fetch,delete,for-each} ...
 
-A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.
+A handy Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
 Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out.
 
 - optional arguments:
@@ -718,7 +775,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   mkdir -p ~/Mail/spam/{new,cur,tmp}
 
   cat > ~/.mailfilter-spam << EOF
-  DEFAULT="$HOME/Mail/spam"
+  DEFAULT="\$HOME/Mail/spam"
   EOF
 
   imaparms mark "${gmail_common[@]}" --folder "[Gmail]/Spam" unseen
