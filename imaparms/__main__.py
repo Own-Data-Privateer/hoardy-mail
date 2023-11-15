@@ -283,6 +283,7 @@ class Account:
     port : int
     user : str
     password : str
+    allow_login : bool
     IMAP_base : type
 
 def connect(account : Account, debug : bool) -> _t.Any:
@@ -414,19 +415,37 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
 
         try:
             srv = connect(account, cfg.debug)
-            typ, data = srv._simple_command("LOGIN", imap_quote(account.user), imap_quote(account.password))
-            if typ != "OK":
-                raise AccountFailure("failed to login as %s to host %s port %d: %s", account.user, account.host, account.port, repr(data))
-            srv.state = "AUTH"
-
-            sys.stdout.write("# " + gettext("logged in as %s to host %s port %d (%s)") % (account.user, account.host, account.port, account.socket.upper()) + "\n")
-            sys.stdout.flush()
 
             data = imap_check(AccountFailure, "CAPABILITY", srv.capability())
-            capabilities = data[0].split(b" ")
-            #print(capabilities)
-            if b"IMAP4rev1" not in capabilities:
+            try:
+                capabilities = data[0].decode("ascii").split(" ")
+                if "IMAP4rev1" not in capabilities:
+                    raise ValueError()
+            except (UnicodeDecodeError, KeyError, ValueError):
                 raise AccountFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", cfg.host, cfg.port)
+
+            #print(capabilities)
+
+            method : str
+            if "AUTH=CRAM-MD5" in capabilities:
+                def do_cram_md5(challenge : bytes) -> str:
+                    import hmac
+                    pwd = account.password.encode("utf-8")
+                    return imap_quote(account.user) + " " + hmac.HMAC(pwd, challenge, "md5").hexdigest()
+                method = "CRAM-MD5"
+                typ, data = srv.authenticate("CRAM-MD5", do_cram_md5)
+            elif account.allow_login:
+                method = "PLAIN"
+                typ, data = srv._simple_command("LOGIN", imap_quote(account.user), imap_quote(account.password))
+            else:
+                raise AccountFailure("authentication with plain-text credentials is disabled, set both `--auth-allow-login` and `--auth-allow-plain` if you really want to do this")
+
+            if typ != "OK":
+                raise AccountFailure("failed to login (%s) as %s to host %s port %d: %s", method, account.user, account.host, account.port, repr(data))
+            srv.state = "AUTH"
+
+            sys.stdout.write("# " + gettext("logged in (%s) as %s to host %s port %d (%s)") % (method, account.user, account.host, account.port, account.socket.upper()) + "\n")
+            sys.stdout.flush()
 
             func(cfg, state, account, srv, *args)
         except AccountFailure as exc:
@@ -1012,6 +1031,10 @@ def make_argparser(real : bool = True) -> _t.Any:
             user = cfg.user
             cfg.user = None
 
+            allow_login = cfg.allow_login
+            if cfg.socket == "plain":
+                allow_login = allow_login and cfg.allow_plain
+
             if self.ptype == "pinentry":
                 password = pinentry(host, user)
             elif self.ptype == "file":
@@ -1032,7 +1055,7 @@ def make_argparser(real : bool = True) -> _t.Any:
             if password[-1:] == "\r":
                 password = password[:-1]
 
-            cfg.accounts.append(Account(cfg.socket, host, port, user, password, IMAP_base))
+            cfg.accounts.append(Account(cfg.socket, host, port, user, password, allow_login, IMAP_base))
 
     def add_common(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(accounts = [])
@@ -1041,6 +1064,17 @@ def make_argparser(real : bool = True) -> _t.Any:
         agrp.add_argument("--debug", action="store_true", help=_("print IMAP conversation to stderr"))
         agrp.add_argument("--dry-run", action="store_true", help=_("connect to the servers, but don't perform any actions, just show what would be done"))
         agrp.add_argument("--very-dry-run", action="store_true", help=_("print an interpretation of the given command line arguments and do nothing else"))
+
+        agrp = cmd.add_argument_group(_("authentication settings"))
+        grp = agrp.add_mutually_exclusive_group()
+        grp.add_argument("--auth-allow-login", dest="allow_login", action="store_true", help=_("allow the use of IMAP `LOGIN` command (default)"))
+        grp.add_argument("--auth-forbid-login", dest="allow_login", action="store_false", help=_("forbid the use of IMAP `LOGIN` command, fail if challenge-response authentication is not available"))
+        grp.set_defaults(allow_login = True)
+
+        grp = agrp.add_mutually_exclusive_group()
+        grp.add_argument("--auth-allow-plain", dest="allow_plain", action="store_true", help=_("allow passwords to be transmitted over the network in plain-text"))
+        grp.add_argument("--auth-forbid-plain", dest="allow_plain", action="store_false", help=_("forbid passwords from being transmitted over the network in plain-text, plain-text authentication would still be possible over SSL if `--auth-allow-login` is set (default)"))
+        grp.set_defaults(allow_plain = False)
 
         agrp = cmd.add_argument_group("server connection", description = _("can be specified multiple times"))
         grp = agrp.add_mutually_exclusive_group()

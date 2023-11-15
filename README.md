@@ -328,7 +328,7 @@ That is to say, I don't use OAuth2, which is why `imaparms` does not support OAu
 
 # Usage
 
-## imaparms [--version] [-h] [--markdown] [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] {list,count,mark,fetch,delete,for-each} ...
+## imaparms [--version] [-h] [--markdown] [--debug] [--dry-run] [--very-dry-run] [--auth-allow-login | --auth-forbid-login] [--auth-allow-plain | --auth-forbid-plain] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] {list,count,mark,fetch,delete,for-each} ...
 
 A handy Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
 Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out.
@@ -348,6 +348,16 @@ Logins to a specified server, performs specified actions on all messages matchin
   : connect to the servers, but don't perform any actions, just show what would be done
   - `--very-dry-run`
   : print an interpretation of the given command line arguments and do nothing else
+
+- authentication settings:
+  - `--auth-allow-login`
+  : allow the use of IMAP `LOGIN` command (default)
+  - `--auth-forbid-login`
+  : forbid the use of IMAP `LOGIN` command, fail if challenge-response authentication is not available
+  - `--auth-allow-plain`
+  : allow passwords to be transmitted over the network in plain-text
+  - `--auth-forbid-plain`
+  : forbid passwords from being transmitted over the network in plain-text, plain-text authentication would still be possible over SSL if `--auth-allow-login` is set (default)
 
 - server connection:
   can be specified multiple times
