@@ -271,7 +271,7 @@ That is to say, I don't use OAuth2, which is why `imaparms` does not support OAu
 
 # Usage
 
-## imaparms [--version] [-h] [--help-markdown] {list,count,mark,fetch,delete,expire} ...
+## imaparms [--version] [-h] [--help-markdown] {list,count,mark,fetch,delete,for-each} ...
 
 A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.
 Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out.
@@ -285,19 +285,21 @@ Logins to a specified server, performs specified actions on all messages matchin
   : show this help message formatted in Markdown and exit
 
 - subcommands:
-  - `{list,count,mark,fetch,delete,expire}`
+  - `{list,count,mark,fetch,delete,for-each}`
     - `list`
     : list all available folders on the server, one per line
     - `count`
-    : count how many matching messages each specified folder has (counts for all available folders by default)
+    : count how many matching messages each specified folder has
     - `mark`
     : mark matching messages in specified folders in a specified way
     - `fetch`
     : fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds
-    - `delete (expire)`
+    - `delete`
     : delete matching messages from specified folders
+    - `for-each`
+    : perform multiple other subcommands while sharing a single server connection
 
-### imaparms list [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD]
+### imaparms list [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD]
 
 Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
@@ -305,9 +307,13 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
   - `--debug`
   : print IMAP conversation to stderr
   - `--dry-run`
-  : don't perform any actions, only show what would be done
+  : connect to the servers, but don't perform any actions, just show what would be done
+  - `--very-dry-run`
+  : print an interpretation of the given command line arguments and do nothing else
 
 - server connection:
+  can be specified multiple times
+
   - `--plain`
   : connect via plain-text socket
   - `--ssl`
@@ -353,7 +359,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
     if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
-### imaparms count [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--porcelain]
+### imaparms count [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--porcelain]
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
@@ -365,9 +371,13 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--debug`
   : print IMAP conversation to stderr
   - `--dry-run`
-  : don't perform any actions, only show what would be done
+  : connect to the servers, but don't perform any actions, just show what would be done
+  - `--very-dry-run`
+  : print an interpretation of the given command line arguments and do nothing else
 
 - server connection:
+  can be specified multiple times
+
   - `--plain`
   : connect via plain-text socket
   - `--ssl`
@@ -453,7 +463,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--unflagged`
   : operate on messages not marked as `FLAGGED`
 
-### imaparms mark [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] {seen,unseen,flagged,unflagged}
+### imaparms mark [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] {seen,unseen,flagged,unflagged}
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
 
@@ -461,9 +471,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   - `--debug`
   : print IMAP conversation to stderr
   - `--dry-run`
-  : don't perform any actions, only show what would be done
+  : connect to the servers, but don't perform any actions, just show what would be done
+  - `--very-dry-run`
+  : print an interpretation of the given command line arguments and do nothing else
 
 - server connection:
+  can be specified multiple times
+
   - `--plain`
   : connect via plain-text socket
   - `--ssl`
@@ -557,7 +571,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
     - `flag`: add `FLAGGED` flag, sets `--unflagged` if no message flag filter is specified
     - `unflag`: remove `FLAGGED` flag, sets `--flagged` if no message flag filter is specified
 
-### imaparms fetch [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] --mda COMMAND [--new-mail-cmd NEW_MAIL_CMD] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
+### imaparms fetch [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] --mda COMMAND [--new-mail-cmd CMD] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--mark {auto,noop,seen,unseen,flagged,unflagged}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands.
 
@@ -565,9 +579,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--debug`
   : print IMAP conversation to stderr
   - `--dry-run`
-  : don't perform any actions, only show what would be done
+  : connect to the servers, but don't perform any actions, just show what would be done
+  - `--very-dry-run`
+  : print an interpretation of the given command line arguments and do nothing else
 
 - server connection:
+  can be specified multiple times
+
   - `--plain`
   : connect via plain-text socket
   - `--ssl`
@@ -625,8 +643,8 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--mda COMMAND`
   : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
     `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
-    `maildrop` from Courier Mail Server project is a good KISS default.
-  - `--new-mail-cmd NEW_MAIL_CMD`
+    `maildrop` from Courier Mail Server project is a good KISS default
+  - `--new-mail-cmd CMD`
   : shell command to run if any new messages were successfully delivered by the `--mda`
 
 - message search filters:
@@ -671,7 +689,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     - `flagged`: add `FLAGGED` flag
     - `unflagged`: remove `FLAGGED` flag
 
-### imaparms delete [--debug] [--dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--method {auto,delete,delete-noexpunge,gmail-trash}]
+### imaparms delete [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] (--all-folders | --folder NAME) [--not-folder NAME] [--older-than DAYS] [--newer-than DAYS] [--older-than-timestamp-in PATH] [--newer-than-timestamp-in PATH] [--older-than-mtime-of PATH] [--newer-than-mtime-of PATH] [--from ADDRESS] [--not-from ADDRESS] [--any-seen | --seen | --unseen] [--any-flagged | --flagged | --unflagged] [--method {auto,delete,delete-noexpunge,gmail-trash}]
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
 
@@ -679,9 +697,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   - `--debug`
   : print IMAP conversation to stderr
   - `--dry-run`
-  : don't perform any actions, only show what would be done
+  : connect to the servers, but don't perform any actions, just show what would be done
+  - `--very-dry-run`
+  : print an interpretation of the given command line arguments and do nothing else
 
 - server connection:
+  can be specified multiple times
+
   - `--plain`
   : connect via plain-text socket
   - `--ssl`
@@ -774,6 +796,87 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
     - `delete`: mark messages as deleted and then use IMAP `EXPUNGE` command, i.e. this does what you would expect a "delete" command to do, works for most IMAP servers
     - `delete-noexpunge`: mark messages as deleted but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly
     - `gmail-trash`: move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `imaparms delete --folder "[Gmail]/Trash"` (which will default to `--method delete`) them after, or you could just leave them there and GMail will delete them in 30 days)
+
+### imaparms for-each [--debug] [--dry-run] [--very-dry-run] [--plain | --ssl | --starttls] [--host HOST] [--port PORT] [--user USER] [--pass-pinentry | --passfile PASSFILE | --passcmd PASSCMD] [--store-number INT] [--fetch-number INT] [--batch-number INT] [--batch-size INT] [--every SECONDS] [--every-add-random ADD] [--all-folders | --folder NAME] [--not-folder NAME] ARG [ARG ...]
+
+For each account: login, perform other subcommands given in `ARG`s, logout.
+
+This is most useful for performing complex changes `--every` once in while in daemon mode.
+Or if you want to set different `--folder`s for different subcommands but run them all at once.
+
+Except for the simplest of cases, you must use `--` before `ARG`s so that any options specified in `ARG`s won't be picked up by `for-each`.
+Run with `--very-dry-run` to see the interpretation of the given command line.
+
+All generated hooks are deduplicated and run after all other subcommands are done.
+E.g., if you have several `fetch --new-mail-cmd CMD` as subcommands of `for-each`, then `CMD` *will be run **once** after all other subcommands finish*.
+
+- positional arguments:
+  - `ARG`
+  : arguments, these will be split by `;` and parsed into other subcommands
+
+- debugging:
+  - `--debug`
+  : print IMAP conversation to stderr
+  - `--dry-run`
+  : connect to the servers, but don't perform any actions, just show what would be done
+  - `--very-dry-run`
+  : print an interpretation of the given command line arguments and do nothing else
+
+- server connection:
+  can be specified multiple times
+
+  - `--plain`
+  : connect via plain-text socket
+  - `--ssl`
+  : connect over SSL socket (default)
+  - `--starttls`
+  : connect via plain-text socket, but then use STARTTLS command
+  - `--host HOST`
+  : IMAP server to connect to (required)
+  - `--port PORT`
+  : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
+
+- authentication to the server:
+  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
+
+  - `--user USER`
+  : username on the server (required)
+  - `--pass-pinentry`
+  : read the password via `pinentry`
+  - `--passfile PASSFILE, --pass-file PASSFILE`
+  : file containing the password on its first line
+  - `--passcmd PASSCMD, --pass-cmd PASSCMD`
+  : shell command that returns the password as the first line of its stdout
+
+- batching settings:
+  larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen
+
+  - `--store-number INT`
+  : batch at most this many message UIDs in IMAP `STORE` requests (default: 150)
+  - `--fetch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: 150)
+  - `--batch-number INT`
+  : batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: 150)
+  - `--batch-size INT`
+  : batch FETCH at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
+
+- polling/daemon options:
+  - `--every SECONDS`
+  : repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way);
+    i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle;
+    this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
+  - `--every-add-random ADD`
+  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
+    if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
+    if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
+
+- folder search filters (this will set as defaults for subcommands):
+  - `--all-folders`
+  : operate on all folders
+  - `--folder NAME`
+  : mail folders to include; can be specified multiple times
+  - `--not-folder NAME`
+  : mail folders to exclude; can be specified multiple times
 
 ## Notes on usage
 
@@ -929,4 +1032,17 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   ```
 
   (`--method delete` is implied by `--host imap.gmail.com` but `--folder` being `[Gmail]/Trash`)
+
+- Every hour, fetch messages from different folders using different MDA settings and then expire messages older than 7 days, all in a single pass (reusing the server connection between subcommands):
+  ```
+  imaparms for-each "${gmail_common[@]}" --every 3600 -- \
+    fetch --folder "[Gmail]/All Mail" --mda maildrop \; \
+    fetch --folder "[Gmail]/Spam" --mda "maildrop ~/.mailfilter-spam" \; \
+    delete --folder "[Gmail]/All Mail" --folder "[Gmail]/Spam" --folder "[Gmail]/Trash" --older-than 7
+
+  ```
+
+  Note the `--` and `\;` tokens, without them the above will fail to parse.
+
+  Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash`.
 

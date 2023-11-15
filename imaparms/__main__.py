@@ -177,8 +177,9 @@ imap_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "O
 def imap_date(date : time.struct_time) -> str:
     return f"{str(date.tm_mday)}-{imap_months[date.tm_mon-1]}-{str(date.tm_year)}"
 
-def make_search_filter(cfg : Namespace) -> str:
+def make_search_filter(cfg : Namespace) -> _t.Tuple[str, bool]:
     filters = []
+    dynamic = False
 
     if cfg.seen is not None:
         if cfg.seen:
@@ -212,12 +213,15 @@ def make_search_filter(cfg : Namespace) -> str:
     older_than = []
     if cfg.older_than is not None:
         older_than.append(now - cfg.older_than * 86400 * 10**9)
+        dynamic = True
 
     for path in cfg.older_than_timestamp_in:
         older_than.append(read_timestamp(os.path.expanduser(path)))
+        dynamic = True
 
     for path in cfg.older_than_mtime_of:
         older_than.append(os.stat(os.path.expanduser(path)).st_mtime_ns)
+        dynamic = True
 
     if len(older_than) > 0:
         date = time.gmtime(min(older_than) / 10**9)
@@ -226,21 +230,24 @@ def make_search_filter(cfg : Namespace) -> str:
     newer_than = []
     if cfg.newer_than is not None:
         newer_than.append(now - cfg.newer_than * 86400 * 10**9)
+        dynamic = True
 
     for path in cfg.newer_than_timestamp_in:
         newer_than.append(read_timestamp(os.path.expanduser(path)))
+        dynamic = True
 
     for path in cfg.newer_than_mtime_of:
         newer_than.append(os.stat(os.path.expanduser(path)).st_mtime_ns)
+        dynamic = True
 
     if len(newer_than) > 0:
         date = time.gmtime(max(newer_than) / 10**9)
         filters.append(f"NOT BEFORE {imap_date(date)}")
 
     if len(filters) == 0:
-        return "(ALL)"
+        return "(ALL)", dynamic
     else:
-        return "(" + " ".join(filters) + ")"
+        return "(" + " ".join(filters) + ")", dynamic
 
 def die(desc : str, code : int = 1) -> None:
     sys.stderr.write(gettext("error") + ": " + desc + "\n")
@@ -330,9 +337,18 @@ def unsleep(seconds : _t.Union[int, float]) -> None:
     finally:
         should_unsleep = False
 
-def for_each_account_poll(cfg : Namespace, *args : _t.Any) -> None:
+@_dc.dataclass
+class State:
+    errors : int = _dc.field(default = 0)
+    num_delivered : int = _dc.field(default = 0)
+    hooks : _t.List[str] = _dc.field(init = False)
+
+    def __post_init__(self) -> None:
+        self.hooks = []
+
+def for_each_account_poll(cfg : Namespace, state : State, *args : _t.Any) -> None:
     if cfg.every is None:
-        for_each_account(cfg, *args)
+        for_each_account(cfg, state, *args)
         return
 
     fmt = "[%Y-%m-%d %H:%M:%S]"
@@ -357,41 +373,41 @@ def for_each_account_poll(cfg : Namespace, *args : _t.Any) -> None:
         do_sleep(ttime)
 
     while True:
-        old_errors = cfg.errors
+        old_errors = state.errors
+        old_delivered = state.num_delivered
 
         now = time.time()
         repeat_at = now + cycle
         ftime = time.strftime(fmt, time.localtime(now))
         print("# " + gettext("poll starts at %s") % (ftime,))
 
-        for_each_account(cfg, *args)
+        for_each_account(cfg, state, *args)
 
         now = time.time()
         ntime = time.strftime(fmt, time.localtime(now))
-        new_errors = cfg.errors - old_errors
+        new_errors = state.errors - old_errors
+        new_delivered = state.num_delivered - old_delivered
 
-        print("# " + ngettext("poll finished at %s, there was %d new error",
-                              "poll finished at %s, there were %d new errors",
-                              new_errors) % (ntime, new_errors))
+        msg = gettext("poll finished at %s, ") % (ntime,)
+        msg += ngettext("there was %d new messages ", "there were %d new messages ",
+                        new_delivered + new_errors) % (new_delivered,)
+        msg += ngettext("and %d new error", "and %d new errors", new_errors) % (new_errors,)
+
+        print("# " + msg)
 
         to_sleep = max(60, repeat_at - now + random.randint(0, cfg.every_add_random))
         ttime = time.strftime(fmt, time.localtime(now + to_sleep))
         do_sleep(ttime)
 
-def for_each_account(cfg : Namespace, *args : _t.Any) -> None:
+def for_each_account(cfg : Namespace, state : State, *args : _t.Any) -> None:
     global should_raise
     should_raise = False
     try:
-        for_each_account_(cfg, *args)
+        for_each_account_(cfg, state, *args)
     finally:
         should_raise = True
 
-def for_each_account_(cfg : Namespace, run_new_mail_cmd : bool, func : _t.Callable[..., None], *args : _t.Any) -> None:
-    #print(cfg.accounts)
-    #sys.exit(1)
-
-    cfg.new_mail = 0
-
+def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., None], *args : _t.Any) -> None:
     account : Account
     for account in cfg.accounts:
         if want_stop: raise KeyboardInterrupt()
@@ -406,9 +422,15 @@ def for_each_account_(cfg : Namespace, run_new_mail_cmd : bool, func : _t.Callab
             sys.stdout.write("# " + gettext("logged in as %s to host %s port %d (%s)") % (account.user, account.host, account.port, account.socket.upper()) + "\n")
             sys.stdout.flush()
 
-            func(cfg, account, srv, *args)
+            data = imap_check(AccountFailure, "CAPABILITY", srv.capability())
+            capabilities = data[0].split(b" ")
+            #print(capabilities)
+            if b"IMAP4rev1" not in capabilities:
+                raise AccountFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", cfg.host, cfg.port)
+
+            func(cfg, state, account, srv, *args)
         except AccountFailure as exc:
-            cfg.errors += 1
+            state.errors += 1
             error(exc.show())
         finally:
             try:
@@ -417,21 +439,22 @@ def for_each_account_(cfg : Namespace, run_new_mail_cmd : bool, func : _t.Callab
                 pass
             srv = None
 
-    if not run_new_mail_cmd:
-        return
+    if len(state.hooks) > 0:
+        done = set()
+        for hook in state.hooks:
+            if hook in done: continue
+            done.add(hook)
 
-    print("# " + ngettext("got %d new message", "got %d new messages", cfg.new_mail) % (cfg.new_mail,))
+            print("# " + gettext("running `%s`") % (hook,))
+            with subprocess.Popen(hook, stdin=subprocess.PIPE, stdout=None, stderr=None, shell=True) as p:
+                # __exit__ will do everything we need
+                pass
 
-    if cfg.new_mail > 0 and cfg.new_mail_cmd is not None:
-        print("# " + gettext("running `--new-mail-cmd`"))
-        with subprocess.Popen(cfg.new_mail_cmd, stdin=subprocess.PIPE, stdout=None, stderr=None, shell=True) as p:
-            # __exit__ will do everything we need
-            pass
+def cmd_list(cfg : Namespace, state : State) -> None:
+    if cfg.very_dry_run: sys.exit(1)
+    for_each_account_poll(cfg, state, False, do_list)
 
-def cmd_list(cfg : Namespace) -> None:
-    for_each_account_poll(cfg, False, do_list)
-
-def do_list(cfg : Namespace, account : Account, srv : IMAP4) -> None:
+def do_list(cfg : Namespace, state : State, account : Account, srv : IMAP4) -> None:
     folders = get_folders(srv)
     for e in folders:
         print(e)
@@ -446,7 +469,17 @@ def get_folders(srv : IMAP4) -> _t.List[str]:
         res.append(arg.decode("utf-8"))
     return res
 
-def cmd_action(cfg : Namespace) -> None:
+def print_prelude(cfg : Namespace) -> None:
+    _ = gettext
+    every = ""
+    if cfg.every is not None:
+        every = _("every %d seconds, ") % (cfg.every,)
+    print("# " + every + _("for each of"))
+    for acc in cfg.accounts:
+        print("... " + _("user %s on host %s port %d (%s)") % (acc.user, acc.host, acc.port, acc.socket.upper()))
+    print("# " + _("do"))
+
+def prepare_cmd(cfg : Namespace) -> None:
     if cfg.command == "mark":
         if cfg.seen is None and cfg.flagged is None:
             if cfg.mark == "seen":
@@ -466,27 +499,51 @@ def cmd_action(cfg : Namespace) -> None:
             else:
                 cfg.mark = "noop"
 
-    search_filter = make_search_filter(cfg)
+    if len(cfg.folders) != 0:
+        cfg.all_folders = False
+
+    if cfg.all_folders:
+        place = gettext("in all folders")
+    else:
+        place = gettext("in %s") % (", ".join(map(repr, cfg.folders)),)
+
+    if cfg.not_folders:
+        place += " " + gettext("excluding %s") % (", ".join(map(repr, cfg.not_folders)),)
+
+    search_filter, dynamic = make_search_filter(cfg)
+    if dynamic:
+        search_filter += " " + gettext("{dynamic}")
 
     if "mark" in cfg:
-        print("# " + gettext(f"searching %s, performing {cfg.command}, marking them as %s") % (search_filter, cfg.mark.upper()))
+        what = gettext(f"search %s, perform {cfg.command}, mark them as %s") % (search_filter, cfg.mark.upper())
     else:
-        print("# " + gettext(f"searching %s, performing {cfg.command}") % (search_filter,))
-    #sys.exit(1)
+        what = gettext(f"search %s, perform {cfg.command}") % (search_filter,)
 
-    for_each_account_poll(cfg, cfg.command == "fetch", for_each_folder, do_folder_action, cfg.command, search_filter)
+    print(f"... {place}: {what}")
 
-def for_each_folder(cfg : Namespace, account : Account, srv : IMAP4, func : _t.Callable[..., None], *args : _t.Any) -> None:
-    data = imap_check(AccountFailure, "CAPABILITY", srv.capability())
-    capabilities = data[0].split(b" ")
-    #print(capabilities)
-    if b"IMAP4rev1" not in capabilities:
-        raise AccountFailure("host %s port %s does not speak IMAP4rev1, sorry but server software is too old to be supported", cfg.host, cfg.port)
+def cmd_action(cfg : Namespace, state : State) -> None:
+    print_prelude(cfg)
+    prepare_cmd(cfg)
+    if cfg.very_dry_run: sys.exit(1)
+    for_each_account_poll(cfg, state, for_each_folder, do_folder_action, cfg.command)
 
-    if cfg.all_folders and len(cfg.folders) == 0:
+def cmd_multi_action(common_cfg : Namespace, state : State, subcfgs : _t.List[Namespace]) -> None:
+    print_prelude(common_cfg)
+    for subcfg in subcfgs:
+        prepare_cmd(subcfg)
+    if common_cfg.very_dry_run: sys.exit(1)
+    for_each_account_poll(common_cfg, state, for_each_folder_multi, subcfgs)
+
+def for_each_folder_multi(common_cfg : Namespace, state : State, account : Account, srv : IMAP4,
+                          subcfgs : _t.List[Namespace]) -> None:
+    for subcfg in subcfgs:
+        for_each_folder(subcfg, state, account, srv, do_folder_action, subcfg.command)
+
+def for_each_folder(cfg : Namespace, state : State, account : Account, srv : IMAP4,
+                    func : _t.Callable[..., None], *args : _t.Any) -> None:
+    if cfg.all_folders:
         folders = get_folders(srv)
     else:
-        cfg.all_folders = False
         folders = cfg.folders
 
     for folder in filter(lambda f: f not in cfg.not_folders, folders):
@@ -498,15 +555,17 @@ def for_each_folder(cfg : Namespace, account : Account, srv : IMAP4, func : _t.C
             continue
 
         try:
-            func(cfg, account, srv, folder, *args)
+            func(cfg, state, account, srv, folder, *args)
         except FolderFailure as exc:
-            cfg.errors += 1
+            state.errors += 1
             error(exc.show())
         finally:
             srv.close()
 
-def do_folder_action(cfg : Namespace, account : Account, srv : IMAP4,
-                     folder : str, command : str, search_filter : str) -> None:
+def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IMAP4,
+                     folder : str, command : str) -> None:
+    search_filter, _ = make_search_filter(cfg)
+
     typ, data = srv.uid("SEARCH", search_filter)
     if typ != "OK":
         raise imap_exc(FolderFailure, "SEARCH", typ, data)
@@ -524,10 +583,6 @@ def do_folder_action(cfg : Namespace, account : Account, srv : IMAP4,
             print(f"{len(message_uids)} {folder}")
         else:
             print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
-        return
-    elif len(message_uids) == 0:
-        # nothing to do
-        print(gettext("folder `%s` has no messages matching %s") % (folder, search_filter))
         return
 
     act : str
@@ -560,20 +615,29 @@ def do_folder_action(cfg : Namespace, account : Account, srv : IMAP4,
         assert False
 
     if cfg.dry_run:
-        print(gettext("dry-run, not " + act) % actargs)
+        print(gettext("dry-run: (not) ") + act % actargs)
         return
     else:
         print(gettext(act) % actargs)
 
+    if len(message_uids) == 0:
+        # nothing to do
+        return
+
     if command == "mark":
-        do_store(cfg, account, srv, cfg.mark, message_uids)
+        do_store(cfg, state, account, srv, cfg.mark, message_uids)
     elif command == "fetch":
-        do_fetch(cfg, account, srv, message_uids)
+        old_num_delivered = state.num_delivered
+        try:
+            do_fetch(cfg, state, account, srv, message_uids)
+        finally:
+            if cfg.new_mail_cmd is not None and state.num_delivered > old_num_delivered:
+                state.hooks.append(cfg.new_mail_cmd)
     elif command == "delete":
         assert method is not None
-        do_store(cfg, account, srv, method, message_uids)
+        do_store(cfg, state, account, srv, method, message_uids)
 
-def do_fetch(cfg : Namespace, account : Account, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
+def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
     fetch_num = cfg.fetch_number
     batch : _t.List[bytes] = []
     batch_total = 0
@@ -584,7 +648,7 @@ def do_fetch(cfg : Namespace, account : Account, srv : IMAP4, message_uids : _t.
         to_fetch_set : _t.Set[bytes] = set(to_fetch)
         typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)") # type: ignore
         if typ != "OK":
-            cfg.errors += 1
+            state.errors += 1
             imap_error("FETCH", typ, data)
             continue
 
@@ -598,14 +662,14 @@ def do_fetch(cfg : Namespace, account : Account, srv : IMAP4, message_uids : _t.
                 uid = attrs[b"UID"]
                 size = int(attrs[b"RFC822.SIZE"])
             except KeyError:
-                fetch_check_untagged(cfg, attrs)
+                fetch_check_untagged(cfg, state, attrs)
                 continue
 
             new.append((uid, size))
             to_fetch_set.remove(uid)
 
         if len(to_fetch_set) > 0:
-            cfg.errors += 1
+            state.errors += 1
             imap_error("FETCH", "did not get enough elements")
             continue
 
@@ -627,14 +691,14 @@ def do_fetch(cfg : Namespace, account : Account, srv : IMAP4, message_uids : _t.
                 batch_total += size
                 batch.append(uid)
 
-            do_fetch_batch(cfg, account, srv, batch, batch_total)
+            do_fetch_batch(cfg, state, account, srv, batch, batch_total)
             batch = []
             batch_total = 0
             new = leftovers
 
-    do_fetch_batch(cfg, account, srv, batch, batch_total)
+    do_fetch_batch(cfg, state, account, srv, batch, batch_total)
 
-def fetch_check_untagged(cfg : Namespace, attrs : _t.Dict[bytes, bytes]) -> None:
+def fetch_check_untagged(cfg : Namespace, state : State, attrs : _t.Dict[bytes, bytes]) -> None:
     try:
         flags = attrs[b"FLAGS"]
         if len(attrs) != 1:
@@ -653,7 +717,7 @@ def fetch_check_untagged(cfg : Namespace, attrs : _t.Dict[bytes, bytes]) -> None
        (cfg.mark == "unflagged" and b"\\Flagged" not in flags):
         raise AccountFailure("another client is marking messages with potentially conflicting flags in parallel with us, aborting")
 
-def do_fetch_batch(cfg : Namespace, account : Account, srv : IMAP4, message_uids : _t.List[bytes], total_size : int) -> None:
+def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP4, message_uids : _t.List[bytes], total_size : int) -> None:
     if want_stop: raise KeyboardInterrupt()
 
     if len(message_uids) == 0: return
@@ -662,7 +726,7 @@ def do_fetch_batch(cfg : Namespace, account : Account, srv : IMAP4, message_uids
     joined = b",".join(message_uids)
     typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])") # type: ignore
     if typ != "OK":
-        cfg.errors += 1
+        state.errors += 1
         imap_error("FETCH", typ, data)
         return
 
@@ -695,7 +759,7 @@ def do_fetch_batch(cfg : Namespace, account : Account, srv : IMAP4, message_uids
             header = attrs[b"BODY[HEADER]"]
             body = attrs[b"BODY[TEXT]"]
         except KeyError:
-            fetch_check_untagged(cfg, attrs)
+            fetch_check_untagged(cfg, state, attrs)
             continue
 
         if True:
@@ -721,15 +785,16 @@ def do_fetch_batch(cfg : Namespace, account : Account, srv : IMAP4, message_uids
 
         if delivered:
             done_message_uids.append(uid)
-            cfg.new_mail += 1
+            state.num_delivered += 1
         else:
-            cfg.errors += 1
+            state.errors += 1
             error(_("`--mda` failed to deliver message %s") % (uid,))
 
     print("... " + gettext("delivered a batch of %d messages via `%s`") % (len(done_message_uids), cfg.mda))
-    do_store(cfg, account, srv, cfg.mark, done_message_uids, False)
+    do_store(cfg, state, account, srv, cfg.mark, done_message_uids, False)
 
-def do_store(cfg : Namespace, account : Account, srv : IMAP4, method : str, message_uids : _t.List[bytes], interruptable : bool = True) -> None:
+def do_store(cfg : Namespace, state : State, account : Account, srv : IMAP4,
+             method : str, message_uids : _t.List[bytes], interruptable : bool = True) -> None:
     if method == "noop": return
 
     marking_as = "... " + gettext("marking a batch of %d messages as %s")
@@ -896,6 +961,16 @@ EOF
     fmt.add_text(_("(`--method delete` is implied by `--host imap.gmail.com` but `--folder` being `[Gmail]/Trash`)"))
     fmt.end_section()
 
+    fmt.start_section(_("Every hour, fetch messages from different folders using different MDA settings and then expire messages older than 7 days, all in a single pass (reusing the server connection between subcommands)"))
+    fmt.add_code(f"""{__package__} for-each "${{gmail_common[@]}}" --every 3600 -- \\
+  fetch --folder "[Gmail]/All Mail" --mda maildrop \\; \\
+  fetch --folder "[Gmail]/Spam" --mda "maildrop ~/.mailfilter-spam" \\; \\
+  delete --folder "[Gmail]/All Mail" --folder "[Gmail]/Spam" --folder "[Gmail]/Trash" --older-than 7
+""")
+    fmt.add_text(_("Note the `--` and `\\;` tokens, without them the above will fail to parse."))
+    fmt.add_text(_("Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash`."))
+    fmt.end_section()
+
 def main() -> None:
     _ = gettext
 
@@ -904,6 +979,7 @@ def main() -> None:
         description=_("A Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP4 servers.") + "\n" + \
                     _("Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out."),
         additional_sections = [add_examples],
+        allow_abbrev = False,
         add_help = True,
         add_version = True)
     parser.add_argument("--help-markdown", action="store_true", help=_("show this help message formatted in Markdown and exit"))
@@ -958,14 +1034,15 @@ def main() -> None:
 
             cfg.accounts.append(Account(cfg.socket, host, port, user, password, IMAP_base))
 
-    def add_common(cmd : _t.Any) -> None:
+    def add_common(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(accounts = [])
 
         agrp = cmd.add_argument_group(_("debugging"))
         agrp.add_argument("--debug", action="store_true", help=_("print IMAP conversation to stderr"))
-        agrp.add_argument("--dry-run", action="store_true", help=_("don't perform any actions, only show what would be done"))
+        agrp.add_argument("--dry-run", action="store_true", help=_("connect to the servers, but don't perform any actions, just show what would be done"))
+        agrp.add_argument("--very-dry-run", action="store_true", help=_("print an interpretation of the given command line arguments and do nothing else"))
 
-        agrp = cmd.add_argument_group("server connection")
+        agrp = cmd.add_argument_group("server connection", description = _("can be specified multiple times"))
         grp = agrp.add_mutually_exclusive_group()
         grp.add_argument("--plain", dest="socket", action="store_const", const = "plain", help=_("connect via plain-text socket"))
         grp.add_argument("--ssl", dest="socket", action="store_const", const = "ssl", help=_("connect over SSL socket") + " " + _("(default)"))
@@ -997,26 +1074,37 @@ def main() -> None:
         agrp.add_argument("--every-add-random", metavar = "ADD", default = 60, type=int, help=_("sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: %(default)s)") + ";\n" + \
                                                                                              _("if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers") + ";\n" + \
                                                                                              _(f"if you run `{__package__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
+        return cmd
 
-    def add_folders(cmd : _t.Any, all_by_default : bool) -> None:
+    def add_folders(cmd : _t.Any, all_by_default : _t.Optional[bool]) -> _t.Any:
         def_fall, def_freq = "", ""
-        if all_by_default:
+        if all_by_default is None:
+            def_freq = " " + _("(this will set as defaults for subcommands)")
+        elif all_by_default:
             def_fall = " " + _("(default)")
         else:
             def_freq = " " + _("(required)")
 
         agrp = cmd.add_argument_group(_("folder search filters") + def_freq)
 
-        egrp = agrp.add_mutually_exclusive_group(required = not all_by_default)
-        egrp.add_argument("--all-folders", action="store_true", default = all_by_default,
+        egrp = agrp.add_mutually_exclusive_group(required = all_by_default == False)
+        egrp.add_argument("--all-folders", action="store_true", default = all_by_default == True,
                           help=_("operate on all folders") + def_fall)
         egrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=[],
                           help=_("mail folders to include; can be specified multiple times"))
 
         agrp.add_argument("--not-folder", metavar = "NAME", dest="not_folders", action="append", type=str, default=[],
                           help=_("mail folders to exclude; can be specified multiple times"))
+        return cmd
 
-    def add_filters(cmd : _t.Any, default : _t.Union[_t.Optional[bool], str]) -> None:
+    def add_folders_sub(cmd : _t.Any) -> _t.Any:
+        egrp = cmd.add_mutually_exclusive_group()
+        egrp.add_argument("--all-folders", action="store_true", default = argparse.SUPPRESS)
+        egrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=argparse.SUPPRESS)
+        cmd.add_argument("--not-folder", metavar = "NAME", dest="not_folders", action="append", type=str, default=argparse.SUPPRESS)
+        return cmd
+
+    def add_filters(cmd : _t.Any, default : _t.Union[_t.Optional[bool], str]) -> _t.Any:
         agrp = cmd.add_argument_group(_("message search filters"))
         agrp.add_argument("--older-than", metavar = "DAYS", type=int, help=_("operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc"))
         agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help=_("operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc"))
@@ -1057,17 +1145,19 @@ def main() -> None:
         grp.add_argument("--flagged", dest="flagged", action="store_true", help=_("operate on messages marked as `FLAGGED`"))
         grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as `FLAGGED`"))
         grp.set_defaults(flagged = None)
+        return cmd
 
-    def add_delivery(cmd : _t.Any) -> None:
+    def add_delivery(cmd : _t.Any) -> _t.Any:
         agrp = cmd.add_argument_group(_("delivery settings"))
         agrp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
                           required=True,
                           help=_("shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)") + "\n" + \
                                _(f"`{__package__}` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.") + "\n" + \
-                               _("`maildrop` from Courier Mail Server project is a good KISS default."))
-        agrp.add_argument("--new-mail-cmd", type=str, help=_("shell command to run if any new messages were successfully delivered by the `--mda`"))
+                               _("`maildrop` from Courier Mail Server project is a good KISS default"))
+        agrp.add_argument("--new-mail-cmd", metavar="CMD", type=str, help=_("shell command to run if any new messages were successfully delivered by the `--mda`"))
+        return cmd
 
-    def no_cmd(cfg : Namespace) -> None:
+    def no_cmd(cfg : Namespace, state : State) -> None:
         parser.print_help(sys.stderr)
         sys.exit(2)
     parser.set_defaults(func=no_cmd)
@@ -1079,39 +1169,47 @@ def main() -> None:
     add_common(cmd)
     cmd.set_defaults(func=cmd_list)
 
-    cmd = subparsers.add_parser("count", help=_("count how many matching messages each specified folder has (counts for all available folders by default)"),
+    cmd = subparsers.add_parser("count", help=_("count how many matching messages each specified folder has"),
                                 description = _("Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line."))
     add_common(cmd)
     add_folders(cmd, True)
-    add_filters(cmd, None)
-    cmd.add_argument("--porcelain", action="store_true", help=_("print in a machine-readable format"))
+    def add_count(cmd : _t.Any) -> _t.Any:
+        cmd.set_defaults(command="count")
+        add_filters(cmd, None)
+        cmd.add_argument("--porcelain", action="store_true", help=_("print in a machine-readable format"))
+        return cmd
+    add_count(cmd)
     cmd.set_defaults(func=cmd_action)
-    cmd.set_defaults(command="count")
 
     cmd = subparsers.add_parser("mark", help=_("mark matching messages in specified folders in a specified way"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands."))
     add_common(cmd)
     add_folders(cmd, False)
-    add_filters(cmd, "depends")
-    agrp = cmd.add_argument_group("marking")
-    sets_x_if = _("sets `%s` if no message flag filter is specified")
-    agrp.add_argument("mark", choices=["seen", "unseen", "flagged", "unflagged"], help=_("mark how") + " " + _("(required)") + f""":
+    def add_mark(cmd : _t.Any) -> _t.Any:
+        cmd.set_defaults(command="mark")
+        add_filters(cmd, "depends")
+        agrp = cmd.add_argument_group("marking")
+        sets_x_if = _("sets `%s` if no message flag filter is specified")
+        agrp.add_argument("mark", choices=["seen", "unseen", "flagged", "unflagged"], help=_("mark how") + " " + _("(required)") + f""":
 - `seen`: {_("add `SEEN` flag")}, {sets_x_if % ("--unseen",)}
 - `unseen`: {_("remove `SEEN` flag")}, {sets_x_if % ("--seen",)}
 - `flag`: {_("add `FLAGGED` flag")}, {sets_x_if % ("--unflagged",)}
 - `unflag`: {_("remove `FLAGGED` flag")}, {sets_x_if % ("--flagged",)}
 """)
+        return cmd
+    add_mark(cmd)
     cmd.set_defaults(func=cmd_action)
-    cmd.set_defaults(command="mark")
 
     cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands."))
     add_common(cmd)
     add_folders(cmd, True)
-    add_delivery(cmd)
-    add_filters(cmd, False)
-    agrp = cmd.add_argument_group("marking")
-    agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
+    def add_fetch(cmd : _t.Any) -> _t.Any:
+        cmd.set_defaults(command="fetch")
+        add_delivery(cmd)
+        add_filters(cmd, False)
+        agrp = cmd.add_argument_group("marking")
+        agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
 - `auto`: {_('`seen` when only `--unseen` is set (default), `flagged` when only `--unflagged` is set, `noop` otherwise')}
 - `noop`: {_("do nothing")}
 - `seen`: {_("add `SEEN` flag")}
@@ -1119,23 +1217,88 @@ def main() -> None:
 - `flagged`: {_("add `FLAGGED` flag")}
 - `unflagged`: {_("remove `FLAGGED` flag")}
 """)
+        return cmd
+    add_fetch(cmd)
     cmd.set_defaults(func=cmd_action)
-    cmd.set_defaults(command="fetch")
 
-    cmd = subparsers.add_parser("delete", aliases = ["expire"], help=_("delete matching messages from specified folders"),
+    cmd = subparsers.add_parser("delete", help=_("delete matching messages from specified folders"),
                                 description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method."))
     add_common(cmd)
     add_folders(cmd, False)
-    add_filters(cmd, True)
-    agrp = cmd.add_argument_group(_("deletion method"))
-    agrp.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help=_("delete messages how") + f""":
+    def add_delete(cmd : _t.Any) -> _t.Any:
+        cmd.set_defaults(command="delete")
+        add_filters(cmd, True)
+        agrp = cmd.add_argument_group(_("deletion method"))
+        agrp.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help=_("delete messages how") + f""":
 - `auto`: {_('`gmail-trash` when `--host imap.gmail.com` and the current folder is not `[Gmail]/Trash`, `delete` otherwise')} {_("(default)")}
 - `delete`: {_('mark messages as deleted and then use IMAP `EXPUNGE` command, i.e. this does what you would expect a "delete" command to do, works for most IMAP servers')}
 - `delete-noexpunge`: {_('mark messages as deleted but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly')}
 - `gmail-trash`: {_(f'move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `EXPUNGE` outside of `[Gmail]/Trash`, you can then `{__package__} delete --folder "[Gmail]/Trash"` (which will default to `--method delete`) them after, or you could just leave them there and GMail will delete them in 30 days)')}
 """)
+        return cmd
+    add_delete(cmd)
     cmd.set_defaults(func=cmd_action)
-    cmd.set_defaults(command="delete")
+
+    state = State()
+
+    def cmd_for_each(cfg : Namespace, state : State) -> None:
+        # generate parser for our cfg
+        fe_parser = argparse.BetterArgumentParser(prog = __package__ + " for-each", add_help = True)
+
+        # we do this to force the user to specify `--folder` or such
+        # for each command if the global one is not specified
+        add_folders_here = add_folders_sub
+        if not cfg.all_folders and len(cfg.folders) == 0:
+            add_folders_here = lambda x: add_folders(x, False)
+
+        fe_subparsers = fe_parser.add_subparsers(title="subcommands")
+        add_count(fe_subparsers.add_parser("count"))
+        add_folders_here(add_mark(fe_subparsers.add_parser("mark")))
+        add_folders_here(add_fetch(fe_subparsers.add_parser("fetch")))
+        add_folders_here(add_delete(fe_subparsers.add_parser("delete")))
+
+        # set defaults from cfg
+        fe_parser.set_defaults(**{name: value for name, value in cfg.__dict__.items() if name != "rest"})
+
+        # split command line by ";" tokens
+        commands = []
+        acc = []
+        for a in cfg.rest:
+            if a != ";":
+                acc.append(a)
+            else:
+                if len(acc) > 0:
+                    commands.append(acc)
+                    acc = []
+        if len(acc) > 0:
+            commands.append(acc)
+        del acc
+
+        # parse each command
+        subcfgs = []
+        for cargv in commands:
+            subcfg = fe_parser.parse_args(cargv)
+            subcfgs.append(subcfg)
+
+        # run them
+        cmd_multi_action(cfg, state, subcfgs)
+
+    cmd = subparsers.add_parser("for-each", help=_("perform multiple other subcommands while sharing a single server connection"),
+                                description = _("""For each account: login, perform other subcommands given in `ARG`s, logout.
+
+This is most useful for performing complex changes `--every` once in while in daemon mode.
+Or if you want to set different `--folder`s for different subcommands but run them all at once.
+
+Except for the simplest of cases, you must use `--` before `ARG`s so that any options specified in `ARG`s won't be picked up by `for-each`.
+Run with `--very-dry-run` to see the interpretation of the given command line.
+
+All generated hooks are deduplicated and run after all other subcommands are done.
+E.g., if you have several `fetch --new-mail-cmd CMD` as subcommands of `for-each`, then `CMD` *will be run **once** after all other subcommands finish*.
+"""))
+    add_common(cmd)
+    add_folders(cmd, None)
+    cmd.add_argument("rest", metavar="ARG", nargs="+", type=str, help=_("arguments, these will be split by `;` and parsed into other subcommands"))
+    cmd.set_defaults(func=cmd_for_each)
 
     try:
         cfg = parser.parse_args(sys.argv[1:])
@@ -1152,23 +1315,22 @@ def main() -> None:
         return die(_("no accounts specified, need at least one `--host`, `--user`, and either of `--passfile` or `--passcmd`"))
 
     handle_signals()
-    cfg.errors = 0
 
     try:
-        cfg.func(cfg)
+        cfg.func(cfg, state)
     except CatastrophicFailure as exc:
-        cfg.errors += 1
+        state.errors += 1
         error(exc.show())
     except KeyboardInterrupt:
-        cfg.errors += 1
+        state.errors += 1
         error(_("Interrupted!"))
     except Exception as exc:
-        cfg.errors += 1
+        state.errors += 1
         traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
         error(_("A bug!"))
 
-    if cfg.errors > 0:
-        sys.stderr.write(ngettext("There was %d error!", "There were %d errors!", cfg.errors) % (cfg.errors,) + "\n")
+    if state.errors > 0:
+        sys.stderr.write(ngettext("There was %d error!", "There were %d errors!", state.errors) % (state.errors,) + "\n")
         sys.stderr.flush()
         sys.exit(1)
     sys.exit(0)
