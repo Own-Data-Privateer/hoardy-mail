@@ -985,8 +985,8 @@ def make_argparser(real : bool = True) -> _t.Any:
     parser.add_argument("--markdown", action="store_true", help=_("show help messages formatted in Markdown"))
 
     class EmitAccount(argparse.Action):
-        def __init__(self, option_strings : str, dest : str, default : _t.Any = None, **kwargs : _t.Any) -> None:
-            self.ptype = default
+        def __init__(self, option_strings : str, dest : str, type : _t.Any = None, **kwargs : _t.Any) -> None:
+            self.ptype = type
             super().__init__(option_strings, dest, type=str, **kwargs)
 
         def __call__(self, parser : _t.Any, cfg : Namespace, value : _t.Any, option_string : _t.Optional[str] = None) -> None:
@@ -1056,9 +1056,9 @@ def make_argparser(real : bool = True) -> _t.Any:
         agrp.add_argument("--user", type=str, help=_("username on the server (required)"))
 
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--pass-pinentry", nargs=0, action=EmitAccount, default="pinentry", help=_("read the password via `pinentry`"))
-        grp.add_argument("--passfile", "--pass-file", action=EmitAccount, default="file", help=_("file containing the password on its first line"))
-        grp.add_argument("--passcmd", "--pass-cmd", action=EmitAccount, default="cmd", help=_("shell command that returns the password as the first line of its stdout"))
+        grp.add_argument("--pass-pinentry", nargs=0, action=EmitAccount, type="pinentry", help=_("read the password via `pinentry`"))
+        grp.add_argument("--passfile", "--pass-file", action=EmitAccount, type="file", help=_("file containing the password on its first line"))
+        grp.add_argument("--passcmd", "--pass-cmd", action=EmitAccount, type="cmd", help=_("shell command that returns the password as the first line of its stdout"))
         grp.set_defaults(password = None)
 
         agrp = cmd.add_argument_group(_("batching settings"), description=_("larger values improve performance but produce longer command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen"))
