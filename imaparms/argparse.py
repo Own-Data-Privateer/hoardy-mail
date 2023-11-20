@@ -34,13 +34,13 @@ class BetterHelpFormatter(HelpFormatter):
         return res
 
     def add_code(self, text : str) -> None:
-        self.add_text(text)
+        self.add_text(text.strip())
 
 class MarkdownBetterHelpFormatter(BetterHelpFormatter):
     """BetterHelpFormatter that outputs stuff formatted in Markdown"""
 
     def add_code(self, text : str) -> None:
-        self.add_text("```\n" + text + "\n```")
+        self.add_text("```\n" + text.strip() + "\n```")
 
     def _format_usage(self, usage : _t.Optional[str], actions : _t.Any, groups : _t.Any, prefix : _t.Optional[str]) -> str:
         return super()._format_usage(usage, actions, groups, "")

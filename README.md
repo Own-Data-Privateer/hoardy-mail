@@ -698,7 +698,6 @@ Specifying `--folder` multiple times will perform the specified action on all sp
              --ssl --host imap.example.com \
              --user myself@example.com --passcmd "pass show mail/myself@example.com" \
              --user another@example.com --passcmd "pass show mail/another@example.com"
-
     ```
 
 Now, assuming the following are set:
@@ -708,7 +707,6 @@ common=(--ssl --host imap.example.com --user myself@example.com --passcmd "pass 
 common_mda=("${{common[@]}}" --mda maildrop)
 gmail_common=(--ssl --host imap.gmail.com --user myself@gmail.com --passcmd "pass show mail/myself@gmail.com")
 gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
-
 ```
 
 - Count how many messages older than 7 days are in `[Gmail]/All Mail` folder:
@@ -723,7 +721,6 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 
   # repeatable part
   imaparms fetch "${common_mda[@]}" --folder "INBOX"
-
   ```
 
 - Similarly to the above, but use `FLAGGED` instead of `SEEN`. This allows to use this in parallel with another instance of `imaparms` using the `SEEN` flag, e.g. if you want to backup to two different machines independently, or if you want to use `imaparms` simultaneously in parallel with `fetchmail` or other similar tool:
@@ -739,7 +736,6 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 
   # in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both imaparms and fetchmail
   imaparms delete "${common[@]}" --folder "INBOX" --older-than 7 --seen --flagged
-
   ```
 
 - Similarly to the above, but run `imaparms fetch` as a daemon to download updates every hour:
@@ -749,7 +745,6 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 
   # repeatable part
   imaparms fetch "${common_mda[@]}" --folder "INBOX" --every 3600
-
   ```
 
 - Fetch all messages from `INBOX` folder that were delivered in the last 7 days (the resulting date is rounded down to the start of the day by server time), but don't change any flags:
@@ -792,7 +787,6 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 
   # repeatable part
   imaparms fetch "${gmail_common_mda[@]}" --mda "maildrop ~/.mailfilter-spam" --folder "[Gmail]/Spam"
-
   ```
 
 - Fetch everything from all folders, except `INBOX` and `[Gmail]/Trash` (because messages in GMail `INBOX` are included `[Gmail]/All Mail`):
@@ -826,7 +820,6 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
     fetch --folder "[Gmail]/All Mail" --mda maildrop \; \
     fetch --folder "[Gmail]/Spam" --mda "maildrop ~/.mailfilter-spam" \; \
     delete --folder "[Gmail]/All Mail" --folder "[Gmail]/Spam" --folder "[Gmail]/Trash" --older-than 7
-
   ```
 
   Note the `--` and `\;` tokens, without them the above will fail to parse.
