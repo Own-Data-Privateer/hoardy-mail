@@ -407,6 +407,24 @@ Logins to a specified server, performs specified actions on all messages matchin
     if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
+- message search filters:
+  - `--older-than DAYS`
+  : operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc
+  - `--newer-than DAYS`
+  : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
+  - `--older-than-timestamp-in PATH`
+  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
+  - `--newer-than-timestamp-in PATH`
+  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
+  - `--older-than-mtime-of PATH`
+  : operate on messages older than `mtime` of this PATH, rounded as above (can be specified multiple times)
+  - `--newer-than-mtime-of PATH`
+  : operate on messages newer than `mtime` of this PATH, rounded as above (can be specified multiple times)
+  - `--from ADDRESS`
+  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
+  - `--not-from ADDRESS`
+  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
+
 - subcommands:
   - `{list,count,mark,fetch,delete,for-each}`
     - `list`
@@ -442,31 +460,15 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--not-folder NAME`
   : mail folders to exclude; can be specified multiple times
 
-- message search filters:
-  - `--older-than DAYS`
-  : operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc
-  - `--newer-than DAYS`
-  : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
-  - `--older-than-timestamp-in PATH`
-  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
-  - `--newer-than-timestamp-in PATH`
-  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
-  - `--older-than-mtime-of PATH`
-  : operate on messages older than `mtime` of this PATH, rounded as above (can be specified multiple times)
-  - `--newer-than-mtime-of PATH`
-  : operate on messages newer than `mtime` of this PATH, rounded as above (can be specified multiple times)
-  - `--from ADDRESS`
-  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
-  - `--not-from ADDRESS`
-  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
-
-- message flag filters:
+- message IMAP `SEEN` flag filters:
   - `--any-seen`
   : operate on both `SEEN` and not `SEEN` messages (default)
   - `--seen`
   : operate on messages marked as `SEEN`
   - `--unseen`
   : operate on messages not marked as `SEEN`
+
+- message IMAP `FLAGGED` flag filters:
   - `--any-flagged`
   : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
@@ -486,31 +488,15 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   - `--not-folder NAME`
   : mail folders to exclude; can be specified multiple times
 
-- message search filters:
-  - `--older-than DAYS`
-  : operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc
-  - `--newer-than DAYS`
-  : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
-  - `--older-than-timestamp-in PATH`
-  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
-  - `--newer-than-timestamp-in PATH`
-  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
-  - `--older-than-mtime-of PATH`
-  : operate on messages older than `mtime` of this PATH, rounded as above (can be specified multiple times)
-  - `--newer-than-mtime-of PATH`
-  : operate on messages newer than `mtime` of this PATH, rounded as above (can be specified multiple times)
-  - `--from ADDRESS`
-  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
-  - `--not-from ADDRESS`
-  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
-
-- message flag filters (default: depends on other arguments):
+- message IMAP `SEEN` flag filters (default: depends on other arguments):
   - `--any-seen`
   : operate on both `SEEN` and not `SEEN` messages
   - `--seen`
   : operate on messages marked as `SEEN`
   - `--unseen`
   : operate on messages not marked as `SEEN`
+
+- message IMAP `FLAGGED` flag filters (default: depends on other arguments):
   - `--any-flagged`
   : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
@@ -546,31 +532,15 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--new-mail-cmd CMD`
   : shell command to run after the fetch cycle finishes if any new messages were successfully delivered by the `--mda`
 
-- message search filters:
-  - `--older-than DAYS`
-  : operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc
-  - `--newer-than DAYS`
-  : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
-  - `--older-than-timestamp-in PATH`
-  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
-  - `--newer-than-timestamp-in PATH`
-  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
-  - `--older-than-mtime-of PATH`
-  : operate on messages older than `mtime` of this PATH, rounded as above (can be specified multiple times)
-  - `--newer-than-mtime-of PATH`
-  : operate on messages newer than `mtime` of this PATH, rounded as above (can be specified multiple times)
-  - `--from ADDRESS`
-  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
-  - `--not-from ADDRESS`
-  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
-
-- message flag filters:
+- message IMAP `SEEN` flag filters:
   - `--any-seen`
   : operate on both `SEEN` and not `SEEN` messages
   - `--seen`
   : operate on messages marked as `SEEN`
   - `--unseen`
   : operate on messages not marked as `SEEN` (default)
+
+- message IMAP `FLAGGED` flag filters:
   - `--any-flagged`
   : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
@@ -600,31 +570,15 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   - `--not-folder NAME`
   : mail folders to exclude; can be specified multiple times
 
-- message search filters:
-  - `--older-than DAYS`
-  : operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc
-  - `--newer-than DAYS`
-  : operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc
-  - `--older-than-timestamp-in PATH`
-  : operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
-  - `--newer-than-timestamp-in PATH`
-  : operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as above (can be specified multiple times)
-  - `--older-than-mtime-of PATH`
-  : operate on messages older than `mtime` of this PATH, rounded as above (can be specified multiple times)
-  - `--newer-than-mtime-of PATH`
-  : operate on messages newer than `mtime` of this PATH, rounded as above (can be specified multiple times)
-  - `--from ADDRESS`
-  : operate on messages that have this string as substring of their header's FROM field; can be specified multiple times
-  - `--not-from ADDRESS`
-  : operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times
-
-- message flag filters:
+- message IMAP `SEEN` flag filters:
   - `--any-seen`
   : operate on both `SEEN` and not `SEEN` messages
   - `--seen`
   : operate on messages marked as `SEEN` (default)
   - `--unseen`
   : operate on messages not marked as `SEEN`
+
+- message IMAP `FLAGGED` flag filters:
   - `--any-flagged`
   : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`

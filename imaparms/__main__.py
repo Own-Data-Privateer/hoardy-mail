@@ -1116,9 +1116,6 @@ def make_argparser(real : bool = True) -> _t.Any:
                                                                                              _(f"if you run `{__package__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
         return cmd
 
-    if not real:
-        add_common(parser)
-
     def add_folders(cmd : _t.Any, all_by_default : _t.Optional[bool]) -> _t.Any:
         def_fall, def_freq = "", ""
         if all_by_default is None:
@@ -1147,7 +1144,7 @@ def make_argparser(real : bool = True) -> _t.Any:
         cmd.add_argument("--not-folder", metavar = "NAME", dest="not_folders", action="append", type=str, default=argparse.SUPPRESS)
         return cmd
 
-    def add_filters(cmd : _t.Any, default : _t.Union[_t.Optional[bool], str]) -> _t.Any:
+    def add_common_filters(cmd : _t.Any) -> _t.Any:
         agrp = cmd.add_argument_group(_("message search filters"))
         agrp.add_argument("--older-than", metavar = "DAYS", type=int, help=_("operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc"))
         agrp.add_argument("--newer-than", metavar = "DAYS", type=int, help=_("operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc"))
@@ -1160,7 +1157,9 @@ def make_argparser(real : bool = True) -> _t.Any:
 
         agrp.add_argument("--from", dest="hfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that have this string as substring of their header's FROM field; can be specified multiple times"))
         agrp.add_argument("--not-from", dest="hnotfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times"))
+        return cmd
 
+    def add_flag_filters(cmd : _t.Any, default : _t.Union[_t.Optional[bool], str]) -> _t.Any:
         def_req = ""
         def_str = " " + _("(default)")
         def_all, def_seen, def_unseen = "", "", ""
@@ -1175,7 +1174,7 @@ def make_argparser(real : bool = True) -> _t.Any:
         else:
             assert False
 
-        agrp = cmd.add_argument_group(_("message flag filters") + def_req)
+        agrp = cmd.add_argument_group(_("message IMAP `SEEN` flag filters") + def_req)
 
         grp = agrp.add_mutually_exclusive_group()
         grp.add_argument("--any-seen", dest="seen", action="store_const", const = None, help=_("operate on both `SEEN` and not `SEEN` messages") + def_all)
@@ -1183,6 +1182,7 @@ def make_argparser(real : bool = True) -> _t.Any:
         grp.add_argument("--unseen", dest="seen", action="store_false", help=_("operate on messages not marked as `SEEN`") + def_unseen)
         grp.set_defaults(seen = default)
 
+        agrp = cmd.add_argument_group(_("message IMAP `FLAGGED` flag filters") + def_req)
         grp = agrp.add_mutually_exclusive_group()
         grp.add_argument("--any-flagged", dest="flagged", action="store_const", const = None, help=_("operate on both `FLAGGED` and not `FLAGGED` messages") + def_str)
         grp.add_argument("--flagged", dest="flagged", action="store_true", help=_("operate on messages marked as `FLAGGED`"))
@@ -1205,6 +1205,10 @@ def make_argparser(real : bool = True) -> _t.Any:
         sys.exit(2)
     parser.set_defaults(func=no_cmd)
 
+    if not real:
+        add_common(parser)
+        add_common_filters(parser)
+
     subparsers = parser.add_subparsers(title="subcommands")
 
     cmd = subparsers.add_parser("list", help=_("list all available folders on the server, one per line"),
@@ -1218,7 +1222,8 @@ def make_argparser(real : bool = True) -> _t.Any:
     add_folders(cmd, True)
     def add_count(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(command="count")
-        add_filters(cmd, None)
+        if real: add_common_filters(cmd)
+        add_flag_filters(cmd, None)
         cmd.add_argument("--porcelain", action="store_true", help=_("print in a machine-readable format"))
         return cmd
     add_count(cmd)
@@ -1230,7 +1235,8 @@ def make_argparser(real : bool = True) -> _t.Any:
     add_folders(cmd, False)
     def add_mark(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(command="mark")
-        add_filters(cmd, "depends")
+        if real: add_common_filters(cmd)
+        add_flag_filters(cmd, "depends")
         agrp = cmd.add_argument_group("marking")
         sets_x_if = _("sets `%s` if no message flag filter is specified")
         agrp.add_argument("mark", choices=["seen", "unseen", "flagged", "unflagged"], help=_("mark how") + " " + _("(required)") + f""":
@@ -1250,7 +1256,8 @@ def make_argparser(real : bool = True) -> _t.Any:
     def add_fetch(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(command="fetch")
         add_delivery(cmd)
-        add_filters(cmd, False)
+        if real: add_common_filters(cmd)
+        add_flag_filters(cmd, False)
         agrp = cmd.add_argument_group("marking")
         agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
 - `auto`: {_('`seen` when only `--unseen` is set (default), `flagged` when only `--unflagged` is set, `noop` otherwise')}
@@ -1270,7 +1277,8 @@ def make_argparser(real : bool = True) -> _t.Any:
     add_folders(cmd, False)
     def add_delete(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(command="delete")
-        add_filters(cmd, True)
+        if real: add_common_filters(cmd)
+        add_flag_filters(cmd, True)
         agrp = cmd.add_argument_group(_("deletion method"))
         agrp.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help=_("delete messages how") + f""":
 - `auto`: {_('`gmail-trash` when `--host imap.gmail.com` and the current folder is not `[Gmail]/Trash`, `delete` otherwise')} {_("(default)")}
