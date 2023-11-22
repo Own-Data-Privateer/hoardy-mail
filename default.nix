@@ -13,13 +13,16 @@ buildPythonApplication (rec {
   src = lib.cleanSourceWith {
     src = ./.;
     filter = name: type: let baseName = baseNameOf (toString name); in
-      lib.cleanSourceFilter name type && ! (
-        (baseName == "default.nix") ||
-        (baseName == "dist") ||
-        (baseName == "result") ||
-        (baseName == "results") ||
-        (baseName == "__pycache__")
-      );
+      lib.cleanSourceFilter name type
+      && (builtins.match ".*.un~" baseName == null)
+      && (baseName != "default.nix")
+      && (baseName != "dist")
+      && (baseName != "result")
+      && (baseName != "results")
+      && (baseName != "__pycache__")
+      && (baseName != ".mypy_cache")
+      && (baseName != ".pytest_cache")
+      ;
   };
 
   propagatedBuildInputs = [
@@ -30,5 +33,6 @@ buildPythonApplication (rec {
     mypy
   ];
 
-  preBuild = "mypy";
+  preBuild = "find . ; mypy";
+  postInstall = "find $out";
 })
