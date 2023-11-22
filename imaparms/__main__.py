@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright (c) 2023 Jan Malakovski <oxij@oxij.org>
+# Copyright (c) 2023 Jan Malakhovski <oxij@oxij.org>
 #
 # This file can be distributed under the terms of the GNU GPL, version 3 or later.
 
@@ -443,7 +443,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
             func(cfg, state, account, srv, *args)
         except AccountFailure as exc:
             state.errors += 1
-            error(exc.show())
+            error(str(exc))
         finally:
             try:
                 srv.logout()
@@ -570,7 +570,7 @@ def for_each_folder(cfg : Namespace, state : State, account : Account, srv : IMA
             func(cfg, state, account, srv, folder, *args)
         except FolderFailure as exc:
             state.errors += 1
-            error(exc.show())
+            error(str(exc))
         finally:
             srv.close()
 
@@ -1352,7 +1352,7 @@ def main() -> None:
     try:
         cfg = parser.parse_args(sys.argv[1:])
     except CatastrophicFailure as exc:
-        error(exc.show())
+        error(str(exc))
         sys.exit(1)
 
     if cfg.help:
@@ -1375,7 +1375,7 @@ def main() -> None:
         cfg.func(cfg, state)
     except CatastrophicFailure as exc:
         state.errors += 1
-        error(exc.show())
+        error(str(exc))
     except KeyboardInterrupt:
         state.errors += 1
         error(_("Interrupted!"))
