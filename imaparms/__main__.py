@@ -464,7 +464,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
 
 def cmd_list(cfg : Namespace, state : State) -> None:
     if cfg.very_dry_run: sys.exit(1)
-    for_each_account_poll(cfg, state, False, do_list)
+    for_each_account_poll(cfg, state, do_list)
 
 def do_list(cfg : Namespace, state : State, account : Account, srv : IMAP4) -> None:
     folders = get_folders(srv)
