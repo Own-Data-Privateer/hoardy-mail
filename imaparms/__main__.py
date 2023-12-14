@@ -177,8 +177,9 @@ imap_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "O
 def imap_date(date : time.struct_time) -> str:
     return f"{str(date.tm_mday)}-{imap_months[date.tm_mon-1]}-{str(date.tm_year)}"
 
-def make_search_filter(cfg : Namespace) -> str:
+def make_search_filter(cfg : Namespace) -> _t.Tuple[str, bool]:
     filters = []
+    dynamic = False
 
     if cfg.seen is not None:
         if cfg.seen:
@@ -222,6 +223,7 @@ def make_search_filter(cfg : Namespace) -> str:
     if len(older_than) > 0:
         date = time.gmtime(min(older_than) / 10**9)
         filters.append(f"BEFORE {imap_date(date)}")
+        dynamic = True
 
     newer_than = []
     for dt in cfg.newer_than:
@@ -236,11 +238,12 @@ def make_search_filter(cfg : Namespace) -> str:
     if len(newer_than) > 0:
         date = time.gmtime(max(newer_than) / 10**9)
         filters.append(f"NOT BEFORE {imap_date(date)}")
+        dynamic = True
 
     if len(filters) == 0:
-        return "(ALL)"
+        return "(ALL)", dynamic
     else:
-        return "(" + " ".join(filters) + ")"
+        return "(" + " ".join(filters) + ")", dynamic
 
 def die(desc : str, code : int = 1) -> None:
     sys.stderr.write(gettext("error") + ": " + desc + "\n")
@@ -522,14 +525,15 @@ def prepare_cmd(cfg : Namespace) -> None:
     if cfg.not_folders:
         place += " " + gettext("excluding %s") % (", ".join(map(repr, cfg.not_folders)),)
 
-    search_filter = make_search_filter(cfg)
-    if cfg.every is not None:
-        search_filter += " " + gettext("{dynamic}")
+    search_filter, dynamic = make_search_filter(cfg)
+    sf = search_filter
+    if cfg.every is not None and dynamic:
+        sf += " " + gettext("{dynamic}")
 
     if "mark" in cfg:
-        what = gettext(f"search %s, perform {cfg.command}, mark them as %s") % (search_filter, cfg.mark.upper())
+        what = gettext(f"search %s, perform {cfg.command}, mark them as %s") % (sf, cfg.mark.upper())
     else:
-        what = gettext(f"search %s, perform {cfg.command}") % (search_filter,)
+        what = gettext(f"search %s, perform {cfg.command}") % (sf,)
 
     print(f"... {place}: {what}")
 
@@ -576,7 +580,7 @@ def for_each_folder(cfg : Namespace, state : State, account : Account, srv : IMA
 
 def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IMAP4,
                      folder : str, command : str) -> None:
-    search_filter = make_search_filter(cfg)
+    search_filter, _ = make_search_filter(cfg)
 
     typ, data = srv.uid("SEARCH", search_filter)
     if typ != "OK":
