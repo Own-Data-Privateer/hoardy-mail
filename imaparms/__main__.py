@@ -177,7 +177,7 @@ imap_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "O
 def imap_date(date : time.struct_time) -> str:
     return f"{str(date.tm_mday)}-{imap_months[date.tm_mon-1]}-{str(date.tm_year)}"
 
-def make_search_filter(cfg : Namespace) -> _t.Tuple[str, bool]:
+def make_search_filter(cfg : Namespace, now : int) -> _t.Tuple[str, bool]:
     filters = []
     dynamic = False
 
@@ -207,8 +207,6 @@ def make_search_filter(cfg : Namespace) -> _t.Tuple[str, bool]:
                 return int(decimal.Decimal(data) * 10**9)
             except Exception:
                 raise Failure("failed to decode a timestamp from the first line of %s", path)
-
-    now = time.time_ns()
 
     older_than = []
     for dt in cfg.older_than:
@@ -466,7 +464,9 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
                 pass
 
 def cmd_list(cfg : Namespace, state : State) -> None:
-    if cfg.very_dry_run: sys.exit(1)
+    if cfg.very_dry_run:
+        sys.exit(1)
+
     for_each_account_poll(cfg, state, do_list)
 
 def do_list(cfg : Namespace, state : State, account : Account, srv : IMAP4) -> None:
@@ -494,7 +494,7 @@ def print_prelude(cfg : Namespace) -> None:
         print("... " + _("user %s on host %s port %d (%s)") % (acc.user, acc.host, acc.port, acc.socket.upper()))
     print("# " + _("do"))
 
-def prepare_cmd(cfg : Namespace) -> None:
+def prepare_cmd(cfg : Namespace, now : int) -> str:
     if cfg.command == "mark":
         if cfg.seen is None and cfg.flagged is None:
             if cfg.mark == "seen":
@@ -525,7 +525,7 @@ def prepare_cmd(cfg : Namespace) -> None:
     if cfg.not_folders:
         place += " " + gettext("excluding %s") % (", ".join(map(repr, cfg.not_folders)),)
 
-    search_filter, dynamic = make_search_filter(cfg)
+    search_filter, dynamic = make_search_filter(cfg, now)
     sf = search_filter
     if cfg.every is not None and dynamic:
         sf += " " + gettext("{dynamic}")
@@ -537,26 +537,41 @@ def prepare_cmd(cfg : Namespace) -> None:
 
     print(f"... {place}: {what}")
 
+    return search_filter
+
 def cmd_action(cfg : Namespace, state : State) -> None:
     print_prelude(cfg)
-    prepare_cmd(cfg)
-    if cfg.very_dry_run: sys.exit(1)
-    for_each_account_poll(cfg, state, for_each_folder, do_folder_action, cfg.command)
+    now = time.time_ns()
+    cfg.search_filter = prepare_cmd(cfg, now)
+
+    if cfg.very_dry_run:
+        sys.exit(1)
+
+    for_each_account_poll(cfg, state, for_each_folder_multi, [cfg])
 
 def cmd_multi_action(common_cfg : Namespace, state : State, subcfgs : _t.List[Namespace]) -> None:
     print_prelude(common_cfg)
+    now = time.time_ns()
     for subcfg in subcfgs:
-        prepare_cmd(subcfg)
-    if common_cfg.very_dry_run: sys.exit(1)
+        subcfg.search_filter = prepare_cmd(subcfg, now)
+
+    if common_cfg.very_dry_run:
+        sys.exit(1)
+
     for_each_account_poll(common_cfg, state, for_each_folder_multi, subcfgs)
 
 def for_each_folder_multi(common_cfg : Namespace, state : State, account : Account, srv : IMAP4,
                           subcfgs : _t.List[Namespace]) -> None:
-    for subcfg in subcfgs:
-        for_each_folder(subcfg, state, account, srv, do_folder_action, subcfg.command)
+    if common_cfg.every is not None:
+        now = time.time_ns()
+        for subcfg in subcfgs:
+            subcfg.search_filter, _ = make_search_filter(subcfg, now)
 
-def for_each_folder(cfg : Namespace, state : State, account : Account, srv : IMAP4,
-                    func : _t.Callable[..., None], *args : _t.Any) -> None:
+    for subcfg in subcfgs:
+        for_each_folder_(subcfg, state, account, srv, do_folder_action, subcfg.command)
+
+def for_each_folder_(cfg : Namespace, state : State, account : Account, srv : IMAP4,
+                     func : _t.Callable[..., None], *args : _t.Any) -> None:
     if cfg.all_folders:
         folders = get_folders(srv)
     else:
@@ -580,9 +595,8 @@ def for_each_folder(cfg : Namespace, state : State, account : Account, srv : IMA
 
 def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IMAP4,
                      folder : str, command : str) -> None:
-    search_filter, _ = make_search_filter(cfg)
 
-    typ, data = srv.uid("SEARCH", search_filter)
+    typ, data = srv.uid("SEARCH", cfg.search_filter)
     if typ != "OK":
         raise imap_exc(FolderFailure, "SEARCH", typ, data)
 
@@ -598,7 +612,7 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
         if cfg.porcelain:
             print(f"{len(message_uids)} {folder}")
         else:
-            print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), search_filter))
+            print(gettext("folder `%s` has %d messages matching %s") % (folder, len(message_uids), cfg.search_filter))
         return
 
     act : str
@@ -606,10 +620,10 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
     method = None
     if command == "mark":
         act = "marking as %s %d messages matching %s from folder `%s`"
-        actargs  = (cfg.mark.upper(), len(message_uids), search_filter, folder)
+        actargs  = (cfg.mark.upper(), len(message_uids), cfg.search_filter, folder)
     elif command == "fetch":
         act = "fetching %d messages matching %s from folder `%s`"
-        actargs  = (len(message_uids), search_filter, folder)
+        actargs  = (len(message_uids), cfg.search_filter, folder)
     elif command == "delete":
         if cfg.method == "auto":
             if account.host == "imap.gmail.com" and folder != "[Gmail]/Trash":
@@ -621,10 +635,10 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
 
         if method in ["delete", "delete-noexpunge"]:
             act = "deleting %d messages matching %s from folder `%s`"
-            actargs  = (len(message_uids), search_filter, folder)
+            actargs  = (len(message_uids), cfg.search_filter, folder)
         elif method == "gmail-trash":
             act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
-            actargs  = (len(message_uids), search_filter, folder)
+            actargs  = (len(message_uids), cfg.search_filter, folder)
         else:
             assert False
     else:
