@@ -944,7 +944,7 @@ fetchmail
     fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder INBOX --any-seen --newer-than 7')
     fmt.end_section()
 
-    fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time)"))
+    fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time), without changing any flags"))
     fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder INBOX --any-seen --newer-than 0')
     fmt.end_section()
 
@@ -1343,7 +1343,7 @@ def make_argparser(real : bool = True) -> _t.Any:
         # run them
         cmd_multi_action(cfg, state, subcfgs)
 
-    cmd = subparsers.add_parser("for-each", help=_("perform multiple other subcommands while sharing a single server connection"),
+    cmd = subparsers.add_parser("for-each", help=_("perform multiple other subcommands, sequentially, on a single server connection"),
                                 description = _("""For each account: login, perform other subcommands given in `ARG`s, logout.
 
 This is most useful for performing complex changes `--every` once in while in daemon mode.

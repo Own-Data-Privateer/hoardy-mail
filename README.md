@@ -1,25 +1,98 @@
-# What?
+# What is `imaparms`?
 
-`imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
+`imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool/utility/console app for POSIX-compatible systems that can help you to download/backup all your mail/email from an IMAP server (e.g. GMail) to your hard disk, programmatically change flags on messages on the IMAP server (e.g. mark all messages newer than a day old in some folder as unread), delete old messages from the IMAP server, and similar.
+
+Or, more formally: `imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
 That is: login to a specified server, fetch or perform specified actions (count, flag/mark, delete, etc) on all messages matching specified criteria in all specified folders, logout.
 
-This tool was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) and is basically a generalized combination of the two.
+![](https://oxij.org/software/screen/imaparms-v2.2.webm "Screen cast of imaparms invocation (this is a log of an actual invocation with account data edited out)")
 
-# Why?
+# Why does `imaparms` exist?
 
-`imaparms` is intended to be used as a IMAP-server-to-local-`Maildir` [Mail Delivery Agent](https://en.wikipedia.org/wiki/Message_delivery_agent) (MDA, aka Local Delivery Agent, LDA, when used to deliver to the same machine) that keeps the IMAP server in question store as little mail as possible while preventing data loss.
+Remember the time when YouTube and Facebook showed you only the posts of people you were subscribed to?
+After they locked your in by becoming a monopoly by providing fairly good social networking services for free for years (selling under cost is textbook monopolistic behaviour) they started showing "promoted" posts (i.e. advertisements) in your feed so that they could provide cheap and very effective advertisement services for companies at your expense.
+Then, when advertisers were locked in, they started fleecing them too.
+
+Now your subscriptions are just one of the inputs to their algorithms that are designed to make you waste as much time as possible on their platforms (while keeping you satisfied or addicted just enough so that you wouldn't just leave), and advertisers' ad postings are just inputs to their algorithms that are designed to waste as much of the advertiser's money as possible (being just effective enough to make them spend more).
+
+(The process which Cory Doctorow calls "Enshittification".)
+
+Remember the time when most people run their own mail servers or had their employers run them and you yourself got to decide which messages should go to `INBOX` and which should be marked as spam?
+Today, Google provides email service for free, and so >70% of all e-mails originate from or get delivered to Google servers (GMail, GMail on custom domains, corporate GMail).
+Now it's Google who decides which messages you get to see and which vanish into the void without a trace.
+
+Which, as a recipient, is highly annoying if you frequently get useful mail that GMail marks as spam or just drops (happens all the time to me).
+And, as a sender, is highly annoying when you need to send lots of mail.
+Just go look up "Gmail Email Limits" (on a search engine other than Google).
+It's a rabbit hole with lots of ad-hoc rules on just how much mail you can send before GMail decides to just drop your messages, yes, **drop**, not mark as spam, not reject, **they will drop your mail and tell neither you nor the recipient anything at all**.
+
+Moreover, they are now working towards making their `INBOX` into an algorithmically generated feed with "important" messages being shown first.
+It's easy to see where this is going.
+
+Luckily, [while Google is working hard to discourage you from using and/or make open mail protocols unusable](#gmail), IMAP is still #1 protocol for accessing and managing mail, and setting up your own mail server gets easier every year, so they can't just stop supporting it just yet (but they are doing their best).
+
+**But**, objectively, GMail --- when it works --- is a very nice [Mail User Agent](https://en.wikipedia.org/wiki/Mail_user_agent) (aka MUA, aka email client, aka mail app) with an integrated full-text search engine and a labeling system.
+
+Meanwhile, other modern MUAs like [Thunderbird](https://www.thunderbird.net/), [Sylpheed](https://sylpheed.sraoss.jp/en/), or [K-9 Mail](https://k9mail.app/) are designed to be IMAP and SMTP clients *first*, full-text search and tagging/labeling systems *second* (if at all).
+Which is to say, they suck at searching and tagging mail.
+Especially, since doing those things over IMAP is annoyingly slow, especially when your IMAP server is GMail which very much does not want you to use IMAP (after all, with a MUA working over IMAP, it's the MUA that decides how to sort and display your `INBOX`, not Google, and they hate they can't turn the order of messages in your `INBOX` into something they can sell).
+
+**However**, there exists a bunch of MUAs that can do full-text mail search and tagging so well and so blazingly fast that they leave GMail in the dust (from a technical standpoint, given an index, full-text search >10x faster than GMail on a single-core 2013-era laptop with an SSD is pretty easy to archive, simply because your SSD is much closer to you than GMail's servers).
+
+**But**, to make those MUAs do their work you need to download your mail and save it in [`Maildir` format](https://en.wikipedia.org/wiki/Maildir) on your hard disk and index it first.
+
+(Also, if GMail suddenly decides to take your mail hostage by locking you into their web-mail and disabling IMAP access, [which seems more and more plausible every year](#gmail), having a local copy of most of your mail will make it much easier to switch away.)
+
+Which is where `imaparms` and similar tools like [fetchmail](https://www.fetchmail.info/), [getmail](https://github.com/getmail6/getmail6), [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), and etc come in.
+
+Some examples of awesome MUAs that support the above workflow that I know of, in the order from simplest to hardest to setup:
+
+- [sup](https://sup-heliotrope.github.io/) ([also this](https://github.com/sup-heliotrope/sup)) as both MUA and mail indexer,
+- [alot](https://github.com/pazz/alot) as MUA + [notmuch](https://notmuchmail.org/) as mail indexer,
+- Emacs UI of [notmuch](https://notmuchmail.org/) as MUA + [notmuch](https://notmuchmail.org/) as mail indexer,
+- [Mutt](https://en.wikipedia.org/wiki/Mutt_(e-mail_client)) as MUA + [notmuch](https://notmuchmail.org/) as mail indexer.
+
+In theory, [Thunderbird](https://www.thunderbird.net/) also supports operation over `Maildir`, but that feature is so buggy it's apparently disabled by default at the moment.
+
+See ["The Homely Mutt" by Steve Losh](https://stevelosh.com/blog/2012/10/the-homely-mutt/) for a long in-detail explanation on how this setup in general is supposed to work.
+It describes a setup specifically tailored for `mutt` + `notmuch` + `offlineimap` + `msmtp` and the actual configs there are somewhat outdated (it was written in 2012) and much more complex than what you would need with, e.g. `sup` + `imaparms` + `msmtp`, but it gives a good overview of the idea in general.
+Functionally, `imaparms` takes place `offlineimap` in that article.
+
+Personally, I use `notmuch` with Emacs, which requires almost no setup if you have a well-configured Emacs already (and effectively infinite amounts of setup otherwise).
+
+Also, see ["Sup" article on ArchWiki](https://wiki.archlinux.org/title/Sup) for how to setup `sup`.
+
+**After** you set this all up, learned to use it, and setup regular backup/synchronization of your mail, mail index and tag/labels data with a generic file synchronization tool like [syncthing](https://syncthing.net/), [bup](https://bup.github.io/), [rsync](https://rsync.samba.org/), or just [git](https://git-scm.com/), you effectively demoted your use of IMAP from a mail access protocol to a mail delivery protocol.
+
+After which you might start asking yourself, why are you still keeping your old already backed up messages on the IMAP server?
+Don't they just lay there, waiting to be stolen?
+Wouldn't it be nice if there was a way to automate deletion of old mail from IMAP servers in such a way that any of your own systems crashing or losing a hard drive at any point in time would not lose any of your mail.
+
+Which is where the unique feature set of `imaparms` comes in.
+
+# Features
+
+`imaparms` was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) and is basically a *safe* generalized combination of the two.
+
+I used to use and (usually privately, but sometimes not) patch both `fetchmail` and `IMAPExpire` for years before getting tired of it and deciding it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and fix all the issues making it inconvenient and unsafe to run `IMAPExpire` immediately after `fetchmail` finishes fetching mail: `fetchmail` fetches yet-*unfetched* mail, `IMAPExpire` expires *old* mail, in cases when `fetchmail` gets stuck or crashes it is entirely possible for `IMAPExpire` to delete some old yet-unfetched messages.
+
+In other words, `imaparms` was designed to be used as a IMAP-server-to-local-`Maildir` [Mail Delivery Agent](https://en.wikipedia.org/wiki/Message_delivery_agent) (MDA, aka Local Delivery Agent, LDA, when used to deliver to the same machine) that makes the IMAP server in question store as little mail as possible while preventing data loss.
+
 Which is to say, the main use case I made this for is as follows:
 
-- you periodically fetch your mail to a local `Maildir` (or `mbox`) with this tool's `imaparms fetch` subcommand (which does what `fetchmail --softbounce --invisible --norewrite --mda MDA` does but >150x faster), then
-- you backup your `Maildir` with `rsync`/`git`/`bup`/etc to make at least one other copy somewhere, and then, after your backup succeeds,
+- you periodically fetch your mail to a local `Maildir` (or `mbox`) with this tool's `imaparms fetch` subcommand (which does what `fetchmail --softbounce --invisible --norewrite --mda MDA` does but much faster), then
+- you backup your `Maildir` with `syncthing`/`bup`/`rsync`/`git`/etc to make at least one other copy somewhere, and then, after your backup succeeds,
 - you run this tool's `imaparms delete` subcommand to expire old already-fetched messages from the server (I prefer to expire messages `--older-than` some number of intervals between backups, just to be safe, but if you do backups directly after the `fetch`, or you like to live dangerously, you could delete old messages immediately), so that
 - when/if your account get cracked/hacked the attacker only gets your unfetched mail (+ configurable amount of yet to be removed messages), which is much better than them getting the whole last 20 years or whatever of your correspondence. (If your personal computer gets compromised enough, attackers will eventually get everything anyway, so deleting old mail from servers does not make things worse. But see some more thoughts on this below.)
 
-I used to use and (usually privately, but sometimes not) patch both `fetchmail` and `IMAPExpire` for years before getting tired of it and deciding it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and fix all the issues making it inconvenient and unsafe to run `IMAPExpire` immediately after `fetchmail` finishes fetching mail.
+Also, `imaparms` seems to be one of the fastest, if not the fastest, IMAP fetchers there is.
+By default, it fetches mail >150 times faster than [fetchmail](https://www.fetchmail.info/) (and [getmail](https://github.com/getmail6/getmail6)), but if your IMAP server supports long enough command lines, your system can do SSL and your hard drive can flush data fast enough, then you can saturate a gigabit Ethernet link with `imaparms`.
 
 Since bootstrapping into either of these setups requires some querying into actual IMAP folder names and mass changes to flags on IMAP server-side, `imaparms` provides subcommands for that too.
 
-Also, you can run `imaparms fetch` with `--any-seen --unflagged` command line options instead of the implied `--unseen --any-flagged` options, which will make it use the `FLAGGED` IMAP flag instead of the `SEEN` IMAP flag to track state, allowing you to run it simultaneously with tools that use the `SEEN` flag, like `fetchmail`, and then simply delete duplicated files.
+See the "subcommands" subsection of the [usage section](#usage) for the list available of subcommands and explanations of what they do.
+
+Also, if you are really paranoid, you can run `imaparms fetch` with `--any-seen --unflagged` command line options instead of the implied `--unseen --any-flagged` options, which will make it use the `FLAGGED` IMAP flag instead of the `SEEN` IMAP flag to track state, allowing you to run it simultaneously with tools that use the `SEEN` flag, like `fetchmail`, and then simply delete duplicated files.
 I.e. if you are really paranoid, you could use that feature to check files produced by `fetchmail` and `imaparms fetch` against each other, see below.
 
 # Quickstart
@@ -40,16 +113,16 @@ I.e. if you are really paranoid, you could use that feature to check files produ
   ```
 - Alternatively, run without installing:
   ``` {.bash}
-  python3 -m imaparms.__main__ --help
+  python3 -m imaparms --help
   ```
 
 ## How to: fetch all your mail from GMail
 
-`imaparms` is not *intended* as a *backup* utility (it is intended as a better replacement for `fetchmail`+`IMAPExpire` combination), but it can be used as one if you are willing to sacrifice either of `SEEN` or `FLAGGED` ("starred") IMAP flags for it.
+`imaparms` is not *intended* as a *mail backup/mirroring utility*, it is intended to be used as a *mail delivery agent with automatic expiration of old server-side mail*, i.e. a better replacement for `fetchmail`+`IMAPExpire` combination.
+If you want to keep a synchronized copy of your mail locally and on your mail server without sacrificing any flags, you should use [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), or something similar instead.
 
-(If you want to keep a synchronized copy of your mail locally and on your mail server without sacrificing any flags, you should use [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), or something similar instead.)
-
-However, using `imaparms` for backups/mirroring is illustrative, so a couple of examples follow.
+However, `imaparms` can be used for efficient incremental backups of IMAP server data if you are willing to sacrifice either of `SEEN` or `FLAGGED` ("starred") IMAP flags for it.
+Also, using `imaparms` for mail backups is illustrative, so a couple of examples follow.
 
 All examples on this page use `maildrop` MDA/LDA from [Courier Mail Server project](https://www.courier-mta.org/), which is the simplest commodity LDA with the simplest setup I know of.
 But, of course, you can use anything else.
@@ -104,9 +177,13 @@ imaparms fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry --
 
 This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `--unseen`, or mark it as flagged ("star") it there while using `--unflagged`, `imaparms` will ignore the message on the next `fetch`.
 
+## What do I do with the resulting `Maildir`?
+
+You feed it into [sup](https://sup-heliotrope.github.io/) or [notmuch](https://notmuchmail.org/), as discussed above, and it gives you a GMail-like UI with full-text search and tagging, but with faster search, with no cloud storage involvement, and it works while you are offline.
+
 ## How to: implement "fetch + backup + expire" workflow
 
-The intended workflow described [above](#why) looks like this:
+The intended workflow described [above](#features) looks like this:
 
 ``` {.bash}
 # setup: do once
@@ -173,7 +250,7 @@ You can check your command lines by running with `--very-dry-run` option, for th
 
 ## How to: implement the paranoid version of "fetch + backup + expire" workflow
 
-The paranoid/double-backup workflow described [above](#why) that uses `fetchmail` in parallel can be implemented like this:
+The paranoid/double-backup workflow described [above](#features) that uses `fetchmail` in parallel can be implemented like this:
 
 ``` {.bash}
 # setup: do once
@@ -223,27 +300,23 @@ See the [usage section](#usage) for explanation of used command line options.
 
 See the [examples section](#examples) for more examples.
 
-See [notmuch](https://notmuchmail.org/) for my preferred KISS mail indexer and Mail User Agent (MUA).
-Of course, you can use anything else, e.g. Thunderbird, just configure it to use the local `Maildir` as the "mail account".
-Or you could point your own local IMAP server to your `Maildir` and use any mail client that can use IMAP, but locally.
-
 # Comparison to
 
-## [fetchmail](https://www.fetchmail.info/)
+## [fetchmail](https://www.fetchmail.info/) and [getmail](https://github.com/getmail6/getmail6)
 
 `imaparms fetch`
 
-- fetches your mail >150 times faster by default (`fetchmail` fetches and marks messages one-by-one, incurring huge network latency overheads, `imaparms fetch` does it in (configurable) batches);
+- fetches your mail >150 times faster by default (both `fetchmail` and `getmail` fetch and mark messages one-by-one, incurring huge network latency overheads, `imaparms fetch` does it in (configurable) batches);
 - fetches messages out-of-order to try and maximize `messages/second` metric when it makes sense (i.e. it temporarily delays fetching of larger messages if many smaller ones can be fetched instead) so that you could efficiently index your mail in parallel with fetching;
-- only does deliveries to [MDA/LDA](https://en.wikipedia.org/wiki/Message_delivery_agent) (similar to `fetchmail --mda` option), deliveries over SMTP are not and will never be supported (if you want this you can just use [msmtp](https://marlam.de/msmtp/) as your MDA);
-- thus this tool is much simpler to use when fetching to a local `Maildir` as it needs no configuration to fetch messages as-is without modifying any headers, thus fetching the same messages twice will produce identical files (which is not true for `fetchmail`, `imaparms --mda MDA fetch` is roughly equivalent to `fetchmail --softbounce --invisible --norewrite --mda MDA`);
+- only does deliveries to [MDA/LDA](https://en.wikipedia.org/wiki/Message_delivery_agent) (similar to `fetchmail --mda` and `getmail`'s `MDA_external` options), deliveries over SMTP are not and will never be supported (if you want this you can just use [msmtp](https://marlam.de/msmtp/) as your MDA); thus, `imaparms`
+- is much simpler to use when fetching to a local `Maildir` as it needs no configuration to fetch messages as-is without modifying any headers, thus fetching the same messages twice will produce identical files (which is not true for `fetchmail`, `imaparms --mda MDA fetch` is roughly equivalent to `fetchmail --softbounce --invisible --norewrite --mda MDA`);
 - probably will not work with most broken IMAP servers (`fetchmail` has lots of workarounds for server bugs, `imaparms fetch` does not);
-- is written in Python instead of C;
+- is written in Python (like `getmail`) instead of C (like `fetchmail`);
 - has other subcommands, not just `imaparms fetch`.
 
 ## [fdm](https://github.com/nicm/fdm)
 
-[Better explanation of what fdm does](https://wiki.archlinux.org/title/fdm).
+[A better explanation of what fdm does](https://wiki.archlinux.org/title/fdm).
 
 `imaparms fetch`
 
@@ -265,7 +338,10 @@ Or you could point your own local IMAP server to your `Maildir` and use any mail
 
 ## [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), and similar
 
-- `imaparms fetch` does deliveries from an IMAP server to your MDA instead of trying to synchronize state between some combinations of IMAP servers and local `Maildir`s (i.e. for `imaparms fetch` your IMAP server is always the source, never a destination);
+- `imaparms fetch` does deliveries from an IMAP server to your MDA instead of trying to synchronize state between some combinations of IMAP servers and local `Maildir`s (i.e. for `imaparms fetch` your IMAP server is always the source, never a destination):
+  - which is seems like a lack of a feature at first, but
+  - `imaparms` lacking two-way sync also prevents you from screwing up your `imaparms` invocation options or restarting the program at an inopportune time and losing all your mail on the server on the next sync as a result (like you can with `offlineimap`),
+  - i.e., with `imaparms` you won't ever lose any messages on the server if you never run `imaparms delete`, and if you do run `imaparms delete`, `imaparms`'s defaults try their best to prevent you from deleting any mail you probably did not mean to delete;
 - `imaparms` has other subcommands, not just `imaparms fetch`.
 
 # Some Fun and Relevant Facts
@@ -438,7 +514,7 @@ Logins to a specified server, performs specified actions on all messages matchin
     - `delete`
     : delete matching messages from specified folders
     - `for-each`
-    : perform multiple other subcommands while sharing a single server connection
+    : perform multiple other subcommands, sequentially, on a single server connection
 
 ### imaparms list
 
@@ -706,7 +782,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   imaparms fetch "${common_mda[@]}" --folder INBOX --any-seen --newer-than 7
   ```
 
-- Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time):
+- Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time), without changing any flags:
   ```
   imaparms fetch "${common_mda[@]}" --folder INBOX --any-seen --newer-than 0
   ```
