@@ -1,3 +1,9 @@
+# This file is a part of kisstdlib project.
+#
+# This file can be distributed under the terms of the MIT-style license given
+# below or Python Software Foundation License version 2 (PSF-2.0) as published
+# by Python Software Foundation.
+#
 # Copyright (c) 2022-2023 Jan Malakhovski <oxij@oxij.org>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -17,12 +23,6 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-#
-# This file is a part of kisstdlib project.
-#
-# This file can be distributed under the terms of the above MIT license or
-# Python Software Foundation License version 2 (PSF-2.0) as published by Python
-# Software Foundation.
 
 import typing as _t
 from argparse import *

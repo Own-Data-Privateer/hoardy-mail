@@ -402,6 +402,10 @@ In theory, as an alternative to application-specific passwords, you can setup OA
 
 That is to say, I don't use OAuth2, which is why `imaparms` does not support OAuth2.
 
+# License
+
+GPLv3+.
+
 # Usage
 
 ## imaparms
