@@ -7,74 +7,33 @@ That is: login to a specified server, fetch or perform specified actions (count,
 
 [![](https://oxij.org/software/screen/imaparms-v2.2.png)](https://oxij.org/software/screen/imaparms-v2.2.webm "Screen cast of imaparms invocation (this is a log of an actual invocation with account data edited out)")
 
-# Why does `imaparms` exist?
+# <span id="why"/>Why does `imaparms` exist?
 
-Remember the time when YouTube and Facebook showed you only the posts of people you were subscribed to?
-After they locked your in by becoming a monopoly by providing fairly good social networking services for free for years (selling under cost is textbook monopolistic behaviour) they started showing "promoted" posts (i.e. advertisements) in your feed so that they could provide cheap and very effective advertisement services for companies at your expense.
-Then, when advertisers were locked in, they started fleecing them too.
+If all your email experience can be summarized as "I do all my mail in GMail or similar" or if you don't know what a `Maildir` is, **you should start with [this section below](#why-not-gmail) to learn why you might want to do the following**.
 
-Now your subscriptions are just one of the inputs to their algorithms that are designed to make you waste as much time as possible on their platforms (while keeping you satisfied or addicted just enough so that you wouldn't just leave), and advertisers' ad postings are just inputs to their algorithms that are designed to waste as much of the advertiser's money as possible (being just effective enough to make them spend more).
+If you
 
-(The process which Cory Doctorow calls "Enshittification".)
+- fetch all your mail into a [`Maildir`](https://en.wikipedia.org/wiki/Maildir) with [fetchmail](https://www.fetchmail.info/), [getmail](https://github.com/getmail6/getmail6), or similar,
+- index it with [sup](https://sup-heliotrope.github.io/), [notmuch](https://notmuchmail.org/), or similar, and then
+- backup your index and tags/labels database with a generic file synchronization tool like [syncthing](https://syncthing.net/), [bup](https://bup.github.io/), [rsync](https://rsync.samba.org/), [git](https://git-scm.com/), or similar
 
-Remember the time when most people run their own mail servers or had their employers run them and you yourself got to decide which messages should go to `INBOX` and which should be marked as spam?
-Today, Google provides email service for free, and so >70% of all e-mails originate from or get delivered to Google servers (GMail, GMail on custom domains, corporate GMail).
-Now it's Google who decides which messages you get to see and which vanish into the void without a trace.
+... effectively, you are using IMAP as a mail delivery protocol, not like a mail access protocol it was designed to be.
 
-Which, as a recipient, is highly annoying if you frequently get useful mail that GMail marks as spam or just drops (happens all the time to me).
-And, as a sender, is highly annoying when you need to send lots of mail.
-Just go look up "Gmail Email Limits" (on a search engine other than Google).
-It's a rabbit hole with lots of ad-hoc rules on just how much mail you can send before GMail decides to just drop your messages, yes, **drop**, not mark as spam, not reject, **they will drop your mail and tell neither you nor the recipient anything at all**.
-
-Moreover, they are now working towards making their `INBOX` into an algorithmically generated feed with "important" messages being shown first.
-It's easy to see where this is going.
-
-Luckily, [while Google is working hard to discourage you from using and/or make open mail protocols unusable](#gmail), IMAP is still #1 protocol for accessing and managing mail, and setting up your own mail server gets easier every year, so they can't just stop supporting it just yet (but they are doing their best).
-
-**But**, objectively, GMail --- when it works --- is a very nice [Mail User Agent](https://en.wikipedia.org/wiki/Mail_user_agent) (aka MUA, aka email client, aka mail app) with an integrated full-text search engine and a labeling system.
-
-Meanwhile, other modern MUAs like [Thunderbird](https://www.thunderbird.net/), [Sylpheed](https://sylpheed.sraoss.jp/en/), or [K-9 Mail](https://k9mail.app/) are designed to be IMAP and SMTP clients *first*, full-text search and tagging/labeling systems *second* (if at all).
-Which is to say, they suck at searching and tagging mail.
-Especially, since doing those things over IMAP is annoyingly slow, especially when your IMAP server is GMail which very much does not want you to use IMAP (after all, with a MUA working over IMAP, it's the MUA that decides how to sort and display your `INBOX`, not Google, and they hate they can't turn the order of messages in your `INBOX` into something they can sell).
-
-**However**, there exists a bunch of MUAs that can do full-text mail search and tagging so well and so blazingly fast that they leave GMail in the dust (from a technical standpoint, given an index, full-text search >10x faster than GMail on a single-core 2013-era laptop with an SSD is pretty easy to archive, simply because your SSD is much closer to you than GMail's servers).
-
-**But**, to make those MUAs do their work you need to download your mail and save it in [`Maildir` format](https://en.wikipedia.org/wiki/Maildir) on your hard disk and index it first.
-
-(Also, if GMail suddenly decides to take your mail hostage by locking you into their web-mail and disabling IMAP access, [which seems more and more plausible every year](#gmail), having a local copy of most of your mail will make it much easier to switch away.)
-
-Which is where `imaparms` and similar tools like [fetchmail](https://www.fetchmail.info/), [getmail](https://github.com/getmail6/getmail6), [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), and etc come in.
-
-Some examples of awesome MUAs that support the above workflow that I know of, in the order from simplest to hardest to setup:
-
-- [sup](https://sup-heliotrope.github.io/) ([also this](https://github.com/sup-heliotrope/sup)) as both MUA and mail indexer,
-- [alot](https://github.com/pazz/alot) as MUA + [notmuch](https://notmuchmail.org/) as mail indexer,
-- Emacs UI of [notmuch](https://notmuchmail.org/) as MUA + [notmuch](https://notmuchmail.org/) as mail indexer,
-- [Mutt](https://en.wikipedia.org/wiki/Mutt_(e-mail_client)) as MUA + [notmuch](https://notmuchmail.org/) as mail indexer.
-
-In theory, [Thunderbird](https://www.thunderbird.net/) also supports operation over `Maildir`, but that feature is so buggy it's apparently disabled by default at the moment.
-
-See ["The Homely Mutt" by Steve Losh](https://stevelosh.com/blog/2012/10/the-homely-mutt/) for a long in-detail explanation on how this setup in general is supposed to work.
-It describes a setup specifically tailored for `mutt` + `notmuch` + `offlineimap` + `msmtp` and the actual configs there are somewhat outdated (it was written in 2012) and much more complex than what you would need with, e.g. `sup` + `imaparms` + `msmtp`, but it gives a good overview of the idea in general.
-Functionally, `imaparms` takes place `offlineimap` in that article.
-
-Personally, I use `notmuch` with Emacs, which requires almost no setup if you have a well-configured Emacs already (and effectively infinite amounts of setup otherwise).
-
-Also, see ["Sup" article on ArchWiki](https://wiki.archlinux.org/title/Sup) for how to setup `sup`.
-
-**After** you set this all up, learned to use it, and setup regular backup/synchronization of your mail, mail index and tag/labels data with a generic file synchronization tool like [syncthing](https://syncthing.net/), [bup](https://bup.github.io/), [rsync](https://rsync.samba.org/), or just [git](https://git-scm.com/), you effectively demoted your use of IMAP from a mail access protocol to a mail delivery protocol.
-
-After which you might start asking yourself, why are you still keeping your old already backed up messages on the IMAP server?
+So you start asking yourself, if you have all your messages fetched and backed up already, why are you keeping them on the IMAP server?
 Don't they just lay there, waiting to be stolen?
-Wouldn't it be nice if there was a way to automate deletion of old mail from IMAP servers in such a way that any of your own systems crashing or losing a hard drive at any point in time would not lose any of your mail.
+Wouldn't it be nice if there was a way to automate deletion of old mail from IMAP servers in such a way that any of your own systems crashing or losing a hard drive at any point in time would not lose any of your mail?
 
-Which is where the unique feature set of `imaparms` comes in.
+`imaparms` is a replacement for `fetchmail`/`getmail` that does this (and more, but mainly this).
 
-# Features
+## Why would you make a replacement for `fetchmail`/`getmail`?
 
 `imaparms` was inspired by [fetchmail](https://www.fetchmail.info/) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire) and is basically a *safe* generalized combination of the two.
 
-I used to use and (usually privately, but sometimes not) patch both `fetchmail` and `IMAPExpire` for years before getting tired of it and deciding it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and fix all the issues making it inconvenient and unsafe to run `IMAPExpire` immediately after `fetchmail` finishes fetching mail: `fetchmail` fetches yet-*unfetched* mail, `IMAPExpire` expires *old* mail, in cases when `fetchmail` gets stuck or crashes it is entirely possible for `IMAPExpire` to delete some old yet-unfetched messages.
+I used to use and (usually privately, but sometimes not) patch both `fetchmail` and `IMAPExpire` for years before getting tired of it and deciding it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and fix all the issues making it unsafe and inconvenient to run `IMAPExpire` immediately after `fetchmail` finishes fetching mail.
+The main problem is that `fetchmail` fetches yet-*unfetched* mail, while `IMAPExpire` expires *old* mail.
+When `fetchmail` gets stuck or crashes it is entirely possible for `IMAPExpire` to delete some old yet-unfetched messages.
+
+(And [getmail](https://github.com/getmail6/getmail6) suffers from exactly the same problems.)
 
 In other words, `imaparms` was designed to be used as a IMAP-server-to-local-`Maildir` [Mail Delivery Agent](https://en.wikipedia.org/wiki/Message_delivery_agent) (MDA, aka Local Delivery Agent, LDA, when used to deliver to the same machine) that makes the IMAP server in question store as little mail as possible while preventing data loss.
 
@@ -148,7 +107,7 @@ EOF
 imaparms fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry --mda maildrop --all-folders --any-seen
 ```
 
-For GMail you will have to create and use application-specific password, which requires enabling 2FA, [see below for more info](#gmail).
+For GMail you will have to create and use application-specific password, which requires enabling 2FA, [see below for more info](#gmail-is-evil).
 
 Also, if you have a lot of mail, this will be very inefficient, as it will try to re-download everything again if it ever gets interrupted.
 
@@ -179,11 +138,13 @@ This, of course, means that if you open or "mark as read" a message in GMail's w
 
 ## What do I do with the resulting `Maildir`?
 
-You feed it into [sup](https://sup-heliotrope.github.io/) or [notmuch](https://notmuchmail.org/), as discussed above, and it gives you a GMail-like UI with full-text search and tagging, but with faster search, with no cloud storage involvement, and it works while you are offline.
+You feed it into [sup](https://sup-heliotrope.github.io/), [notmuch](https://notmuchmail.org/), or similar, as discussed [this section](#why-not-gmail), and it gives you a GMail-like UI with full-text search and tagging, but with faster search, with no cloud storage involvement, and it works while you are offline.
+
+Or you just repeat this mirroring on a schedule so that [when/if GMail decides to take your mail hostage](#why-not-gmail) you will be more ready to switch.
 
 ## How to: implement "fetch + backup + expire" workflow
 
-The intended workflow described [above](#features) looks like this:
+The intended workflow described [above](#why) looks like this:
 
 ``` {.bash}
 # setup: do once
@@ -250,7 +211,7 @@ You can check your command lines by running with `--very-dry-run` option, for th
 
 ## How to: implement the paranoid version of "fetch + backup + expire" workflow
 
-The paranoid/double-backup workflow described [above](#features) that uses `fetchmail` in parallel can be implemented like this:
+The paranoid/double-backup workflow described [above](#why) that uses `fetchmail` in parallel can be implemented like this:
 
 ``` {.bash}
 # setup: do once
@@ -344,7 +305,66 @@ See the [examples section](#examples) for more examples.
   - i.e., with `imaparms` you won't ever lose any messages on the server if you never run `imaparms delete`, and if you do run `imaparms delete`, `imaparms`'s defaults try their best to prevent you from deleting any mail you probably did not mean to delete;
 - `imaparms` has other subcommands, not just `imaparms fetch`.
 
-# Some Fun and Relevant Facts
+# <span id="why-not-gmail"/>Why would you even want to use any of this, isn't GMail good enough?
+
+Remember the time when YouTube and Facebook showed you only the posts of people you were subscribed to?
+After they locked your in by becoming a monopoly by providing fairly good social networking services for free for years (selling under cost is textbook monopolistic behaviour) they started showing "promoted" posts (i.e. advertisements) in your feed so that they could provide cheap and very effective advertisement services for companies at your expense.
+Then, when advertisers were locked in, they started fleecing them too.
+
+Now your subscriptions are just one of the inputs to their *algorithms that are designed to make you waste as much time as possible* on their platforms (*while keeping you satisfied or addicted just enough so that you wouldn't just leave*), and advertisers' ad postings are just inputs to their algorithms that are designed to waste as much of the advertiser's money as possible (being just effective enough to make them spend more).
+
+(The process which Cory Doctorow calls "Enshittification".)
+
+Remember the time when most people run their own mail servers or had their employers run them and you yourself got to decide which messages should go to `INBOX` and which should be marked as spam?
+Today, Google provides email service for free, and so >70% of all e-mails originate from or get delivered to Google servers (GMail, GMail on custom domains, corporate GMail).
+Now it's Google who decides which messages you get to see and which vanish into the void without a trace.
+
+Which, as a recipient, is highly annoying if you frequently get useful mail that GMail marks as spam or just drops (happens all the time to me).
+And, as a sender, is highly annoying when you need to send lots of mail.
+Just go look up "Gmail Email Limits" (on a search engine other than Google).
+It's a rabbit hole with lots of ad-hoc rules on just how much mail you can send before GMail decides to just drop your messages, yes, *drop*, not mark as spam, not reject, **they will drop your mail and tell neither you nor the recipient anything at all**.
+
+Moreover, they are now working towards making their `INBOX` into an *algorithmically generated feed with "important" messages being shown first*.
+It's easy to see where this is going.
+
+Luckily, [while Google is working hard to discourage you from using and/or make open mail protocols unusable](#gmail-is-evil), IMAP is still #1 protocol for accessing and managing mail, and setting up your own mail server gets easier every year, so they can't just stop supporting it just yet (but they are doing their best).
+
+But, objectively, GMail --- when it works --- is a very nice [Mail User Agent](https://en.wikipedia.org/wiki/Mail_user_agent) (aka MUA, aka email client, aka mail app) with an integrated full-text search engine and a labeling system.
+
+Meanwhile, other modern MUAs like [Thunderbird](https://www.thunderbird.net/), [Sylpheed](https://sylpheed.sraoss.jp/en/), or [K-9 Mail](https://k9mail.app/) are designed to be IMAP and SMTP clients *first*, full-text search and tagging/labeling systems *second* (if at all).
+Which is to say, they suck at searching and tagging mail.
+Especially, since doing those things over IMAP is annoyingly slow, especially when your IMAP server is GMail which very much does not want you to use IMAP (after all, with a MUA working over IMAP, it's the MUA that decides how to sort and display your `INBOX`, not Google, and they hate they can't turn the order of messages in your `INBOX` into something they can sell).
+
+However, there exists a bunch of MUAs that can do full-text mail search and tagging so well and so blazingly fast that they leave GMail in the dust (from a technical standpoint, given an index, full-text search >10x faster than GMail on a single-core 2013-era laptop with an SSD is pretty easy to archive, simply because your SSD is much closer to you than GMail's servers).
+
+Examples of such awesome MUAs that I'm aware of, in the order from simplest to hardest to setup:
+
+- [sup](https://sup-heliotrope.github.io/) ([also this](https://github.com/sup-heliotrope/sup)) as both MUA and mail indexer,
+- [alot](https://github.com/pazz/alot) as MUA + [notmuch](https://notmuchmail.org/) as mail indexer,
+- Emacs UI of [notmuch](https://notmuchmail.org/) as MUA + [notmuch](https://notmuchmail.org/) as mail indexer,
+- [Mutt](https://en.wikipedia.org/wiki/Mutt_(e-mail_client)) as MUA + [notmuch](https://notmuchmail.org/) as mail indexer.
+
+However, to use these awesome MUAs you need to download your mail and save it in [`Maildir` format](https://en.wikipedia.org/wiki/Maildir) on your hard disk first.
+
+Which is where `imaparms` and similar tools like [fetchmail](https://www.fetchmail.info/), [getmail](https://github.com/getmail6/getmail6), [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), and etc come in.
+
+Also, if GMail suddenly decides to take your mail hostage by locking you into their web-mail and disabling IMAP access, [which seems more and more plausible every year](#gmail-is-evil), having a local copy of most of your mail will make it much easier to switch away.
+(Seems unrealistic to you?
+This actually happened to me with one of the email providers I used before (not GMail, *not yet*).
+They basically tried to force me to go through a KYC procedure to allow me to continue using IMAP, but because I had local backups, I just switched all the services that referenced that email address to something else and simply stopped using their service.
+Are you sure Google wouldn't do this?)
+
+See ["The Homely Mutt" by Steve Losh](https://stevelosh.com/blog/2012/10/the-homely-mutt/) for a long in-detail explanation on how this setup in general is supposed to work.
+It describes a setup specifically tailored for `mutt` + `notmuch` + `offlineimap` + `msmtp` and the actual configs there are somewhat outdated (it was written in 2012) and much more complex than what you would need with, e.g. `sup` + `imaparms` + `msmtp`, but it gives a good overview of the idea in general.
+Functionally, `imaparms` takes place `offlineimap` in that article.
+
+Personally, I use `notmuch` with Emacs, which requires almost no setup if you have a well-configured Emacs already (and effectively infinite amounts of setup otherwise).
+
+Also, see ["Sup" article on ArchWiki](https://wiki.archlinux.org/title/Sup) for how to setup `sup`.
+
+(Also, in theory, [Thunderbird](https://www.thunderbird.net/) also supports operation over `Maildir`, but that feature is so buggy it's apparently disabled by default at the moment.)
+
+# Your email will eventually get stolen anyway
 
 Note that [Snowden revelations](https://en.wikipedia.org/wiki/Global_surveillance_disclosures_(2013%E2%80%93present)) mean that Google and US Government store copies of all of your correspondence since 2001-2009 (it depends) even if you delete everything from all the servers.
 
@@ -375,9 +395,11 @@ After all, hoarding of exploitable material that made a disaster after being sto
 
 That is to say, as a long-term defense measure, this tool is probably useless.
 All your mail will get leaked eventually, regardless.
-Short-term and against random exploitations of your mail servers, this thing is perfect, IMHO.
+Against random exploitations of your mail servers `imaparms` is perfect.
 
-# <span id="gmail"/>GMail: Some Fun and Relevant Facts
+Also, `imaparms` is a very fast mail fetcher, regardless of all of this.
+
+# <span id="gmail-is-evil"/>Google's security theater
 
 GMail docs say that IMAP and SMTP are "legacy protocols" and are "insecure".
 Which, sure, they could be, if you reuse passwords.
