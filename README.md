@@ -5,7 +5,7 @@
 Or, more formally: `imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
 That is: login to a specified server, fetch or perform specified actions (count, flag/mark, delete, etc) on all messages matching specified criteria in all specified folders, logout.
 
-[![](https://oxij.org/software/screen/imaparms-v2.2.jpg)](https://oxij.org/software/screen/imaparms-v2.2.webm "Screen cast of imaparms invocation (this is a log of an actual invocation with account data edited out)")
+[![](https://oxij.org/software/screen/imaparms-v2.2.png)](https://oxij.org/software/screen/imaparms-v2.2.webm "Screen cast of imaparms invocation (this is a log of an actual invocation with account data edited out)")
 
 # Why does `imaparms` exist?
 
