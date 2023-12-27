@@ -662,15 +662,26 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--not-folder NAME`
   : mail folders to exclude; can be specified multiple times
 
-- delivery (required):
+- delivery target (required, mutually exclusive):
+  - `--maildir DIRECTORY`
+  : Maildir to deliver the messages to;
+    with this specified `imaparms` will simply drop raw RFC822 messages, one message per file, into `DIRECTORY/new` (creating it, `DIRECTORY/cur`, and `DIRECTORY/tmp` if any of those do not exists)
   - `--mda COMMAND`
   : shell command to use as an MDA to deliver the messages to;
-    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc;
+    with this specified `imaparms` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc;
     `maildrop` from Courier Mail Server project is a good KISS default
+
+- delivery mode (mutually exclusive):
+  - `--yolo`
+  : messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected, current `imaparms fetch` continues as if nothing is amiss
+  - `--careful`
+  : messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected, `imaparms` aborts currently running `fetch` if zero messages from the current batch get delivered as that usually means that the target file system is out of space, read-only, or generates IO errors (default)
+  - `--paranoid`
+  : `imaparms` aborts the process immediately if any of the messages in the current batch fail to be delivered into the `--maildir` or by the `--mda`, the whole batch gets left un`--mark`ed on the server
 
 - hooks:
   - `--new-mail-cmd CMD`
-  : shell command to run after the fetch cycle finishes if any new messages were successfully delivered by the `--mda`
+  : shell command to run after the fetch cycle finishes if any new messages were successfully delivered into the `--maildir` or by the `--mda`
 
 - message IMAP `SEEN` flag filters:
   - `--any-seen`

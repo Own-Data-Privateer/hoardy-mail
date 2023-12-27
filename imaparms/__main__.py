@@ -19,9 +19,12 @@
 
 import dataclasses as _dc
 import decimal
+import fcntl as _fcntl
+import hashlib as _hashlib
 import os
 import random
 import signal
+import socket as _socket
 import ssl
 import subprocess
 import sys
@@ -37,6 +40,8 @@ from .argparse_better import Namespace
 from .exceptions import *
 
 defenc = sys.getdefaultencoding()
+myhostname = _socket.gethostname()
+smypid = str(os.getpid())
 
 interrupt_msg = "\n" + gettext("Gently finishing up... Press ^C again to forcefully interrupt.") + "\n"
 want_stop = False
@@ -347,8 +352,8 @@ def unsleep(seconds : _t.Union[int, float]) -> None:
 
 @_dc.dataclass
 class State:
-    errors : int = _dc.field(default = 0)
     num_delivered : int = _dc.field(default = 0)
+    num_errors : int = _dc.field(default = 0)
     hooks : _t.List[str] = _dc.field(init = False)
 
     def __post_init__(self) -> None:
@@ -381,7 +386,7 @@ def for_each_account_poll(cfg : Namespace, state : State, *args : _t.Any) -> Non
         do_sleep(ttime)
 
     while True:
-        old_errors = state.errors
+        old_errors = state.num_errors
         old_delivered = state.num_delivered
 
         now = time.time()
@@ -393,7 +398,7 @@ def for_each_account_poll(cfg : Namespace, state : State, *args : _t.Any) -> Non
 
         now = time.time()
         ntime = time.strftime(fmt, time.localtime(now))
-        new_errors = state.errors - old_errors
+        new_errors = state.num_errors - old_errors
         new_delivered = state.num_delivered - old_delivered
 
         msg = gettext("poll finished at %s, ") % (ntime,)
@@ -456,7 +461,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
 
             func(cfg, state, account, srv, *args)
         except AccountFailure as exc:
-            state.errors += 1
+            state.num_errors += 1
             error(str(exc))
         finally:
             try:
@@ -602,7 +607,7 @@ def for_each_folder_(cfg : Namespace, state : State, account : Account, srv : IM
         try:
             func(cfg, state, account, srv, folder, *args)
         except FolderFailure as exc:
-            state.errors += 1
+            state.num_errors += 1
             error(str(exc))
         finally:
             srv.close()
@@ -692,7 +697,7 @@ def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, mes
         to_fetch_set : _t.Set[bytes] = set(to_fetch)
         typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)") # type: ignore
         if typ != "OK":
-            state.errors += 1
+            state.num_errors += 1
             imap_error("FETCH", typ, data)
             continue
 
@@ -713,7 +718,7 @@ def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, mes
             to_fetch_set.remove(uid)
 
         if len(to_fetch_set) > 0:
-            state.errors += 1
+            state.num_errors += 1
             imap_error("FETCH", "did not get enough elements")
             continue
 
@@ -767,18 +772,40 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
     if len(message_uids) == 0: return
     print("... " + gettext("fetching a batch of %d messages (%d bytes)") % (len(message_uids), total_size))
 
+    # because time.time() gives a float
+    epoch_ms = time.time_ns() // 1000000
+
     joined = b",".join(message_uids)
     typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])") # type: ignore
     if typ != "OK":
-        state.errors += 1
+        state.num_errors += 1
         imap_error("FETCH", typ, data)
         return
 
-    done_message_uids = []
+    if cfg.maildir is not None:
+        internal_mda = True
+        unsynced = []
+        destdir = os.path.expanduser(cfg.maildir)
+        try:
+            os.makedirs(os.path.join(destdir, "tmp"), exist_ok=True)
+            os.makedirs(os.path.join(destdir, "new"), exist_ok=True)
+            os.makedirs(os.path.join(destdir, "cur"), exist_ok=True)
+        except:
+            raise CatastrophicFailure(gettext("failed to create `--maildir %s`"), destdir)
+
+        sepoch_ms = str(epoch_ms)
+        tmp_num = 0
+    elif cfg.mda is not None:
+        internal_mda = False
+    else:
+        assert False
+
+    done_uids = []
+    failed_uids = []
     while len(data) > 0:
         # have to do this whole thing beacause imaplib returns
         # multiple outputs as a flat list of partially-parsed chunks,
-        # so we need (xxx) detector to make any sense of it
+        # so we need the (xxx) detector below to make any sense of it
         chunks = []
         literals = []
         while len(data) > 0:
@@ -811,31 +838,168 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
             header = header.replace(b"\r\n", b"\n")
             body = body.replace(b"\r\n", b"\n")
 
-        # try delivering to MDA
-        delivered = True
-        with subprocess.Popen(cfg.mda, stdin=subprocess.PIPE, stdout=None, stderr=None, shell=True) as p:
-            fd : _t.Any = p.stdin
+        if internal_mda:
+            # deliver to Maildir
+            mho = _hashlib.sha256()
+            mho.update(header)
+            mho.update(body)
+            msghash = mho.hexdigest()
+            sflen = str(len(header) + len(body))
+
             try:
-                fd.write(header)
-                fd.write(body)
-            except BrokenPipeError:
-                delivered = False
-            finally:
-                fd.close()
+                tf : _t.Any
+                tmp_path : str
+                while True:
+                    tmp_path = os.path.join(destdir, "tmp",
+                                            f"IAP_{smypid}_{sepoch_ms}_{str(tmp_num)}.{myhostname},S={sflen}.part")
+                    tmp_num += 1
 
-            retcode = p.wait()
-            if retcode != 0:
-                delivered = False
+                    try:
+                        tf = open(tmp_path, "xb")
+                    except FileExistsError:
+                        continue
+                    break
 
-        if delivered:
-            done_message_uids.append(uid)
-            state.num_delivered += 1
+                try:
+                    tf.write(header)
+                    tf.write(body)
+                    tf.flush()
+                except Exception as exc:
+                    try: tf.close()
+                    except Exception: pass
+                    try: os.unlink(tmp_path)
+                    except Exception: pass
+                    raise exc
+            except Exception as exc:
+                traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                failed_uids.append(uid)
+            else:
+                unsynced.append((tf, (uid, msghash, sflen, tmp_path)))
         else:
-            state.errors += 1
-            error(_("`--mda` failed to deliver message %s") % (uid,))
+            # deliver via MDA
+            flushed = False
+            delivered = False
+            with subprocess.Popen(cfg.mda, stdin=subprocess.PIPE, stdout=None, stderr=None, shell=True) as p:
+                fd : _t.Any = p.stdin
+                try:
+                    fd.write(header)
+                    fd.write(body)
+                    fd.flush()
+                    fd.close()
+                except BrokenPipeError:
+                    try: fd.close()
+                    except Exception: pass
+                except Exception as exc:
+                    traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                    try: fd.close()
+                    except Exception: pass
+                else:
+                    flushed = True
 
-    print("... " + gettext("delivered a batch of %d messages via `%s`") % (len(done_message_uids), cfg.mda))
-    do_store(cfg, state, account, srv, cfg.mark, done_message_uids, False)
+                retcode = p.wait()
+                if retcode == 0:
+                    delivered = flushed
+
+            if delivered:
+                done_uids.append(uid)
+            else:
+                failed_uids.append(uid)
+
+    if internal_mda:
+        # finish delivering to Maildir
+
+        # fsync all messages to disk
+        #
+        # we delay `fsync`s till the end of the whole batch so that the target
+        # filesystem could also batch disk writes, which could make a big
+        # difference on an SSD
+        synced = []
+        for tf, el in unsynced:
+            uid, msghash, sflen, tmp_path = el
+            try:
+                os.fsync(tf.fileno())
+                tf.close()
+            except Exception as exc:
+                traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                try: tf.close()
+                except Exception: pass
+                try: os.unlink(tmp_path)
+                except Exception: pass
+                failed_uids.append(uid)
+            else:
+                synced.append(el)
+        del unsynced
+
+        # lock destination directory
+        ddir = os.path.join(destdir, "new")
+        try:
+            dirfd = os.open(ddir, os.O_RDONLY | os.O_DIRECTORY)
+            _fcntl.flock(dirfd, _fcntl.LOCK_EX)
+        except Exception as exc:
+            traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+            # cleanup
+            for uid, _, _, tmp_path in synced:
+                try: os.unlink(tmp_path)
+                except Exception: pass
+                failed_uids.append(uid)
+            del synced
+            error(gettext("failed to lock `--maildir %s`") % (destdir,))
+        else:
+            # rename files to destination
+            for uid, msghash, sflen, tmp_path in synced:
+                msg_num = 0
+                while True:
+                    msg_path = os.path.join(ddir,
+                                            f"IAH_{msghash}_{str(msg_num)}.{myhostname},S={sflen}")
+                    msg_num += 1
+
+                    if os.path.exists(msg_path):
+                        continue
+                    break
+
+                try:
+                    os.rename(tmp_path, msg_path)
+                except Exception as exc:
+                    traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                    try: os.unlink(tmp_path)
+                    except Exception: pass
+                    failed_uids.append(uid)
+                else:
+                    done_uids.append(uid)
+            del synced
+
+            # ensure directory inode is synced to disk
+            try:
+                os.fsync(dirfd)
+                _fcntl.flock(dirfd, _fcntl.LOCK_UN)
+                os.close(dirfd)
+            except Exception as exc:
+                traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                failed_uids += done_uids
+                done_uids = []
+                error(gettext("failed to sync `--maildir %s`") % (destdir,))
+
+        if len(done_uids) > 0:
+            print("... " + gettext("delivered a batch of %d messages to `--maildir %s`") % (len(done_uids), destdir))
+        if len(failed_uids) > 0:
+            error(gettext("failed to deliver %d messages to `--maildir %s`") % (len(failed_uids), destdir))
+    else:
+        if len(done_uids) > 0:
+            print("... " + gettext("delivered a batch of %d messages via `--mda %s`") % (len(done_uids), cfg.mda))
+        if len(failed_uids) > 0:
+            error(gettext("failed to deliver %d messages via `--mda %s`") % (len(failed_uids), cfg.mda))
+
+    state.num_delivered += len(done_uids)
+    state.num_errors += len(failed_uids)
+
+    if len(failed_uids) > 0:
+        if cfg.paranoid is not None:
+            if len(done_uids) == 0:
+                raise AccountFailure(gettext("failed to deliver any messages, aborting"))
+            elif cfg.paranoid:
+                raise CatastrophicFailure(gettext("failed to deliver %d messages in paranoid mode"), len(failed_uids))
+
+    do_store(cfg, state, account, srv, cfg.mark, done_uids, False)
 
 def do_store(cfg : Namespace, state : State, account : Account, srv : IMAP4,
              method : str, message_uids : _t.List[bytes], interruptable : bool = True) -> None:
@@ -1217,15 +1381,25 @@ def make_argparser(real : bool = True) -> _t.Any:
         return cmd
 
     def add_delivery(cmd : _t.Any) -> _t.Any:
-        agrp = cmd.add_argument_group(_("delivery (required)"))
-        agrp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
-                          required=True,
-                          help=_("shell command to use as an MDA to deliver the messages to;") + "\n" + \
-                               _(f"`{__package__}` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc;") + "\n" + \
-                               _("`maildrop` from Courier Mail Server project is a good KISS default"))
+        agrp = cmd.add_argument_group(_("delivery target (required, mutually exclusive)"))
+        grp = agrp.add_mutually_exclusive_group(required=True)
+        grp.add_argument("--maildir", metavar = "DIRECTORY", type=str,
+                         help=_("Maildir to deliver the messages to;") + "\n" + \
+                              _(f"with this specified `{__package__}` will simply drop raw RFC822 messages, one message per file, into `DIRECTORY/new` (creating it, `DIRECTORY/cur`, and `DIRECTORY/tmp` if any of those do not exists)"))
+        grp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
+                         help=_("shell command to use as an MDA to deliver the messages to;") + "\n" + \
+                              _(f"with this specified `{__package__}` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc;") + "\n" + \
+                              _("`maildrop` from Courier Mail Server project is a good KISS default"))
+
+        agrp = cmd.add_argument_group(_("delivery mode (mutually exclusive)"))
+        grp = agrp.add_mutually_exclusive_group()
+        grp.add_argument("--yolo", dest="paranoid", action="store_const", const = None, help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected, current `{__package__} fetch` continues as if nothing is amiss"))
+        grp.add_argument("--careful", dest="paranoid", action="store_false", help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected, `{__package__}` aborts currently running `fetch` if zero messages from the current batch get delivered as that usually means that the target file system is out of space, read-only, or generates IO errors (default)"))
+        grp.add_argument("--paranoid", dest="paranoid", action="store_true", help=_(f"`{__package__}` aborts the process immediately if any of the messages in the current batch fail to be delivered into the `--maildir` or by the `--mda`, the whole batch gets left un`--mark`ed on the server"))
+        grp.set_defaults(paranoid = False)
 
         agrp = cmd.add_argument_group(_("hooks"))
-        agrp.add_argument("--new-mail-cmd", metavar="CMD", type=str, help=_("shell command to run after the fetch cycle finishes if any new messages were successfully delivered by the `--mda`"))
+        agrp.add_argument("--new-mail-cmd", metavar="CMD", type=str, help=_("shell command to run after the fetch cycle finishes if any new messages were successfully delivered into the `--maildir` or by the `--mda`"))
         return cmd
 
     def no_cmd(cfg : Namespace, state : State) -> None:
@@ -1409,18 +1583,18 @@ def main() -> None:
     try:
         cfg.func(cfg, state)
     except CatastrophicFailure as exc:
-        state.errors += 1
+        state.num_errors += 1
         error(str(exc))
     except KeyboardInterrupt:
-        state.errors += 1
+        state.num_errors += 1
         error(_("Interrupted!"))
     except Exception as exc:
-        state.errors += 1
+        state.num_errors += 1
         traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
         error(_("A bug!"))
 
-    if state.errors > 0:
-        sys.stderr.write(ngettext("There was %d error!", "There were %d errors!", state.errors) % (state.errors,) + "\n")
+    if state.num_errors > 0:
+        sys.stderr.write(ngettext("There was %d error!", "There were %d errors!", state.num_errors) % (state.num_errors,) + "\n")
         sys.stderr.flush()
         sys.exit(1)
     sys.exit(0)
