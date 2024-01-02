@@ -475,6 +475,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
             with subprocess.Popen(hook, stdin=subprocess.PIPE, stdout=None, stderr=None, shell=True) as p:
                 # __exit__ will do everything we need
                 pass
+        state.hooks = []
 
 def cmd_list(cfg : Namespace, state : State) -> None:
     if cfg.very_dry_run:
