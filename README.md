@@ -1,11 +1,17 @@
 # What is `imaparms`?
 
-`imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool/utility/console app for POSIX-compatible systems that can help you to download/backup all your mail/email from an IMAP server (e.g. GMail) to your hard disk, programmatically change flags on messages on the IMAP server (e.g. mark all messages newer than a day old in some folder as unread), delete old messages from the IMAP server, and similar.
+`imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool/utility/console app for POSIX-compatible systems that can help you to download/fetch/backup all your mail/email from an IMAP server (e.g. GMail, Yahoo, Hotmail, Yandex, etc, or your own private mail server) to your hard disk, programmatically change flags on messages on the IMAP server (e.g. mark all messages newer than a day old in some folder as unread), delete/expire old messages from the IMAP server, and similar.
 
 Or, more formally: `imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
 That is: login to a specified server, fetch or perform specified actions (count, flag/mark, delete, etc) on all messages matching specified criteria in all specified folders, logout.
 
-[![](https://oxij.org/software/screen/imaparms-v2.2.png)](https://oxij.org/software/screen/imaparms-v2.2.webm "Screen cast of imaparms invocation (this is a log of an actual invocation with account data edited out)")
+# Screenshot
+
+[![](https://oxij.org/software/imaparms/imaparms-v2.2.png)](https://oxij.org/software/imaparms/imaparms-v2.2.webm)
+
+Click the above image to see the full terminal recording video of `imaparms` invocation (with account data edited out and replaced by fake GMail accounts in post-processing) running `new-mail-hook` indexing new mail with [`notmuch`](https://notmuchmail.org/) ([see workflow example below](#workflow)), followed by a full-text search in Emacs UI of `notmuch`.
+
+It was recorded on a 2012-era laptop (Thinkpad X230 with Intel Core i5-3230M CPU @ 2.60GHz with 16GB RAM and Samsung 870 EVO SSD), my `notmuch` database contains ~4 millions messages, and the whole search takes only 0.25 seconds in person (but about 2 seconds in the video because rendering an [`asciinema`](https://github.com/asciinema/asciinema) file to gif and then compressing it into webm adds extra time between frames, so it looks much more laggy than it actually is at the end there).
 
 # <span id="why"/>Why does `imaparms` exist?
 
@@ -19,9 +25,7 @@ If you
 
 ... effectively, you are using IMAP as a mail delivery protocol, not like a mail access protocol it was designed to be.
 
-So you start asking yourself, if you have all your messages fetched and backed up already, why are you keeping them on the IMAP server?
-Don't they just lay there, waiting to be stolen?
-Wouldn't it be nice if there was a way to automate deletion of old mail from IMAP servers in such a way that any of your own systems crashing or losing a hard drive at any point in time would not lose any of your mail?
+In which case you might ask yourself, wouldn't it be nice if there was a tool that could help you automate fetching of new messages and deletion of already backed up old messages from IMAP servers in such a way that **any of your own systems crashing or losing hard drives at any point in time would not lose any of your mail**?
 
 `imaparms` is a replacement for `fetchmail`/`getmail` that does this (and more, but mainly this).
 
@@ -32,10 +36,9 @@ Wouldn't it be nice if there was a way to automate deletion of old mail from IMA
 I used to use and (usually privately, but sometimes not) patch both `fetchmail` and `IMAPExpire` for years before getting tired of it and deciding it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and fix all the issues making it unsafe and inconvenient to run `IMAPExpire` immediately after `fetchmail` finishes fetching mail.
 The main problem is that `fetchmail` fetches yet-*unfetched* mail, while `IMAPExpire` expires *old* mail.
 When `fetchmail` gets stuck or crashes it is entirely possible for `IMAPExpire` to delete some old yet-unfetched messages.
-
 (And [getmail](https://github.com/getmail6/getmail6) suffers from exactly the same problems.)
 
-In other words, `imaparms` was designed to be used as a IMAP-server-to-local-`Maildir` [Mail Delivery Agent](https://en.wikipedia.org/wiki/Message_delivery_agent) (MDA, aka Local Delivery Agent, LDA, when used to deliver to the same machine) that makes the IMAP server in question store as little mail as possible while preventing data loss.
+In short, `imaparms` is designed to be used as a IMAP-server-to-local-`Maildir` [Mail Delivery Agent](https://en.wikipedia.org/wiki/Message_delivery_agent) (MDA) that makes the IMAP server in question store as little mail as possible while preventing data loss.
 
 Which is to say, the main use case I made this for is as follows:
 
@@ -47,12 +50,9 @@ Which is to say, the main use case I made this for is as follows:
 Also, `imaparms` seems to be one of the fastest, if not the fastest, IMAP fetchers there is.
 By default, it fetches mail >150 times faster than [fetchmail](https://www.fetchmail.info/) (and [getmail](https://github.com/getmail6/getmail6)), but if your IMAP server supports long enough command lines, your system can do SSL and your hard drive can flush data fast enough, then you can saturate a gigabit Ethernet link with `imaparms`.
 
-Since bootstrapping into either of these setups requires some querying into actual IMAP folder names and mass changes to flags on IMAP server-side, `imaparms` provides subcommands for that too.
+Since bootstrapping into a setup similar to the one described above requires querying into actual IMAP folder names and mass changes to flags on IMAP server-side, `imaparms` provides subcommands for that too.
 
 See the "subcommands" subsection of the [usage section](#usage) for the list available of subcommands and explanations of what they do.
-
-Also, if you are really paranoid, you can run `imaparms fetch` with `--any-seen --unflagged` command line options instead of the implied `--unseen --any-flagged` options, which will make it use the `FLAGGED` IMAP flag instead of the `SEEN` IMAP flag to track state, allowing you to run it simultaneously with tools that use the `SEEN` flag, like `fetchmail`, and then simply delete duplicated files.
-I.e. if you are really paranoid, you could use that feature to check files produced by `fetchmail` and `imaparms fetch` against each other, see below.
 
 # Quickstart
 
@@ -75,24 +75,24 @@ I.e. if you are really paranoid, you could use that feature to check files produ
   python3 -m imaparms --help
   ```
 
-## How to: fetch all your mail from GMail
+## How to: backup all your mail from GMail, Yahoo, Hotmail, Yandex, etc
 
-`imaparms` is not *intended* as a *mail backup/mirroring utility*, it is intended to be used as a *mail delivery agent with automatic expiration of old server-side mail*, i.e. a better replacement for `fetchmail`+`IMAPExpire` combination.
+`imaparms` is not *intended* as an *IMAP mirroring tool*, it is intended to be used as a *Mail Delivery Agent with automatic expiration of old server-side mail*, i.e. a better replacement for `fetchmail`+`IMAPExpire` combination.
 If you want to keep a synchronized copy of your mail locally and on your mail server without sacrificing any flags, you should use [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), or something similar instead.
 
 However, `imaparms` can be used for efficient incremental backups of IMAP server data if you are willing to sacrifice either of `SEEN` or `FLAGGED` ("starred") IMAP flags for it.
-Also, using `imaparms` for mail backups is illustrative, so a couple of examples follow.
+Also, making email backups with `imaparms` is pretty simple, [useful](#why-not-gmail), and illustrative, so a couple of examples follow.
 
-All examples on this page use `maildrop` MDA/LDA from [Courier Mail Server project](https://www.courier-mta.org/), which is the simplest commodity LDA with the simplest setup I know of.
+All examples on this page use `maildrop` Local Delivery Agent (LDA, which in an MDA used to deliver messages locally to same machine) from [Courier Mail Server project](https://www.courier-mta.org/), which is the simplest commodity LDA with the simplest setup I know of.
 But, of course, you can use anything else.
 E.g., [fdm](https://github.com/nicm/fdm) can function as an LDA, and it is also pretty simple to setup.
 
-### Backup all your email from GMail
+### How to: fetch all your emails from GMail, Yahoo, Hotmail, Yandex, etc
 
 The following will fetch all messages from all the folders on the server (without changing message flags on the server side) and feed them to `maildrop` which will just put them all into `~/Mail/backup` `Maildir`.
 
 ``` {.bash}
-# setup: do once
+### setup: do once
 mkdir -p ~/Mail/backup/{new,cur,tmp}
 
 cat > ~/.mailfilter << EOF
@@ -101,53 +101,75 @@ EOF
 ```
 
 ``` {.bash}
-# repeatable part
+### repeatable part
 
 # backup all your mail from GMail
-imaparms fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry --mda maildrop --all-folders --any-seen
+imaparms fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry \
+  --mda maildrop --all-folders --any-seen
 ```
 
 For GMail you will have to create and use application-specific password, which requires enabling 2FA, [see below for more info](#gmail-is-evil).
 
 Also, if you have a lot of mail, this will be very inefficient, as it will try to re-download everything again if it ever gets interrupted.
 
-### ... efficiently
+### How to: efficiently incrementally backup all your mail from GMail, Yahoo, Hotmail, Yandex, etc
 
 To make the above efficient you have to sacrifice either `SEEN` or `FLAGGED` IMAP flags to allow `imaparms` to track which messages are yet to be fetched, i.e. either:
 
 ``` {.bash}
 # mark all messages as UNSEEN
-imaparms mark --host imap.gmail.com --user account@gmail.com --pass-pinentry --folder "[Gmail]/All Mail" unseen
+imaparms mark --host imap.gmail.com --user account@gmail.com --pass-pinentry \
+  --folder "[Gmail]/All Mail" unseen
 
 # fetch UNSEEN and mark as SEEN as you go
 # this can be interrrupted and restarted and it will continue from where it left off
-imaparms fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry --mda maildrop --folder "[Gmail]/All Mail" --unseen
+imaparms fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry \
+  --mda maildrop --folder "[Gmail]/All Mail" --unseen
 ```
 
 or
 
 ``` {.bash}
 # mark all messages as UNFLAGGED
-imaparms mark --host imap.gmail.com --user account@gmail.com --pass-pinentry --folder "[Gmail]/All Mail" unflagged
+imaparms mark --host imap.gmail.com --user account@gmail.com --pass-pinentry \
+  --folder "[Gmail]/All Mail" unflagged
 
 # similarly
-imaparms fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry --mda maildrop --folder "[Gmail]/All Mail" --any-seen --unflagged
+imaparms fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry \
+  --mda maildrop --folder "[Gmail]/All Mail" --any-seen --unflagged
 ```
 
 This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `--unseen`, or mark it as flagged ("star") it there while using `--unflagged`, `imaparms` will ignore the message on the next `fetch`.
+
+### How to: efficiently incrementally backup millions and/or decades of messages from GMail, Yahoo, Hotmail, Yandex, etc
+
+In cases where you want to fetch *millions* of messages spanning *decades*, you'll probably want invoke `imaparms fetch` multiple times with progressively smaller ` --older-than` arguments so that IMAP `SEARCH` command responses will be smaller to re-fetch if the process gets interrupted, i.e.:
+
+``` {.bash}
+# mark all messages as UNSEEN
+imaparms mark --host imap.gmail.com --user account@gmail.com --pass-pinentry \
+  --folder "[Gmail]/All Mail" unseen
+
+for n in 10 5 3 2 1; do
+    echo "fetching mail older than $n years..."
+    imaparms fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry \
+      --mda maildrop --folder "[Gmail]/All Mail" --unseen \
+      --older-than $((365*n))
+done
+```
 
 ## What do I do with the resulting `Maildir`?
 
 You feed it into [sup](https://sup-heliotrope.github.io/), [notmuch](https://notmuchmail.org/), or similar, as discussed [this section](#why-not-gmail), and it gives you a GMail-like UI with full-text search and tagging, but with faster search, with no cloud storage involvement, and it works while you are offline.
 
-Or you just repeat this mirroring on a schedule so that [when/if GMail decides to take your mail hostage](#why-not-gmail) you will be more ready to switch.
+Or you just repeat this mirroring on a schedule so that [when/if GMail decides to take your mail hostage](#why-not-gmail) you will be prepared to switch.
 
-## How to: implement "fetch + backup + expire" workflow
+## <span id="workflow"/>How to: implement "fetch + backup + expire" workflow
 
 The intended workflow described [above](#why) looks like this:
 
 ``` {.bash}
-# setup: do once
+### setup: do once
 mkdir -p ~/Mail/INBOX/{new,cur,tmp}
 mkdir -p ~/Mail/spam/{new,cur,tmp}
 echo 0 > ~/.rsync-last-mail-backup-timestamp
@@ -177,7 +199,7 @@ chmod +x ~/bin/new-mail-hook
 ```
 
 ``` {.bash}
-# repeatable part
+### repeatable part
 
 # optionally, if needed
 # imaparms mark ... --folder "[Gmail]/All Mail" unseen
@@ -209,12 +231,26 @@ You can check your command lines by running with `--very-dry-run` option, for th
 ... in '[Gmail]/All Mail', '[Gmail]/Spam', '[Gmail]/Trash': search (SEEN BEFORE 1-Jan-1970) {dynamic}, perform delete
 ```
 
-## How to: implement the paranoid version of "fetch + backup + expire" workflow
+Personally, I have a separate script `exec`-invoking `imaparms` (see the terminal recording above) for each mail service I use, my window manager spawns a terminal window with `tmux attach -t subs` on startup while I have the following at the end of my `~/.tmux.conf`:
 
-The paranoid/double-backup workflow described [above](#why) that uses `fetchmail` in parallel can be implemented like this:
+```
+new-session -s subs -n shell
+new-window -t :2 -n mail imaparms-fetch-mine
+new-window -t :3 -n gmail imaparms-fetch-gmail
+# ... and so on
+```
+
+## How to: run `imaparms` in parallel with `fetchmail` or similar
+
+You can run `imaparms fetch` with `--any-seen --unflagged` command line options instead of the implied `--unseen --any-flagged` options, which will make it use the `FLAGGED` IMAP flag instead of the `SEEN` IMAP flag to track state, allowing you to run it simultaneously with tools that use the `SEEN` flag, like `fetchmail`, `getmail`, or just another instance of `imaparms` (using the other flag).
+
+I.e. if you are really paranoid, you can this feature to check files produced by `fetchmail` and `imaparms fetch` against each other and then simply delete duplicated files.
+Or you can use it to run two instances of `imaparms` on two separate machines and only expire old mail from the server after it was successfully backed up onto both machines.
+
+Running in parallel with `fetchmail` can be implemented like this:
 
 ``` {.bash}
-# setup: do once
+### setup: do once
 
 # include the setup from above
 
@@ -236,7 +272,7 @@ chmod +x ~/bin/new-mail-hook-dedup
 ```
 
 ``` {.bash}
-# repeatable part
+### repeatable part
 secondary_common=(--host imap.example.com --user myself@example.com --passcmd "pass show mail/myself@example.com")
 
 # prepare by unflagging all messages
@@ -261,50 +297,6 @@ See the [usage section](#usage) for explanation of used command line options.
 
 See the [examples section](#examples) for more examples.
 
-# Comparison to
-
-## [fetchmail](https://www.fetchmail.info/) and [getmail](https://github.com/getmail6/getmail6)
-
-`imaparms fetch`
-
-- fetches your mail >150 times faster by default (both `fetchmail` and `getmail` fetch and mark messages one-by-one, incurring huge network latency overheads, `imaparms fetch` does it in (configurable) batches);
-- fetches messages out-of-order to try and maximize `messages/second` metric when it makes sense (i.e. it temporarily delays fetching of larger messages if many smaller ones can be fetched instead) so that you could efficiently index your mail in parallel with fetching;
-- only does deliveries to [MDA/LDA](https://en.wikipedia.org/wiki/Message_delivery_agent) (similar to `fetchmail --mda` and `getmail`'s `MDA_external` options), deliveries over SMTP are not and will never be supported (if you want this you can just use [msmtp](https://marlam.de/msmtp/) as your MDA); thus, `imaparms`
-- is much simpler to use when fetching to a local `Maildir` as it needs no configuration to fetch messages as-is without modifying any headers, thus fetching the same messages twice will produce identical files (which is not true for `fetchmail`, `imaparms --mda MDA fetch` is roughly equivalent to `fetchmail --softbounce --invisible --norewrite --mda MDA`);
-- probably will not work with most broken IMAP servers (`fetchmail` has lots of workarounds for server bugs, `imaparms fetch` does not);
-- is written in Python (like `getmail`) instead of C (like `fetchmail`);
-- has other subcommands, not just `imaparms fetch`.
-
-## [fdm](https://github.com/nicm/fdm)
-
-[A better explanation of what fdm does](https://wiki.archlinux.org/title/fdm).
-
-`imaparms fetch`
-
-- uses server-side message flags to track state instead of keeping a local database of fetched UIDs;
-- fetches messages out-of-order to try and maximize `messages/second` metric;
-- does not do any filtering, offloads delivery to MDA/LDA;
-- is written in Python instead of C;
-- has other subcommands, not just `imaparms fetch`.
-
-## [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire)
-
-`imaparms delete`
-
-- allows all UNICODE characters except `\n` in passwords/passphrases (yes, including spaces, quotes, etc);
-- provides a bunch of options controlling message selection and uses `--seen` option by default for destructive actions, so you won't accidentally delete any messages you have not yet fetched even if your fetcher got stuck/crashed;
-- provides GMail-specific options;
-- is written in Python instead of Perl and requires nothing but the basic Python install, no third-party libraries needed;
-- has other subcommands, not just `imaparms delete`.
-
-## [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), and similar
-
-- `imaparms fetch` does deliveries from an IMAP server to your MDA instead of trying to synchronize state between some combinations of IMAP servers and local `Maildir`s (i.e. for `imaparms fetch` your IMAP server is always the source, never a destination):
-  - which is seems like a lack of a feature at first, but
-  - `imaparms` lacking two-way sync also prevents you from screwing up your `imaparms` invocation options or restarting the program at an inopportune time and losing all your mail on the server on the next sync as a result (like you can with `offlineimap`),
-  - i.e., with `imaparms` you won't ever lose any messages on the server if you never run `imaparms delete`, and if you do run `imaparms delete`, `imaparms`'s defaults try their best to prevent you from deleting any mail you probably did not mean to delete;
-- `imaparms` has other subcommands, not just `imaparms fetch`.
-
 # <span id="why-not-gmail"/>Why would you even want to use any of this, isn't GMail good enough?
 
 Remember the time when YouTube and Facebook showed you only the posts of people you were subscribed to?
@@ -316,7 +308,7 @@ Now your subscriptions are just one of the inputs to their *algorithms that are 
 (The process which Cory Doctorow calls "Enshittification".)
 
 Remember the time when most people run their own mail servers or had their employers run them and you yourself got to decide which messages should go to `INBOX` and which should be marked as spam?
-Today, Google provides email service for free, and so >70% of all e-mails originate from or get delivered to Google servers (GMail, GMail on custom domains, corporate GMail).
+Today, Google provides email services for free, and so >70% of all e-mails originate from or get delivered to Google servers (GMail, GMail on custom domains, corporate GMail).
 Now it's Google who decides which messages you get to see and which vanish into the void without a trace.
 
 Which, as a recipient, is highly annoying if you frequently get useful mail that GMail marks as spam or just drops (happens all the time to me).
@@ -335,7 +327,7 @@ Meanwhile, other modern MUAs like [Thunderbird](https://www.thunderbird.net/), [
 Which is to say, they suck at searching and tagging mail.
 Especially, since doing those things over IMAP is annoyingly slow, especially when your IMAP server is GMail which very much does not want you to use IMAP (after all, with a MUA working over IMAP, it's the MUA that decides how to sort and display your `INBOX`, not Google, and they hate they can't turn the order of messages in your `INBOX` into something they can sell).
 
-However, there exists a bunch of MUAs that can do full-text mail search and tagging so well and so blazingly fast that they leave GMail in the dust (from a technical standpoint, given an index, full-text search >10x faster than GMail on a single-core 2013-era laptop with an SSD is pretty easy to archive, simply because your SSD is much closer to you than GMail's servers).
+However, there exists a bunch of MUAs that can do full-text mail search and tagging so well and so blazingly fast that they leave GMail in the dust (from a technical standpoint, given an index, full-text search >10x faster than GMail on a single-core of 2012-era laptop with an SSD is pretty easy to archive, simply because your SSD is much closer to you than GMail's servers).
 
 Examples of such awesome MUAs that I'm aware of, in the order from simplest to hardest to setup:
 
@@ -364,41 +356,6 @@ Also, see ["Sup" article on ArchWiki](https://wiki.archlinux.org/title/Sup) for 
 
 (Also, in theory, [Thunderbird](https://www.thunderbird.net/) also supports operation over `Maildir`, but that feature is so buggy it's apparently disabled by default at the moment.)
 
-# Your email will eventually get stolen anyway
-
-Note that [Snowden revelations](https://en.wikipedia.org/wiki/Global_surveillance_disclosures_(2013%E2%80%93present)) mean that Google and US Government store copies of all of your correspondence since 2001-2009 (it depends) even if you delete everything from all the servers.
-
-And they wiretap basically all the traffic going though international Internet exchanges because they wiretap all underwater cables.
-Simply because they can, apparently?
-(If you think about it, there is absolutely no point to doing this if you are trying to achieve their stated signal-intelligence goals.
-Governments and organized crime use one-time-pads since 1950s.
-AES256 + 32 bytes of shared secret + some simple [steganography](https://en.wikipedia.org/wiki/Steganography) and even if the signal gets discovered, no quantum-computer will ever be able to break it, no research into [quantum-safe cryptography](https://en.wikipedia.org/wiki/Post-quantum_cryptography) needed.
-So, clearly, this data collection only works against private citizens and civil society which have no ways to distribute symmetric keys and thus have to use public-key cryptography.)
-
-Globally, >70% of all e-mails originate from or get delivered to Google servers (GMail, GMail on custom domains, corporate GMail).
-
-Most e-mails never gets E2E-encrypted at all, `(100 - epsilon)`% (so, basically, 100%) of all e-mails sent over the Internet never get encrypted with quantum-safe cryptography in-transit.
-
-So, eventually, US Government will get plain-text for almost everything you ever sent (unless you are a government official, work for well-organized crime syndicate, or you and all your friends are really paranoid).
-
-Which means that, eventually, all that mail will get stolen.
-
-So, in the best case scenario, a simple relatively benign blackmail-everyone-you-can-to-get-as-much-money-as-possible AI will be able organize a personal WikiLeaks-style breach, for every single person on planet Earth.
-No input from nefarious humans interested in exploiting *personally you* required.
-After all, you are not that interesting, so you have nothing to fear, nothing to hide, and you certainly did not write any still-embarrassing e-mails when you were 16 years old and did not send any nudes of yourself or anyone else to anyone (including any doctors, during the pandemic) ever.
-
-It would be glorious, wouldn't it?
-
-(Seriously, abstractly speaking, I'm kinda interested in civilization-wide legal and cultural effects of *every embarrassing, even slightly illegal and/or hypocritical thing every person ever did* relentlessly programmatically exploited as blackmail or worse.
-Non-abstractly speaking, why exactly do governments spend public money to make this possible?
-After all, hoarding of exploitable material that made a disaster after being stolen worked so well with [EternalBlue](https://en.wikipedia.org/wiki/EternalBlue), and that thing was a fixable bug, which leaked blackmail is not.)
-
-That is to say, as a long-term defense measure, this tool is probably useless.
-All your mail will get leaked eventually, regardless.
-Against random exploitations of your mail servers `imaparms` is perfect.
-
-Also, `imaparms` is a very fast mail fetcher, regardless of all of this.
-
 # <span id="gmail-is-evil"/>Google's security theater
 
 GMail docs say that IMAP and SMTP are "legacy protocols" and are "insecure".
@@ -423,6 +380,85 @@ Thank you very much.
 In theory, as an alternative to application-specific passwords, you can setup OAuth2 and update tokens automatically with [mailctl](https://github.com/pdobsan/mailctl), but Google will still ask for your phone number to set it up, and OAuth2 renewal adds another point of failure without really adding any security if you store your passwords in a password manager and use `--passcmd` option described below to feed them into `imaparms`.
 
 That is to say, I don't use OAuth2, which is why `imaparms` does not support OAuth2.
+
+# Your email will eventually get stolen anyway
+
+Note that [Snowden revelations](https://en.wikipedia.org/wiki/Global_surveillance_disclosures_(2013%E2%80%93present)) mean that Google and US Government store copies of all of your correspondence since 2007-2009 (it depends on your mail provider) even if you delete everything from all the servers.
+
+And they wiretap basically all the traffic going though international Internet exchanges because they wiretap all underwater cables.
+Simply because they can, apparently?
+(If you think about it, there is absolutely no point to doing this if you are trying to achieve their stated signal-intelligence goals.
+Governments and organized crime use one-time-pads since 1950s.
+AES256 + 32 bytes of shared secret (+ 8 bytes of plain-text session key + 4 bytes of plain-text IV) + some simple [steganography](https://en.wikipedia.org/wiki/Steganography) and even if the signal gets discovered, no quantum-computer will ever be able to break it, no research into [quantum-safe cryptography](https://en.wikipedia.org/wiki/Post-quantum_cryptography) needed.
+So, clearly, this data collection only works against private citizens and civil society which have no ways to distribute symmetric keys and thus have to use public-key cryptography.)
+
+Globally, >70% of all e-mails originate from or get delivered to Google servers (GMail, GMail on custom domains, corporate GMail).
+
+Most e-mails never gets E2E-encrypted at all, `(100 - epsilon)`% (so, basically, 100%) of all e-mails sent over the Internet never get encrypted with quantum-safe cryptography in-transit.
+
+So, eventually, US Government will get plain-text for almost everything you ever sent (unless you are a government official, work for well-organized crime syndicate, or you and all your friends are really paranoid).
+
+Which means that, eventually, all that mail will get stolen.
+
+So, in the best case scenario, a simple relatively benign blackmail-everyone-you-can-to-get-as-much-money-as-possible AI will be able organize a personal WikiLeaks-style breach, for every single person on planet Earth.
+No input from nefarious humans interested in exploiting *personally you* required.
+After all, you are not that interesting, so you have nothing to fear, nothing to hide, and you certainly did not write any still-embarrassing e-mails when you were 16 years old and did not send any nudes of yourself or anyone else to anyone (including any doctors, during the pandemic) ever.
+
+It would be glorious, wouldn't it?
+
+(Seriously, abstractly speaking, I'm kinda interested in civilization-wide legal and cultural effects of *every embarrassing, even slightly illegal and/or hypocritical thing every person ever did* relentlessly programmatically exploited as blackmail or worse.
+Non-abstractly speaking, why exactly do governments spend public money to make this possible?
+After all, hoarding of exploitable material that made a disaster after being stolen worked so well with [EternalBlue](https://en.wikipedia.org/wiki/EternalBlue), and that thing was a fixable bug, which leaked blackmail is not.)
+
+That is to say, as a long-term defense measure, this tool is probably useless.
+All your mail will get leaked eventually, regardless.
+Against random exploitations of your mail servers `imaparms` is perfect.
+
+Also, `imaparms` is a very nice fast mail fetcher, regardless of all of this.
+
+# Comparison to
+
+## [fetchmail](https://www.fetchmail.info/) and [getmail](https://github.com/getmail6/getmail6)
+
+`imaparms fetch`
+
+- fetches your mail >150 times faster by default (both `fetchmail` and `getmail` fetch and mark messages one-by-one, incurring huge network latency overheads, `imaparms fetch` does it in (configurable) batches);
+- fetches messages out-of-order to try and maximize `messages/second` metric when it makes sense (i.e. it temporarily delays fetching of larger messages if many smaller ones can be fetched instead) so that you could efficiently index your mail in parallel with fetching;
+- only does deliveries to [MDA/LDA](https://en.wikipedia.org/wiki/Message_delivery_agent) (similar to `fetchmail --mda` and `getmail`'s `MDA_external` options), deliveries over SMTP are not and will never be supported (if you want this you can just use [msmtp](https://marlam.de/msmtp/) with `imaparms fetch --mda`); thus, `imaparms`
+- is much simpler to use when fetching to a local `Maildir` as it needs no configuration to fetch messages as-is without modifying any headers, thus fetching the same messages twice will produce identical files (which is not true for `fetchmail`, `imaparms fetch --mda MDA` is roughly equivalent to `fetchmail --softbounce --invisible --norewrite --mda MDA`);
+- probably will not work with most broken IMAP servers (`fetchmail` has lots of workarounds for server bugs, `imaparms fetch` does not);
+- is written in Python (like `getmail`) instead of C (like `fetchmail`);
+- has other subcommands, not just `imaparms fetch`.
+
+## [fdm](https://github.com/nicm/fdm)
+
+[A better explanation of what fdm does](https://wiki.archlinux.org/title/fdm).
+
+`imaparms fetch`
+
+- uses server-side message flags to track state instead of keeping a local database of fetched UIDs;
+- fetches messages out-of-order to try and maximize `messages/second` metric;
+- does not do any filtering, offloads delivery to MDA/LDA;
+- is written in Python instead of C;
+- has other subcommands, not just `imaparms fetch`.
+
+## [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire)
+
+`imaparms delete`
+
+- allows all UNICODE characters except `\n` in passwords/passphrases (yes, including spaces, quotes, etc);
+- provides a bunch of options controlling message selection and uses `--seen` option by default for destructive actions, so you won't accidentally delete any messages you have not yet fetched even if your fetcher got stuck/crashed;
+- provides GMail-specific options;
+- is written in Python instead of Perl and requires nothing but the basic Python install, no third-party libraries needed;
+- has other subcommands, not just `imaparms delete`.
+
+## [offlineimap](https://github.com/OfflineIMAP/offlineimap), [imapsync](https://github.com/imapsync/imapsync), and similar
+
+- `imaparms fetch` does deliveries from an IMAP server to your MDA instead of trying to synchronize state between some combinations of IMAP servers and local `Maildir`s (i.e. for `imaparms fetch` your IMAP server is always the source, never the destination), which might seem like a lack of a feature at first, but
+  - `imaparms` lacking two-way sync also prevents you from screwing up your `imaparms` invocation options or restarting the program at an inopportune time and losing all your mail on the server on the next sync as a result (like you can with `offlineimap`),
+  - i.e., with `imaparms` you won't ever lose any messages on the server if you never run `imaparms delete`, and if you do run `imaparms delete`, `imaparms`'s defaults try their best to prevent you from deleting any mail you probably did not mean to delete;
+- consequently, `imaparms` is much simpler to use as the complexity of its configuration is proportional to the complexity of your usage;
+- `imaparms` has other subcommands, not just `imaparms fetch`.
 
 # License
 
@@ -626,11 +662,13 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--not-folder NAME`
   : mail folders to exclude; can be specified multiple times
 
-- delivery settings:
+- delivery (required):
   - `--mda COMMAND`
-  : shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)
-    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.
+  : shell command to use as an MDA to deliver the messages to;
+    `imaparms` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc;
     `maildrop` from Courier Mail Server project is a good KISS default
+
+- hooks:
   - `--new-mail-cmd CMD`
   : shell command to run after the fetch cycle finishes if any new messages were successfully delivered by the `--mda`
 
@@ -707,7 +745,7 @@ Except for the simplest of cases, you must use `--` before `ARG`s so that any op
 Run with `--very-dry-run` to see the interpretation of the given command line.
 
 All generated hooks are deduplicated and run after all other subcommands are done.
-E.g., if you have several `fetch --new-mail-cmd CMD` as subcommands of `for-each`, then `CMD` *will be run **once** after all other subcommands finish*.
+E.g., if you have several `fetch --new-mail-cmd filter-my-mail` as subcommands of `for-each`, then `filter-my-mail` *will be run **once** after all other subcommands finish*.
 
 - positional arguments:
   - `ARG`
@@ -851,6 +889,8 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
     --not-folder INBOX --not-folder "[Gmail]/Starred" --not-folder "[Gmail]/Trash"
   ```
 
+  The purpose of this is purely illustrative. In GMail all messages outside of `[Gmail]/Trash` and `[Gmail]/Spam` are included in `[Gmail]/All Mail` so you should probably just fetch that folder instead.
+
 - GMail-specific deletion mode: move (expire) old messages to `[Gmail]/Trash` and then delete them:
 
   In GMail, deleting messages from `INBOX` does not actually delete them, nor moves them to trash, just removes them from `INBOX` while keeping them available from `[Gmail]/All Mail`.
@@ -882,5 +922,5 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 
   Note the `--` and `\;` tokens, without them the above will fail to parse.
 
-  Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash`.
+  Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash` even though they are specified together.
 

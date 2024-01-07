@@ -993,6 +993,7 @@ EOF
     fmt.add_code(f"""{__package__} fetch "${{gmail_common_mda[@]}}" --all-folders \\
   --not-folder INBOX --not-folder "[Gmail]/Starred" --not-folder "[Gmail]/Trash"
 """)
+    fmt.add_text("The purpose of this is purely illustrative. In GMail all messages outside of `[Gmail]/Trash` and `[Gmail]/Spam` are included in `[Gmail]/All Mail` so you should probably just fetch that folder instead.")
     fmt.end_section()
 
     fmt.start_section(_("GMail-specific deletion mode: move (expire) old messages to `[Gmail]/Trash` and then delete them"))
@@ -1017,7 +1018,7 @@ EOF
     --older-than 7
 """)
     fmt.add_text(_("Note the `--` and `\\;` tokens, without them the above will fail to parse."))
-    fmt.add_text(_("Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash`."))
+    fmt.add_text(_("Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash` even though they are specified together."))
     fmt.end_section()
 
 def make_argparser(real : bool = True) -> _t.Any:
@@ -1216,12 +1217,14 @@ def make_argparser(real : bool = True) -> _t.Any:
         return cmd
 
     def add_delivery(cmd : _t.Any) -> _t.Any:
-        agrp = cmd.add_argument_group(_("delivery settings"))
+        agrp = cmd.add_argument_group(_("delivery (required)"))
         agrp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
                           required=True,
-                          help=_("shell command to use as an MDA to deliver the messages to (required for `fetch` subcommand)") + "\n" + \
-                               _(f"`{__package__}` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc.") + "\n" + \
+                          help=_("shell command to use as an MDA to deliver the messages to;") + "\n" + \
+                               _(f"`{__package__}` will spawn COMMAND via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc;") + "\n" + \
                                _("`maildrop` from Courier Mail Server project is a good KISS default"))
+
+        agrp = cmd.add_argument_group(_("hooks"))
         agrp.add_argument("--new-mail-cmd", metavar="CMD", type=str, help=_("shell command to run after the fetch cycle finishes if any new messages were successfully delivered by the `--mda`"))
         return cmd
 
@@ -1367,7 +1370,7 @@ Except for the simplest of cases, you must use `--` before `ARG`s so that any op
 Run with `--very-dry-run` to see the interpretation of the given command line.
 
 All generated hooks are deduplicated and run after all other subcommands are done.
-E.g., if you have several `fetch --new-mail-cmd CMD` as subcommands of `for-each`, then `CMD` *will be run **once** after all other subcommands finish*.
+E.g., if you have several `fetch --new-mail-cmd filter-my-mail` as subcommands of `for-each`, then `filter-my-mail` *will be run **once** after all other subcommands finish*.
 """))
     if real: add_common(cmd)
     add_folders(cmd, None)
