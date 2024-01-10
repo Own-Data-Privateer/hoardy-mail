@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "imaparms"
-version = "2.2.5"
+version = "2.3"
 authors = [{ name = "Jan Malakhovski", email = "oxij@oxij.org" }]
 description = "A handy Keep It Stupid Simple Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers"
 readme = "README.md"
