@@ -316,7 +316,7 @@ def connect(account : Account, debug : bool) -> _t.Any:
     else:
         IMAP = account.IMAP_base # type: ignore
 
-    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ssl_context.verify_mode = ssl.CERT_REQUIRED
     ssl_context.check_hostname = True
     ssl_context.load_default_certs()
