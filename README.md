@@ -471,7 +471,7 @@ GPLv3+.
 A handy Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
 Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out.
 
-- optional arguments:
+- options:
   - `--version`
   : show program's version number and exit
   - `-h, --help`
@@ -586,7 +586,7 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
-- optional arguments:
+- options:
   - `--porcelain`
   : print in a machine-readable format
 

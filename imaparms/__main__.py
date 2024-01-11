@@ -32,8 +32,8 @@ import typing as _t
 from imaplib import IMAP4, IMAP4_SSL
 from gettext import gettext, ngettext
 
-from . import argparse
-from .argparse import Namespace
+from . import argparse_better as argparse
+from .argparse_better import Namespace
 from .exceptions import *
 
 defenc = sys.getdefaultencoding()
