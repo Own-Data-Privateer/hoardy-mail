@@ -482,7 +482,16 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
                 pass
         state.hooks = []
 
+def check_cmd(cfg : Namespace) -> None:
+    if len(cfg.accounts) == 0:
+        die(gettext("no accounts are specified, need at least one `--host`, `--user`, and either of `--passfile` or `--passcmd`"))
+
+    if cfg.command == "fetch" and cfg.maildir is None and cfg.mda is None:
+        die(gettext("no delivery method is specified, either `--maildir` or `--mda` is required"))
+
 def cmd_list(cfg : Namespace, state : State) -> None:
+    check_cmd(cfg)
+
     if cfg.very_dry_run:
         sys.exit(1)
 
@@ -559,6 +568,7 @@ def prepare_cmd(cfg : Namespace, now : int) -> str:
     return search_filter
 
 def cmd_action(cfg : Namespace, state : State) -> None:
+    check_cmd(cfg)
     print_prelude(cfg)
     now = time.time_ns()
     cfg.search_filter = prepare_cmd(cfg, now)
@@ -1384,7 +1394,7 @@ def make_argparser(real : bool = True) -> _t.Any:
 
     def add_delivery(cmd : _t.Any) -> _t.Any:
         agrp = cmd.add_argument_group(_("delivery target (required, mutually exclusive)"))
-        grp = agrp.add_mutually_exclusive_group(required=True)
+        grp = agrp.add_mutually_exclusive_group()
         grp.add_argument("--maildir", metavar = "DIRECTORY", type=str,
                          help=_("Maildir to deliver the messages to;") + "\n" + \
                               _(f"with this specified `{__package__}` will simply drop raw RFC822 messages, one message per file, into `DIRECTORY/new` (creating it, `DIRECTORY/cur`, and `DIRECTORY/tmp` if any of those do not exists)"))
@@ -1418,6 +1428,7 @@ def make_argparser(real : bool = True) -> _t.Any:
     cmd = subparsers.add_parser("list", help=_("list all available folders on the server, one per line"),
                                 description = _("Login, perform IMAP `LIST` command to get all folders, print them one per line."))
     if real: add_common(cmd)
+    cmd.set_defaults(command="list")
     cmd.set_defaults(func=cmd_list)
 
     cmd = subparsers.add_parser("count", help=_("count how many matching messages each specified folder has"),
@@ -1574,9 +1585,6 @@ def main() -> None:
         else:
             print(parser.format_help())
         sys.exit(0)
-
-    if len(cfg.accounts) == 0:
-        return die(_("no accounts specified, need at least one `--host`, `--user`, and either of `--passfile` or `--passcmd`"))
 
     state = State()
 
