@@ -1282,7 +1282,7 @@ def make_argparser(real : bool = True) -> _t.Any:
         agrp.add_argument("--host", type=str, help=_("IMAP server to connect to (required)"))
         agrp.add_argument("--port", type=int, help=_("port to use") + " " + _("(default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)"))
 
-        agrp = cmd.add_argument_group(_("authentication to the server"), description=_("either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times"))
+        agrp = cmd.add_argument_group(_("authentication to the server"), description=_("either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required; can be specified multiple times"))
         agrp.add_argument("--user", type=str, help=_("username on the server (required)"))
 
         grp = agrp.add_mutually_exclusive_group()
@@ -1350,31 +1350,33 @@ def make_argparser(real : bool = True) -> _t.Any:
         return cmd
 
     def add_flag_filters(cmd : _t.Any, default : _t.Union[_t.Optional[bool], str]) -> _t.Any:
-        def_req = ""
+        def_mex = " " + _("(mutually exclusive)")
         def_str = " " + _("(default)")
-        def_all, def_seen, def_unseen = "", "", ""
+        def_req = def_mex
+        def_any, def_seen, def_unseen, def_flag = "", "", "", def_str
         if default is None:
-            def_all = def_str
+            def_any = def_str
         elif default == True:
             def_seen = def_str
         elif default == False:
             def_unseen = def_str
         elif default == "depends":
-            def_req = " " + _("(default: depends on other arguments)")
+            def_req = " " + _("(mutually exclusive, default: depends on other arguments)")
+            def_flag = ""
         else:
             assert False
 
         agrp = cmd.add_argument_group(_("message IMAP `SEEN` flag filters") + def_req)
 
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--any-seen", dest="seen", action="store_const", const = None, help=_("operate on both `SEEN` and not `SEEN` messages") + def_all)
+        grp.add_argument("--any-seen", dest="seen", action="store_const", const = None, help=_("operate on both `SEEN` and not `SEEN` messages") + def_any)
         grp.add_argument("--seen", dest="seen", action="store_true", help=_("operate on messages marked as `SEEN`") + def_seen)
         grp.add_argument("--unseen", dest="seen", action="store_false", help=_("operate on messages not marked as `SEEN`") + def_unseen)
         grp.set_defaults(seen = default)
 
         agrp = cmd.add_argument_group(_("message IMAP `FLAGGED` flag filters") + def_req)
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--any-flagged", dest="flagged", action="store_const", const = None, help=_("operate on both `FLAGGED` and not `FLAGGED` messages") + def_str)
+        grp.add_argument("--any-flagged", dest="flagged", action="store_const", const = None, help=_("operate on both `FLAGGED` and not `FLAGGED` messages") + def_flag)
         grp.add_argument("--flagged", dest="flagged", action="store_true", help=_("operate on messages marked as `FLAGGED`"))
         grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as `FLAGGED`"))
         grp.set_defaults(flagged = None)

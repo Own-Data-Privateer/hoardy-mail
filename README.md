@@ -537,7 +537,7 @@ Logins to a specified server, performs specified actions on all messages matchin
   : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
 
 - authentication to the server:
-  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required, can be specified multiple times
+  either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required; can be specified multiple times
 
   - `--user USER`
   : username on the server (required)
@@ -623,7 +623,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--not-folder NAME`
   : mail folders to exclude; can be specified multiple times
 
-- message IMAP `SEEN` flag filters:
+- message IMAP `SEEN` flag filters (mutually exclusive):
   - `--any-seen`
   : operate on both `SEEN` and not `SEEN` messages (default)
   - `--seen`
@@ -631,7 +631,7 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
   - `--unseen`
   : operate on messages not marked as `SEEN`
 
-- message IMAP `FLAGGED` flag filters:
+- message IMAP `FLAGGED` flag filters (mutually exclusive):
   - `--any-flagged`
   : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
@@ -651,7 +651,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   - `--not-folder NAME`
   : mail folders to exclude; can be specified multiple times
 
-- message IMAP `SEEN` flag filters (default: depends on other arguments):
+- message IMAP `SEEN` flag filters (mutually exclusive, default: depends on other arguments):
   - `--any-seen`
   : operate on both `SEEN` and not `SEEN` messages
   - `--seen`
@@ -659,9 +659,9 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
   - `--unseen`
   : operate on messages not marked as `SEEN`
 
-- message IMAP `FLAGGED` flag filters (default: depends on other arguments):
+- message IMAP `FLAGGED` flag filters (mutually exclusive, default: depends on other arguments):
   - `--any-flagged`
-  : operate on both `FLAGGED` and not `FLAGGED` messages (default)
+  : operate on both `FLAGGED` and not `FLAGGED` messages
   - `--flagged`
   : operate on messages marked as `FLAGGED`
   - `--unflagged`
@@ -708,7 +708,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--new-mail-cmd CMD`
   : shell command to run after the fetch cycle finishes if any new messages were successfully delivered into the `--maildir` or by the `--mda`
 
-- message IMAP `SEEN` flag filters:
+- message IMAP `SEEN` flag filters (mutually exclusive):
   - `--any-seen`
   : operate on both `SEEN` and not `SEEN` messages
   - `--seen`
@@ -716,7 +716,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
   - `--unseen`
   : operate on messages not marked as `SEEN` (default)
 
-- message IMAP `FLAGGED` flag filters:
+- message IMAP `FLAGGED` flag filters (mutually exclusive):
   - `--any-flagged`
   : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
@@ -746,7 +746,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   - `--not-folder NAME`
   : mail folders to exclude; can be specified multiple times
 
-- message IMAP `SEEN` flag filters:
+- message IMAP `SEEN` flag filters (mutually exclusive):
   - `--any-seen`
   : operate on both `SEEN` and not `SEEN` messages
   - `--seen`
@@ -754,7 +754,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, del
   - `--unseen`
   : operate on messages not marked as `SEEN`
 
-- message IMAP `FLAGGED` flag filters:
+- message IMAP `FLAGGED` flag filters (mutually exclusive):
   - `--any-flagged`
   : operate on both `FLAGGED` and not `FLAGGED` messages (default)
   - `--flagged`
