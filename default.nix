@@ -7,7 +7,7 @@ with pkgs.python3Packages;
 
 buildPythonApplication (rec {
   pname = "imaparms";
-  version = "2.3";
+  version = "2.4.0";
   format = "pyproject";
 
   src = lib.cleanSourceWith {
