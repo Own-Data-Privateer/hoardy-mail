@@ -270,6 +270,14 @@ def error(desc : str) -> None:
     sys.stderr.write(gettext("error") + ": " + desc + "\n")
     sys.stderr.flush()
 
+def run_hook(hook : str) -> None:
+    try:
+        with subprocess.Popen(hook, shell=True) as p:
+            # __exit__ will do everything we need
+            pass
+    except Exception as exc:
+        traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+
 class AccountFailure(Failure): pass
 class FolderFailure(AccountFailure): pass
 
@@ -477,9 +485,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
             done.add(hook)
 
             print("# " + gettext("running `%s`") % (hook,))
-            with subprocess.Popen(hook, shell=True) as p:
-                # __exit__ will do everything we need
-                pass
+            run_hook(hook)
         state.hooks = []
 
 def check_cmd(cfg : Namespace) -> None:
@@ -690,8 +696,8 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
         try:
             do_fetch(cfg, state, account, srv, message_uids)
         finally:
-            if cfg.new_mail_cmd is not None and state.num_delivered > old_num_delivered:
-                state.hooks.append(cfg.new_mail_cmd)
+            if state.num_delivered > old_num_delivered:
+                state.hooks += cfg.new_mail_cmd
     elif command == "delete":
         assert method is not None
         do_store(cfg, state, account, srv, method, message_uids)
@@ -1411,7 +1417,7 @@ def make_argparser(real : bool = True) -> _t.Any:
         grp.set_defaults(paranoid = False)
 
         agrp = cmd.add_argument_group(_("hooks"))
-        agrp.add_argument("--new-mail-cmd", metavar="CMD", type=str, help=_("shell command to run after the fetch cycle finishes if any new messages were successfully delivered into the `--maildir` or by the `--mda`"))
+        agrp.add_argument("--new-mail-cmd", metavar="CMD", action = "append", type=str, default = [], help=_("shell command to run at the end of each program cycle that had new messages successfully delivered into the `--maildir` or by the `--mda` of this `fetch` subcommand; can be specified multiple times"))
         return cmd
 
     def no_cmd(cfg : Namespace, state : State) -> None:

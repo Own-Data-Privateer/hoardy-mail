@@ -706,7 +706,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
 
 - hooks:
   - `--new-mail-cmd CMD`
-  : shell command to run after the fetch cycle finishes if any new messages were successfully delivered into the `--maildir` or by the `--mda`
+  : shell command to run at the end of each program cycle that had new messages successfully delivered into the `--maildir` or by the `--mda` of this `fetch` subcommand; can be specified multiple times
 
 - message IMAP `SEEN` flag filters (mutually exclusive):
   - `--any-seen`
