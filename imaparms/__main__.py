@@ -71,7 +71,7 @@ def handle_signals() -> None:
     signal.signal(signal.SIGUSR1, sig_unsleep)
 
 def pinentry(host : str, user : str) -> str:
-    with subprocess.Popen(["pinentry"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as p:
+    with subprocess.Popen(["pinentry"], stdin=subprocess.PIPE, stdout=subprocess.PIPE) as p:
         def check(beginning : str) -> str:
             res = p.stdout.readline().decode(defenc) # type: ignore
             if not res.endswith("\n") or not res.startswith(beginning):
@@ -477,7 +477,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
             done.add(hook)
 
             print("# " + gettext("running `%s`") % (hook,))
-            with subprocess.Popen(hook, stdin=subprocess.PIPE, stdout=None, stderr=None, shell=True) as p:
+            with subprocess.Popen(hook, shell=True) as p:
                 # __exit__ will do everything we need
                 pass
         state.hooks = []
@@ -889,7 +889,7 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
             # deliver via MDA
             flushed = False
             delivered = False
-            with subprocess.Popen(cfg.mda, stdin=subprocess.PIPE, stdout=None, stderr=None, shell=True) as p:
+            with subprocess.Popen(cfg.mda, stdin=subprocess.PIPE, shell=True) as p:
                 fd : _t.Any = p.stdin
                 try:
                     fd.write(header)
@@ -1247,7 +1247,7 @@ def make_argparser(real : bool = True) -> _t.Any:
                 with open(value, "rb") as f:
                     password = f.readline().decode(defenc)
             elif self.ptype == "cmd":
-                with subprocess.Popen(value, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=None, shell=True) as p:
+                with subprocess.Popen(value, stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True) as p:
                     p.stdin.close() # type: ignore
                     password = p.stdout.readline().decode(defenc) # type: ignore
                     retcode = p.wait()
