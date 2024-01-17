@@ -388,7 +388,7 @@ def for_each_account_poll(cfg : Namespace, state : State, *args : _t.Any) -> Non
     cycle = cfg.every
 
     def do_sleep(ttime : str) -> None:
-        report("# " + gettext("sleeping until %s, send SIGUSR1 or hit ^C to start immediately, hit ^C twice to abort") % (ttime,))
+        report("# " + gettext("sleeping until %s, send SIGUSR1 to PID %s or hit ^C to start immediately, hit ^C twice to abort") % (ttime, smypid))
         try:
             unsleep(to_sleep)
         except KeyboardInterrupt:
