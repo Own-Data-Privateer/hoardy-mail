@@ -503,6 +503,8 @@ Logins to a specified server, performs specified actions on all messages matchin
   : show this help message and exit
   - `--markdown`
   : show help messages formatted in Markdown
+  - `-q, --quieter`
+  : be less verbose
 
 - debugging:
   - `--very-dry-run`

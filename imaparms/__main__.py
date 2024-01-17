@@ -279,6 +279,7 @@ def report(message : str) -> None:
     sys.stdout.flush()
 
 def info(cfg : Namespace, message : str) -> None:
+    if cfg.quiet: return
     report(message)
 
 def run_hook(hook : str) -> None:
@@ -1294,6 +1295,8 @@ def make_argparser(real : bool = True) -> _t.Any:
 
     def add_common(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(accounts = [])
+
+        cmd.add_argument("-q", "--quieter", dest = "quiet", action="store_true", help=_("be less verbose"))
 
         agrp = cmd.add_argument_group(_("debugging"))
         agrp.add_argument("--very-dry-run", action="store_true", help=_("verbosely describe what the given command line would do and exit"))
