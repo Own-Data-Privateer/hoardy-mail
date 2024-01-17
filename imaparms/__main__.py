@@ -1045,26 +1045,30 @@ def do_store(cfg : Namespace, state : State, account : Account, srv : IMAP4,
         joined = b",".join(to_store)
         if method == "seen":
             info(cfg, marking_as % (len(to_store), "SEEN"))
-            srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Seen") # type: ignore
+            typ, data = srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Seen") # type: ignore
         elif method == "unseen":
             info(cfg, marking_as % (len(to_store), "UNSEEN"))
-            srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Seen") # type: ignore
+            typ, data = srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Seen") # type: ignore
         elif method == "flagged":
             info(cfg, marking_as % (len(to_store), "FLAGGED"))
-            srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Flagged") # type: ignore
+            typ, data = srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Flagged") # type: ignore
         elif method == "unflagged":
             info(cfg, marking_as % (len(to_store), "UNFLAGGED"))
-            srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Flagged") # type: ignore
+            typ, data = srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Flagged") # type: ignore
         elif method in ["delete", "delete-noexpunge"]:
             info(cfg, "... " + gettext("deleting a batch of %d messages") % (len(to_store),))
-            srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted") # type: ignore
-            if method == "delete":
+            typ, data = srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted") # type: ignore
+            if typ == "OK" and method == "delete":
                 srv.expunge()
         elif method == "gmail-trash":
             info(cfg, "... " + gettext("moving a batch of %d messages to `[GMail]/Trash`") % (len(to_store),))
-            srv.uid("STORE", joined, "+X-GM-LABELS", "\\Trash") # type: ignore
+            typ, data = srv.uid("STORE", joined, "+X-GM-LABELS", "\\Trash") # type: ignore
         else:
             assert False
+
+        if typ != "OK":
+            state.num_errors += 1
+            error(format_imap_error("STORE", typ, data))
 
 def add_examples(fmt : _t.Any) -> None:
     _ = gettext
