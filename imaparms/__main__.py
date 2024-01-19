@@ -732,6 +732,9 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
     if cfg.dry_run:
         report(gettext("dry-run: (not) " + act) % actargs)
         return
+    elif command == "delete" and len(account.errors) > 0:
+        account_error(account, gettext("one of the previous commands produced errors, not " + act) % actargs)
+        return
     else:
         report(gettext(act) % actargs)
 
