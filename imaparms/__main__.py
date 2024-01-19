@@ -318,6 +318,17 @@ class Account:
     allow_login : bool
     IMAP_base : type
 
+    num_delivered : int = _dc.field(default = 0)
+    num_undelivered : int = _dc.field(default = 0)
+    num_marked : int = _dc.field(default = 0)
+    num_moved : int = _dc.field(default = 0)
+    num_deleted : int = _dc.field(default = 0)
+    errors : _t.List[str] = _dc.field(default_factory = lambda: [])
+
+def account_error(account : Account, message : str) -> None:
+    account.errors.append(message)
+    error(message)
+
 def connect(account : Account, debug : bool) -> _t.Any:
     if debug:
         binstderr = os.fdopen(sys.stderr.fileno(), "wb")
@@ -372,7 +383,6 @@ def unsleep(seconds : _t.Union[int, float]) -> None:
 
 @_dc.dataclass
 class State:
-    num_delivered : int = _dc.field(default = 0)
     num_errors : int = _dc.field(default = 0)
     hooks : _t.List[str] = _dc.field(init = False)
 
@@ -406,28 +416,17 @@ def for_each_account_poll(cfg : Namespace, state : State, *args : _t.Any) -> Non
         do_sleep(ttime)
 
     while True:
-        old_errors = state.num_errors
-        old_delivered = state.num_delivered
-
         now = time.time()
         repeat_at = now + cycle
         ftime = time.strftime(fmt, time.localtime(now))
-        info(cfg, "# " + gettext("poll starts at %s") % (ftime,))
+        info(cfg, "# " + gettext("poll: starting at %s") % (ftime,))
 
         for_each_account(cfg, state, *args)
 
         now = time.time()
         ntime = time.strftime(fmt, time.localtime(now))
-        new_errors = state.num_errors - old_errors
-        new_delivered = state.num_delivered - old_delivered
 
-        msg = gettext("poll finished at %s, ") % (ntime,)
-        msg += ngettext("there was %d new messages ", "there were %d new messages ",
-                        new_delivered + new_errors) % (new_delivered,)
-        msg += ngettext("and %d new error", "and %d new errors", new_errors) % (new_errors,)
-
-        msg_delivered = ngettext("delivered %d new message", "delivered %d new messages", new_delivered) % (new_delivered,)
-        info(cfg, "# " + gettext("poll finished at %s, ") % (ntime,) + msg_delivered)
+        info(cfg, "# " + gettext("poll: finished at %s") % (ntime,))
 
         to_sleep = max(60, repeat_at - now + random.randint(0, cfg.every_add_random))
         ttime = time.strftime(fmt, time.localtime(now + to_sleep))
@@ -442,6 +441,10 @@ def for_each_account(cfg : Namespace, state : State, *args : _t.Any) -> None:
         should_raise = True
 
 def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., None], *args : _t.Any) -> None:
+    num_delivered, num_undelivered = 0, 0
+    num_marked, num_moved, num_deleted = 0, 0, 0
+    errors = []
+
     account : Account
     for account in cfg.accounts:
         if want_stop: raise KeyboardInterrupt()
@@ -482,7 +485,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
             func(cfg, state, account, srv, *args)
         except AccountFailure as exc:
             state.num_errors += 1
-            error(str(exc))
+            account_error(account, str(exc))
         finally:
             try:
                 srv.logout()
@@ -490,15 +493,47 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
                 pass
             srv = None
 
-    if len(state.hooks) > 0:
-        done = set()
-        for hook in state.hooks:
-            if hook in done: continue
-            done.add(hook)
+            num_delivered += account.num_delivered
+            num_marked += account.num_marked
+            num_moved += account.num_moved
+            num_deleted += account.num_deleted
+            num_undelivered += account.num_undelivered
+            errors += account.errors
 
+            account.num_delivered, account.num_undelivered = 0, 0
+            account.num_marked, account.num_moved, account.num_deleted = 0, 0, 0
+            account.errors = []
+
+    if len(state.hooks) > 0:
+        for hook in state.hooks:
             report("# " + gettext("running `%s`") % (hook,))
             run_hook(hook)
         state.hooks = []
+
+    good = []
+    if num_delivered > 0:
+        good.append(ngettext("fetched %d new message", "fetched %d new messages", num_delivered) % (num_delivered,))
+    if num_marked > 0:
+        good.append(ngettext("marked %d message", "marked %d messages", num_marked) % (num_marked,))
+    if num_moved > 0:
+        good.append(ngettext("moved %d message", "moved %d messages", num_moved) % (num_moved,))
+    if num_deleted > 0:
+        good.append(ngettext("deleted %d message", "deleted %d messages", num_deleted) % (num_deleted,))
+
+    bad = []
+    if num_undelivered > 0:
+        bad.append(ngettext("failed to fetch %d message", "failed to fetch %d messages", num_undelivered) % (num_undelivered,))
+    num_errors = len(errors)
+    if num_errors > 0:
+        bad.append(ngettext("produced %d new error", "produced %d new errors", num_errors) % (num_errors,))
+
+    if len(good) > 0:
+        title = gettext(", ").join(good)
+        info(cfg, "# " + gettext("poll: ") + title)
+
+    if len(bad) > 0:
+        title = gettext(", ").join(bad)
+        issue("# " + gettext("poll: ") + title)
 
 def check_cmd(cfg : Namespace) -> None:
     if len(cfg.accounts) == 0:
@@ -631,13 +666,14 @@ def for_each_folder_(cfg : Namespace, state : State, account : Account, srv : IM
         if typ != "OK":
             state.num_errors += 1
             error(format_imap_error("SELECT", typ, data))
+            account_error(account, gettext("failed to IMAP SELECT folder `%s`, skipping") % (folder,))
             continue
 
         try:
             func(cfg, state, account, srv, folder, *args)
         except FolderFailure as exc:
             state.num_errors += 1
-            error(str(exc))
+            account_error(account, str(exc))
         finally:
             srv.close()
 
@@ -706,12 +742,14 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
     if command == "mark":
         do_store(cfg, state, account, srv, cfg.mark, message_uids)
     elif command == "fetch":
-        old_num_delivered = state.num_delivered
+        old_num_delivered = account.num_delivered
         try:
             do_fetch(cfg, state, account, srv, message_uids)
         finally:
-            if state.num_delivered > old_num_delivered:
-                state.hooks += cfg.new_mail_cmd
+            if account.num_delivered > old_num_delivered:
+                for hook in cfg.new_mail_cmd:
+                    if hook not in state.hooks:
+                        state.hooks.append(hook)
     elif command == "delete":
         assert method is not None
         do_store(cfg, state, account, srv, method, message_uids)
@@ -727,6 +765,7 @@ def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, mes
         to_fetch_set : _t.Set[bytes] = set(to_fetch)
         typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)") # type: ignore
         if typ != "OK":
+            account.num_undelivered += len(to_fetch)
             state.num_errors += 1
             error(format_imap_error("FETCH", typ, data))
             continue
@@ -748,6 +787,7 @@ def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, mes
             to_fetch_set.remove(uid)
 
         if len(to_fetch_set) > 0:
+            account.num_undelivered += len(to_fetch)
             state.num_errors += 1
             error(format_imap_error("FETCH", "did not get enough elements"))
             continue
@@ -808,6 +848,7 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
     joined = b",".join(message_uids)
     typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])") # type: ignore
     if typ != "OK":
+        account.num_undelivered += len(message_uids)
         state.num_errors += 1
         error(format_imap_error("FETCH", typ, data))
         return
@@ -1011,7 +1052,8 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
 
     num_delivered = len(done_uids)
     num_undelivered = len(failed_uids)
-    state.num_delivered += num_delivered
+    account.num_delivered += num_delivered
+    account.num_undelivered += num_undelivered
 
     if internal_mda:
         how = "--maildir " + destdir
@@ -1067,7 +1109,15 @@ def do_store(cfg : Namespace, state : State, account : Account, srv : IMAP4,
         else:
             assert False
 
-        if typ != "OK":
+        if typ == "OK":
+            num_messages = len(to_store)
+            if method in ["delete", "delete-noexpunge"]:
+                account.num_deleted += num_messages
+            elif method == "gmail-trash":
+                account.num_moved += num_messages
+            else:
+                account.num_marked += num_messages
+        else:
             state.num_errors += 1
             error(format_imap_error("STORE", typ, data))
 
