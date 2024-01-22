@@ -514,6 +514,16 @@ Logins to a specified server, performs specified actions on all messages matchin
   - `--debug`
   : dump IMAP conversation to stderr
 
+- hooks:
+  - `--notify-success`
+  : generate notification (via `notify-send`) describing changes on the server performed by `imaparms`, if any, at the end of each program cycle; most useful if you run `imaparms` in background with `--every` argument in a graphical environment
+  - `--success-cmd CMD`
+  : shell command to run at the end of each program cycle that performed some changes on the server, i.e. a generalized version of `--notify-success`; the spawned process will receive the description of the performed changes via stdin; can be specified multiple times
+  - `--notify-failure`
+  : generate notification (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `imaparms` in background with `--every` argument in a graphical environment
+  - `--failure-cmd CMD`
+  : shell command to run at the end of each program cycle that had some of its command fail, i.e. a generalized version of `--notify-failure`; the spawned process will receive the description of the failured via stdin; can be specified multiple times
+
 - authentication settings:
   - `--auth-allow-login`
   : allow the use of IMAP `LOGIN` command (default)

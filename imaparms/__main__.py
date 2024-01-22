@@ -290,6 +290,41 @@ def run_hook(hook : str) -> None:
     except Exception as exc:
         traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
 
+def run_hook_stdin(hook : str, data : bytes) -> None:
+    try:
+        with subprocess.Popen(hook, stdin=subprocess.PIPE, shell=True) as p:
+            fd : _t.Any = p.stdin
+            fd.write(data)
+            fd.flush()
+            fd.close()
+    except Exception as exc:
+        traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+
+def notify_send(typ : str, title : str, body : str) -> None:
+    try:
+        with subprocess.Popen(["notify-send", "-a", "imaparms", "-i", typ, "--", title, body]) as p:
+            pass
+    except Exception as exc:
+        traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+
+def notify_success(cfg : Namespace, title : str, body : str) -> None:
+    if cfg.notify_success:
+        notify_send("info", title, body)
+
+    for cmd in cfg.success_cmd:
+        run_hook_stdin(cmd, title.encode(defenc) + b"\n" + body.encode(defenc) + b"\n")
+
+def notify_failure(cfg : Namespace, title : str, body : str) -> None:
+    if cfg.notify_failure:
+        notify_send("error", title, body)
+
+    for cmd in cfg.failure_cmd:
+        run_hook_stdin(cmd, title.encode(defenc) + b"\n" + body.encode(defenc) + b"\n")
+
+def notify_error(cfg : Namespace, title : str, body : str = "") -> None:
+    error(title)
+    notify_failure(cfg, title, body)
+
 class AccountFailure(Failure): pass
 class FolderFailure(AccountFailure): pass
 
@@ -323,6 +358,7 @@ class Account:
     num_marked : int = _dc.field(default = 0)
     num_moved : int = _dc.field(default = 0)
     num_deleted : int = _dc.field(default = 0)
+    log : _t.List[str] = _dc.field(default_factory = lambda: [])
     errors : _t.List[str] = _dc.field(default_factory = lambda: [])
 
 def account_error(account : Account, message : str) -> None:
@@ -443,6 +479,7 @@ def for_each_account(cfg : Namespace, state : State, *args : _t.Any) -> None:
 def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., None], *args : _t.Any) -> None:
     num_delivered, num_undelivered = 0, 0
     num_marked, num_moved, num_deleted = 0, 0, 0
+    log = []
     errors = []
 
     account : Account
@@ -498,10 +535,15 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
             num_moved += account.num_moved
             num_deleted += account.num_deleted
             num_undelivered += account.num_undelivered
+            if len(account.log) > 0:
+                log.append(gettext("%s on %s:") % \
+                           (account.user, account.host) + \
+                           "\n- " + "\n- ".join(account.log))
             errors += account.errors
 
             account.num_delivered, account.num_undelivered = 0, 0
             account.num_marked, account.num_moved, account.num_deleted = 0, 0, 0
+            account.log = []
             account.errors = []
 
     if len(state.hooks) > 0:
@@ -530,10 +572,12 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
     if len(good) > 0:
         title = gettext(", ").join(good)
         info(cfg, "# " + gettext("poll: ") + title)
+        notify_success(cfg, title, "\n".join(log))
 
     if len(bad) > 0:
         title = gettext(", ").join(bad)
         issue("# " + gettext("poll: ") + title)
+        notify_failure(cfg, title, "\n".join(errors))
 
 def check_cmd(cfg : Namespace) -> None:
     if len(cfg.accounts) == 0:
@@ -743,19 +787,44 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
         return
 
     if command == "mark":
-        do_store(cfg, state, account, srv, cfg.mark, message_uids)
+        old_num_marked = account.num_marked
+        try:
+            do_store(cfg, state, account, srv, cfg.mark, message_uids)
+        finally:
+            num_marked = account.num_marked - old_num_marked
+            if num_marked > 0:
+                account.log.append("`%s`: " % (folder,) + \
+                                   ngettext("marked %d message", "marked %d messages", num_marked) % (num_marked,))
     elif command == "fetch":
         old_num_delivered = account.num_delivered
+        old_num_marked = account.num_marked
         try:
             do_fetch(cfg, state, account, srv, message_uids)
         finally:
-            if account.num_delivered > old_num_delivered:
+            num_delivered = account.num_delivered - old_num_delivered
+            num_marked = account.num_marked - old_num_marked
+            if num_delivered > 0:
+                if num_delivered == num_marked:
+                    msg = ngettext("fetched and marked %d message", "fetched and marked %d messages", \
+                                   num_delivered) % (num_delivered,)
+                else:
+                    msg = ngettext("fetched %d but marked %d message", "fetched %d but marked %d messages", \
+                                   num_delivered) % (num_delivered, num_marked)
+                account.log.append("`%s`: " % (folder,) + msg)
+
                 for hook in cfg.new_mail_cmd:
                     if hook not in state.hooks:
                         state.hooks.append(hook)
     elif command == "delete":
         assert method is not None
-        do_store(cfg, state, account, srv, method, message_uids)
+        old_num_deleted = account.num_deleted
+        try:
+            do_store(cfg, state, account, srv, method, message_uids)
+        finally:
+            num_deleted = account.num_deleted - old_num_deleted
+            if num_deleted > 0:
+                account.log.append("`%s`: " % (folder,) + \
+                                   ngettext("deleted %d message", "deleted %d messages", num_deleted) % (num_deleted,))
 
 def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
     fetch_num = cfg.fetch_number
@@ -1356,6 +1425,13 @@ def make_argparser(real : bool = True) -> _t.Any:
         agrp.add_argument("--dry-run", action="store_true", help=_("perform a trial run without actually performing any changes"))
         agrp.add_argument("--debug", action="store_true", help=_("dump IMAP conversation to stderr"))
 
+        agrp = cmd.add_argument_group(_("hooks"))
+        agrp.add_argument("--notify-success", action="store_true", help=_(f"generate notification (via `notify-send`) describing changes on the server performed by `{__package__}`, if any, at the end of each program cycle; most useful if you run `{__package__}` in background with `--every` argument in a graphical environment"))
+        agrp.add_argument("--success-cmd", metavar = "CMD", action = "append", type=str, default = [], help=_(f"shell command to run at the end of each program cycle that performed some changes on the server, i.e. a generalized version of `--notify-success`; the spawned process will receive the description of the performed changes via stdin; can be specified multiple times"))
+        agrp.add_argument("--notify-failure", action="store_true", help=_(f"generate notification (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `{__package__}` in background with `--every` argument in a graphical environment"))
+        agrp.add_argument("--failure-cmd", metavar = "CMD", action = "append", type=str, default = [], help=_(f"shell command to run at the end of each program cycle that had some of its command fail, i.e. a generalized version of `--notify-failure`; the spawned process will receive the description of the failured via stdin; can be specified multiple times"))
+        agrp.set_defaults(notify = False)
+
         agrp = cmd.add_argument_group(_("authentication settings"))
         grp = agrp.add_mutually_exclusive_group()
         grp.add_argument("--auth-allow-login", dest="allow_login", action="store_true", help=_("allow the use of IMAP `LOGIN` command (default)"))
@@ -1682,11 +1758,11 @@ def main() -> None:
         error(_("Interrupted!"))
     except CatastrophicFailure as exc:
         state.num_errors += 1
-        error(str(exc))
+        notify_error(cfg, str(exc))
     except Exception as exc:
         traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
         state.num_errors += 1
-        error(_("A bug!"))
+        notify_error(cfg, _("A bug!"))
 
     if state.num_errors > 0:
         error(ngettext("There was %d error!", "There were %d errors!", state.num_errors) % (state.num_errors,))
