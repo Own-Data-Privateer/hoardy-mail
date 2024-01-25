@@ -1,13 +1,16 @@
 # What is `imaparms`?
 
-`imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool/utility/console app for POSIX-compatible systems that can help you to download/fetch/backup all your mail/email from an IMAP server (e.g. GMail, Yahoo, Hotmail, Yandex, etc, or your own private mail server) to your hard disk, programmatically change flags on messages on the IMAP server (e.g. mark all messages newer than a day old in some folder as unread), delete/expire old messages from the IMAP server, and similar.
+`imaparms` is a *handy* Swiss-army-knife-like tool/utility/console app for POSIX-compatible systems that can help you to download/fetch/backup all your mail/email from an IMAP server (e.g. GMail, Yahoo, Hotmail, Yandex, etc, or your own private mail server) to your hard disk, programmatically change flags on messages on the IMAP server (e.g. mark all messages newer than a day old in some folder as unread), delete/expire old messages from the IMAP server, and similar.
 
-Or, more formally: `imaparms` is a *handy* Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
+Or, more formally: `imaparms` is a utility for fetching and performing batch operations on messages residing on IMAP servers.
 That is: login to a specified server, fetch or perform specified actions (count, flag/mark, delete, etc) on all messages matching specified criteria in all specified folders, logout.
+
+Or, in comparison to other things, `imaparms` is an advanced but fairly KISS (Keep It Stupid Simple) replacement for a combination of [fetchmail](https://www.fetchmail.info/)/[getmail](https://github.com/getmail6/getmail6) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire), with additional features, and written in pure Python.
+Also, it fetches mail >150 times faster and (when using `--maildir` option) generates ~150 times less disk writes than `fetchmail` and `getmail` by default, and it is designed to do its very best at not losing any of your mail regardless of network connections failing unexpectedly, your IMAP server generating errors at unexpected times, other simultaneous IMAP clients making incompatible changes that could lead to future data loss, your disk failing while `imaparms` tries to `fsync` your data, and you calling `imaparms` with wrong command line arguments.
 
 # Screenshot
 
-[![](https://oxij.org/software/imaparms/imaparms-v2.2.png)](https://oxij.org/software/imaparms/imaparms-v2.2.webm)
+[![](https://oxij.org/software/imaparms/imaparms-v2.5.png)](https://oxij.org/software/imaparms/imaparms-v2.5.webm)
 
 Click the above image to see the full terminal recording video of `imaparms` invocation (with account data edited out and replaced by fake GMail accounts in post-processing) running `new-mail-hook` indexing new mail with [`notmuch`](https://notmuchmail.org/) ([see workflow example below](#workflow)), followed by a full-text search in Emacs UI of `notmuch`.
 
@@ -203,8 +206,9 @@ chmod +x ~/bin/new-mail-hook
 # optionally, if needed
 # imaparms mark ... --folder "[Gmail]/All Mail" unseen
 
-# every hour, fetch new and expire old mail from two GMail accounts
-imaparms for-each --every 3600 \
+# every hour, fetch new and expire old mail from two GMail accounts,
+# generate new desktop notifications with `notify-send` if some of the commands fail
+imaparms for-each --every 3600 --notify-failure \
     --host imap.gmail.com \
       --user account@gmail.com --passcmd "pass show mail/account@gmail.com" \
       --user another@gmail.com --passcmd "pass show mail/another@gmail.com" \
@@ -299,7 +303,8 @@ fetchmail --mda "maildrop ~/.mailfilter-secondary" -d 3600
 # - expire old backed up messages marked both SEEN (by fetchmail) and FLAGGED (by imaparms) from "[Gmail]/All Mail",
 # - expire old backed up messages marked as SEEN (by imaparms) from "[Gmail]/Spam",
 # - clean any messages older than 7 days (regardless of their flags) from "[Gmail]/Trash".
-imaparms for-each --every 900 \
+# - generate new desktop notifications with `notify-send` if some of the commands fail
+imaparms for-each --every 900 --notify-failure \
     "${secondary_common[@]}" \
   -- \
     fetch --folder "[Gmail]/All Mail" --mda maildrop --new-mail-cmd new-mail-hook --any-seen --unflagged \; \
@@ -448,6 +453,7 @@ Also, `imaparms` is a very nice fast mail fetcher, regardless of all of this.
 `imaparms fetch`
 
 - fetches your mail >150 times faster by default (both `fetchmail` and `getmail` fetch and mark messages one-by-one, incurring huge network latency overheads, `imaparms fetch` does it in (configurable) batches);
+- generates ~150 times less disk writes (`imaparms fetch --maildir` `fsync`s messages to disk in (configurable) batches) improving performance and longevity of your SSD;
 - fetches messages out-of-order to try and maximize `messages/second` metric when it makes sense (i.e. it temporarily delays fetching of larger messages if many smaller ones can be fetched instead) so that you could efficiently index your mail in parallel with fetching;
 - only does deliveries to a local Maildir (with `imaparms fetch --maildir` option) or [MDA/LDA](https://en.wikipedia.org/wiki/Message_delivery_agent) (with `imaparms fetch --mda` option, which does the same thing as `fetchmail --mda` and `getmail`'s `MDA_external` options), deliveries over SMTP are not and will never be supported (if you want this you can just use [msmtp](https://marlam.de/msmtp/) with `imaparms fetch --mda`); thus, `imaparms`
 - is much simpler to use when fetching to a local `Maildir` as it needs no configuration to fetch messages as-is without modifying any headers, thus fetching the same messages twice will produce identical files (which is not true for `fetchmail`, `imaparms fetch --mda MDA` is roughly equivalent to `fetchmail --softbounce --invisible --norewrite --mda MDA`);
@@ -463,6 +469,7 @@ Also, `imaparms` is a very nice fast mail fetcher, regardless of all of this.
 
 - uses server-side message flags to track state instead of keeping a local database of fetched UIDs;
 - fetches messages out-of-order to try and maximize `messages/second` metric;
+- generates ~150 times less disk writes;
 - does not do any filtering, offloads that to MDA/LDA;
 - is written in Python instead of C;
 - has other subcommands, not just `imaparms fetch`.
@@ -483,6 +490,7 @@ Also, `imaparms` is a very nice fast mail fetcher, regardless of all of this.
   - `imaparms` lacking two-way sync also prevents you from screwing up your `imaparms` invocation options or restarting the program at an inopportune time and losing all your mail on the server on the next sync as a result (like you can with `offlineimap`),
   - i.e., with `imaparms` you won't ever lose any messages on the server if you never run `imaparms delete`, and if you do run `imaparms delete`, `imaparms`'s defaults try their best to prevent you from deleting any mail you probably did not mean to delete;
 - consequently, `imaparms` is much simpler to use as the complexity of its configuration is proportional to the complexity of your usage;
+- `imaparms fetch` generates ~150 times less disk writes;
 - `imaparms` has other subcommands, not just `imaparms fetch`.
 
 # License
@@ -493,7 +501,7 @@ GPLv3+.
 
 ## imaparms
 
-A handy Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.
+A handy Swiss-army-knife-like utility for performing batch operations on messages residing on IMAP servers.
 Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out.
 
 - options:
@@ -516,11 +524,11 @@ Logins to a specified server, performs specified actions on all messages matchin
 
 - hooks:
   - `--notify-success`
-  : generate notification (via `notify-send`) describing changes on the server performed by `imaparms`, if any, at the end of each program cycle; most useful if you run `imaparms` in background with `--every` argument in a graphical environment
+  : generate notifications (via `notify-send`) describing server-side changes, if any, at the end of each program cycle; most useful if you run `imaparms` in background with `--every` argument in a graphical environment
   - `--success-cmd CMD`
   : shell command to run at the end of each program cycle that performed some changes on the server, i.e. a generalized version of `--notify-success`; the spawned process will receive the description of the performed changes via stdin; can be specified multiple times
   - `--notify-failure`
-  : generate notification (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `imaparms` in background with `--every` argument in a graphical environment
+  : generate notifications (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `imaparms` in background with `--every` argument in a graphical environment
   - `--failure-cmd CMD`
   : shell command to run at the end of each program cycle that had some of its command fail, i.e. a generalized version of `--notify-failure`; the spawned process will receive the description of the failured via stdin; can be specified multiple times
 
@@ -573,12 +581,12 @@ Logins to a specified server, performs specified actions on all messages matchin
   : batch `FETCH` at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `imaparms` is batching (default: 4194304)
 
 - polling/daemon options:
-  - `--every SECONDS`
-  : repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way);
-    i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle;
+  - `--every INTERVAL`
+  : repeat the command every `INTERVAL` seconds;
+    `imaparms` will do its best to repeat the command precisely every `INTERVAL` seconds even if the command involes `fetch`ing of new messages and `--new-mail-cmd` invocations take different time each cycle; if program cycle takes more than `INTERVAL` seconds or `INTERVAL < 60` then `imaparms` would sleep for `60` seconds either way,
     this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle
   - `--every-add-random ADD`
-  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: 60);
+  : sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle, including the very first one (default: 60);
     if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers;
     if you run `imaparms` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle
 
@@ -809,9 +817,17 @@ E.g., if you have several `fetch --new-mail-cmd filter-my-mail` as subcommands o
 
 ## Notes on usage
 
-Message search filters are connected by logical "AND"s so, e.g., `--from "github.com" --not-from "notifications@github.com"` will act on messages which have a `From:` header with `github.com` but without `notifications@github.com` as substrings.
+- Message search filters are connected by logical "AND"s so, e.g., `--from "github.com" --not-from "notifications@github.com"` will act on messages which have a `From:` header with `github.com` but without `notifications@github.com` as substrings.
 
-Note that `fetch` subcommand acts on `--unseen` while `delete` acts on `--seen` messages by default.
+- `fetch` subcommand acts on `--unseen` messages by default.
+
+- `delete` subcommand acts on `--seen` messages by default.
+
+- Under `for-each`, after any command that produced errors (e.g. a `fetch` that failed to deliver at least one message because `--maildir` or `--mda` failed to do their job), any `delete` commands will be automatically skipped.
+
+  In theory, in the case of `--maildir` or `--mda` failing to deliver some messages `imaparms` need not do this as those messages will be left unmarked on the server, but in combination with the default `--careful` delivery option (which see) this behaviour could still be helpful in preventing data loss in the event where the target filesystem starts generating random IO errors (e.g. if you HDD/SSD just failed).
+
+  In general, this behaviour exists to prevent `delete` from accidentally deleting something important when folder hierarchy of an in-use IMAP server changes to be incompatible with in-use `imaparms` options (e.g., you are trying to `fetch` from a folder was recently renamed, but then `delete` from `--all-folders`).
 
 ## Examples
 

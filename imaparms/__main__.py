@@ -1200,9 +1200,12 @@ def add_examples(fmt : _t.Any) -> None:
     _ = gettext
     fmt.add_text("# " + _("Notes on usage"))
 
-    fmt.add_text(_('Message search filters are connected by logical "AND"s so, e.g., `--from "github.com" --not-from "notifications@github.com"` will act on messages which have a `From:` header with `github.com` but without `notifications@github.com` as substrings.'))
-
-    fmt.add_text(_("Note that `fetch` subcommand acts on `--unseen` while `delete` acts on `--seen` messages by default."))
+    fmt.add_text(_('- Message search filters are connected by logical "AND"s so, e.g., `--from "github.com" --not-from "notifications@github.com"` will act on messages which have a `From:` header with `github.com` but without `notifications@github.com` as substrings.'))
+    fmt.add_text(_("- `fetch` subcommand acts on `--unseen` messages by default."))
+    fmt.add_text(_("- `delete` subcommand acts on `--seen` messages by default."))
+    fmt.add_text(_("- Under `for-each`, after any command that produced errors (e.g. a `fetch` that failed to deliver at least one message because `--maildir` or `--mda` failed to do their job), any `delete` commands will be automatically skipped."))
+    fmt.add_text(_(f"  In theory, in the case of `--maildir` or `--mda` failing to deliver some messages `{__package__}` need not do this as those messages will be left unmarked on the server, but in combination with the default `--careful` delivery option (which see) this behaviour could still be helpful in preventing data loss in the event where the target filesystem starts generating random IO errors (e.g. if you HDD/SSD just failed)."))
+    fmt.add_text(_(f"  In general, this behaviour exists to prevent `delete` from accidentally deleting something important when folder hierarchy of an in-use IMAP server changes to be incompatible with in-use `{__package__}` options (e.g., you are trying to `fetch` from a folder was recently renamed, but then `delete` from `--all-folders`)."))
 
     fmt.add_text("# " + _("Examples"))
 
@@ -1355,7 +1358,7 @@ def make_argparser(real : bool = True) -> _t.Any:
 
     parser = ArgumentParser(
         prog=__package__,
-        description=_("A handy Keep It Stupid Simple (KISS) Swiss-army-knife-like tool for fetching and performing batch operations on messages residing on IMAP servers.") + "\n" + \
+        description=_("A handy Swiss-army-knife-like utility for performing batch operations on messages residing on IMAP servers.") + "\n" + \
                     _("Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out."),
         additional_sections = [add_examples],
         allow_abbrev = False,
@@ -1429,9 +1432,9 @@ def make_argparser(real : bool = True) -> _t.Any:
         agrp.add_argument("--debug", action="store_true", help=_("dump IMAP conversation to stderr"))
 
         agrp = cmd.add_argument_group(_("hooks"))
-        agrp.add_argument("--notify-success", action="store_true", help=_(f"generate notification (via `notify-send`) describing changes on the server performed by `{__package__}`, if any, at the end of each program cycle; most useful if you run `{__package__}` in background with `--every` argument in a graphical environment"))
+        agrp.add_argument("--notify-success", action="store_true", help=_(f"generate notifications (via `notify-send`) describing server-side changes, if any, at the end of each program cycle; most useful if you run `{__package__}` in background with `--every` argument in a graphical environment"))
         agrp.add_argument("--success-cmd", metavar = "CMD", action = "append", type=str, default = [], help=_(f"shell command to run at the end of each program cycle that performed some changes on the server, i.e. a generalized version of `--notify-success`; the spawned process will receive the description of the performed changes via stdin; can be specified multiple times"))
-        agrp.add_argument("--notify-failure", action="store_true", help=_(f"generate notification (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `{__package__}` in background with `--every` argument in a graphical environment"))
+        agrp.add_argument("--notify-failure", action="store_true", help=_(f"generate notifications (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `{__package__}` in background with `--every` argument in a graphical environment"))
         agrp.add_argument("--failure-cmd", metavar = "CMD", action = "append", type=str, default = [], help=_(f"shell command to run at the end of each program cycle that had some of its command fail, i.e. a generalized version of `--notify-failure`; the spawned process will receive the description of the failured via stdin; can be specified multiple times"))
         agrp.set_defaults(notify = False)
 
@@ -1472,10 +1475,10 @@ def make_argparser(real : bool = True) -> _t.Any:
         agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_(f"batch `FETCH` at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `{__package__}` is batching (default: %(default)s)"))
 
         agrp = cmd.add_argument_group("polling/daemon options")
-        agrp.add_argument("--every", metavar = "SECONDS", type=int, help=_("repeat the command every `SECONDS` seconds if the whole cycle takes less than `SECONDS` seconds and `<cycle time>` seconds otherwise (with a minimum of `60` seconds either way)") + ";\n" + \
-                                                                         _("i.e. it will do its best to repeat the command precisely every `SECONDS` seconds even if the command is `fetch` and fetching new messages and `--new-mail-cmd` take different time each cycle") + ";\n" + \
+        agrp.add_argument("--every", metavar = "INTERVAL", type=int, help=_("repeat the command every `INTERVAL` seconds") + ";\n" +\
+                                                                         _(f"`{__package__}` will do its best to repeat the command precisely every `INTERVAL` seconds even if the command involes `fetch`ing of new messages and `--new-mail-cmd` invocations take different time each cycle; if program cycle takes more than `INTERVAL` seconds or `INTERVAL < 60` then `{__package__}` would sleep for `60` seconds either way") + ",\n" + \
                                                                          _("this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle"))
-        agrp.add_argument("--every-add-random", metavar = "ADD", default = 60, type=int, help=_("sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle (default: %(default)s)") + ";\n" + \
+        agrp.add_argument("--every-add-random", metavar = "ADD", default = 60, type=int, help=_("sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle, including the very first one (default: %(default)s)") + ";\n" + \
                                                                                              _("if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers") + ";\n" + \
                                                                                              _(f"if you run `{__package__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
         return cmd
