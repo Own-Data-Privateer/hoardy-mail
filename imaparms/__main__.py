@@ -323,7 +323,10 @@ def notify_failure(cfg : Namespace, title : str, body : str) -> None:
 
 def notify_error(cfg : Namespace, title : str, body : str = "") -> None:
     error(title)
-    notify_failure(cfg, title, body)
+    try:
+        notify_failure(cfg, title, body)
+    except Exception:
+        pass
 
 class AccountFailure(Failure): pass
 class FolderFailure(AccountFailure): pass
