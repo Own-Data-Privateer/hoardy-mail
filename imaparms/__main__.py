@@ -812,7 +812,7 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
                                    num_delivered) % (num_delivered,)
                 else:
                     msg = ngettext("fetched %d but marked %d message", "fetched %d but marked %d messages", \
-                                   num_delivered) % (num_delivered, num_marked)
+                                   max(num_delivered, num_marked)) % (num_delivered, num_marked)
                 account.log.append("`%s`: " % (folder,) + msg)
 
                 for hook in cfg.new_mail_cmd:
@@ -1580,7 +1580,7 @@ def make_argparser(real : bool = True) -> _t.Any:
 
     def no_cmd(cfg : Namespace, state : State) -> None:
         parser.print_help(sys.stderr)
-        sys.exit(2)
+        die(_("no subcommand specified"), 2)
     parser.set_defaults(func=no_cmd)
 
     if not real:
