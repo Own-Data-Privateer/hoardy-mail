@@ -349,6 +349,7 @@ def imap_check(exc : _t.Any, command : str, v : _t.Tuple[str, _t.Any]) -> _t.Any
 @_dc.dataclass
 class Account:
     socket : str
+    timeout : int
     host : str
     port : int
     user : str
@@ -395,6 +396,8 @@ def connect(account : Account, debug : bool) -> _t.Any:
     ssl_context.verify_mode = ssl.CERT_REQUIRED
     ssl_context.check_hostname = True
     ssl_context.load_default_certs()
+
+    _socket.setdefaulttimeout(account.timeout)
 
     try:
         if account.socket == "ssl":
@@ -491,48 +494,60 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
 
         try:
             srv = connect(account, cfg.debug)
-
-            data = imap_check(AccountFailure, "CAPABILITY", srv.capability())
-            try:
-                capabilities = data[0].decode("ascii").split(" ")
-                if "IMAP4rev1" not in capabilities:
-                    raise ValueError()
-            except (UnicodeDecodeError, KeyError, ValueError):
-                raise AccountFailure("host %s port %s does not speak IMAP4rev1, your IMAP server appears to be too old", cfg.host, cfg.port)
-
-            #print(capabilities)
-
-            method : str
-            if "AUTH=CRAM-MD5" in capabilities:
-                def do_cram_md5(challenge : bytes) -> str:
-                    import hmac
-                    pwd = account.password.encode("utf-8")
-                    return imap_quote(account.user) + " " + hmac.HMAC(pwd, challenge, "md5").hexdigest()
-                method = "AUTHENTICATE CRAM-MD5"
-                typ, data = srv.authenticate("CRAM-MD5", do_cram_md5)
-            elif account.allow_login:
-                method = "LOGIN PLAIN"
-                typ, data = srv._simple_command("LOGIN", imap_quote(account.user), imap_quote(account.password))
-            else:
-                raise AccountFailure("authentication with plain-text credentials is disabled, set both `--auth-allow-login` and `--auth-allow-plain` if you really want to do this")
-
-            if typ != "OK":
-                raise AccountFailure("failed to login (%s) as %s to host %s port %d: %s", method, account.user, account.host, account.port, repr(data))
-            srv.state = "AUTH"
-
-            report("# " + gettext("logged in (%s) as %s to host %s port %d (%s)") % (method, account.user, account.host, account.port, account.socket.upper()))
-
-            func(cfg, state, account, srv, *args)
         except AccountFailure as exc:
             state.num_errors += 1
             account_error(account, str(exc))
-        finally:
+        else:
+            do_logout = True
             try:
-                srv.logout()
-            except:
-                pass
-            srv = None
+                data = imap_check(AccountFailure, "CAPABILITY", srv.capability())
+                try:
+                    capabilities = data[0].decode("ascii").split(" ")
+                    if "IMAP4rev1" not in capabilities:
+                        raise ValueError()
+                except (UnicodeDecodeError, KeyError, ValueError):
+                    raise AccountFailure("host %s port %s does not speak IMAP4rev1, your IMAP server appears to be too old", cfg.host, cfg.port)
 
+                #print(capabilities)
+
+                method : str
+                if "AUTH=CRAM-MD5" in capabilities:
+                    def do_cram_md5(challenge : bytes) -> str:
+                        import hmac
+                        pwd = account.password.encode("utf-8")
+                        return imap_quote(account.user) + " " + hmac.HMAC(pwd, challenge, "md5").hexdigest()
+                    method = "AUTHENTICATE CRAM-MD5"
+                    typ, data = srv.authenticate("CRAM-MD5", do_cram_md5)
+                elif account.allow_login:
+                    method = "LOGIN PLAIN"
+                    typ, data = srv._simple_command("LOGIN", imap_quote(account.user), imap_quote(account.password))
+                else:
+                    raise AccountFailure("authentication with plain-text credentials is disabled, set both `--auth-allow-login` and `--auth-allow-plain` if you really want to do this")
+
+                if typ != "OK":
+                    raise AccountFailure("failed to login (%s) as %s to host %s port %d: %s", method, account.user, account.host, account.port, repr(data))
+                srv.state = "AUTH"
+
+                report("# " + gettext("logged in (%s) as %s to host %s port %d (%s)") % (method, account.user, account.host, account.port, account.socket.upper()))
+
+                func(cfg, state, account, srv, *args)
+            except AccountFailure as exc:
+                state.num_errors += 1
+                account_error(account, str(exc))
+            except OSError as exc:
+                do_logout = False
+                state.num_errors += 1
+                account_error(account, gettext("unexpected failure while working with host %s port %s: %s") % (account.host, account.port, repr(exc)))
+            finally:
+                if do_logout:
+                    try:
+                        srv.logout()
+                    except Exception:
+                        pass
+                else:
+                    srv.shutdown()
+                srv = None
+        finally:
             num_delivered += account.num_delivered
             num_marked += account.num_marked
             num_moved += account.num_moved
@@ -936,7 +951,7 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
             os.makedirs(os.path.join(destdir, "tmp"), exist_ok=True)
             os.makedirs(os.path.join(destdir, "new"), exist_ok=True)
             os.makedirs(os.path.join(destdir, "cur"), exist_ok=True)
-        except:
+        except Exception:
             raise CatastrophicFailure(gettext("failed to create `--maildir %s`"), destdir)
 
         sepoch_ms = str(epoch_ms)
@@ -1419,7 +1434,7 @@ def make_argparser(real : bool = True) -> _t.Any:
             if password[-1:] == "\r":
                 password = password[:-1]
 
-            cfg.accounts.append(Account(cfg.socket, host, port, user, password, allow_login, IMAP_base))
+            cfg.accounts.append(Account(cfg.socket, cfg.timeout, host, port, user, password, allow_login, IMAP_base))
 
     def add_common(cmd : _t.Any) -> _t.Any:
         cmd.set_defaults(accounts = [])
@@ -1458,6 +1473,8 @@ def make_argparser(real : bool = True) -> _t.Any:
 
         agrp.add_argument("--host", type=str, help=_("IMAP server to connect to (required)"))
         agrp.add_argument("--port", type=int, help=_("port to use") + " " + _("(default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)"))
+
+        agrp.add_argument("--timeout", type=int, default = 60, help=_("socket timeout, in seconds (default: %(default)s)"))
 
         agrp = cmd.add_argument_group(_("authentication to the server"), description=_("either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required; can be specified multiple times"))
         agrp.add_argument("--user", type=str, help=_("username on the server (required)"))

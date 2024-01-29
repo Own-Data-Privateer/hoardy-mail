@@ -555,6 +555,8 @@ Logins to a specified server, performs specified actions on all messages matchin
   : IMAP server to connect to (required)
   - `--port PORT`
   : port to use (default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)
+  - `--timeout TIMEOUT`
+  : socket timeout, in seconds (default: 60)
 
 - authentication to the server:
   either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required; can be specified multiple times
