@@ -360,7 +360,7 @@ class Account:
     num_delivered : int = _dc.field(default = 0)
     num_undelivered : int = _dc.field(default = 0)
     num_marked : int = _dc.field(default = 0)
-    num_moved : int = _dc.field(default = 0)
+    num_trashed : int = _dc.field(default = 0)
     num_deleted : int = _dc.field(default = 0)
     log : _t.List[str] = _dc.field(default_factory = lambda: [])
     errors : _t.List[str] = _dc.field(default_factory = lambda: [])
@@ -484,7 +484,7 @@ def for_each_account(cfg : Namespace, state : State, *args : _t.Any) -> None:
 
 def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., None], *args : _t.Any) -> None:
     num_delivered, num_undelivered = 0, 0
-    num_marked, num_moved, num_deleted = 0, 0, 0
+    num_marked, num_trashed, num_deleted = 0, 0, 0
     log = []
     errors = []
 
@@ -550,7 +550,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
         finally:
             num_delivered += account.num_delivered
             num_marked += account.num_marked
-            num_moved += account.num_moved
+            num_trashed += account.num_trashed
             num_deleted += account.num_deleted
             num_undelivered += account.num_undelivered
             if len(account.log) > 0:
@@ -560,7 +560,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
             errors += account.errors
 
             account.num_delivered, account.num_undelivered = 0, 0
-            account.num_marked, account.num_moved, account.num_deleted = 0, 0, 0
+            account.num_marked, account.num_trashed, account.num_deleted = 0, 0, 0
             account.log = []
             account.errors = []
 
@@ -575,8 +575,8 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
         good.append(ngettext("fetched %d new message", "fetched %d new messages", num_delivered) % (num_delivered,))
     if num_marked > 0:
         good.append(ngettext("marked %d message", "marked %d messages", num_marked) % (num_marked,))
-    if num_moved > 0:
-        good.append(ngettext("moved %d message", "moved %d messages", num_moved) % (num_moved,))
+    if num_trashed > 0:
+        good.append(ngettext("trashed %d message", "trashed %d messages", num_trashed) % (num_trashed,))
     if num_deleted > 0:
         good.append(ngettext("deleted %d message", "deleted %d messages", num_deleted) % (num_deleted,))
 
@@ -835,10 +835,15 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
                         state.hooks.append(hook)
     elif command == "delete":
         assert method is not None
+        old_num_trashed = account.num_trashed
         old_num_deleted = account.num_deleted
         try:
             do_store(cfg, state, account, srv, method, message_uids)
         finally:
+            num_trashed = account.num_trashed - old_num_trashed
+            if num_trashed > 0:
+                account.log.append("`%s`: " % (folder,) + \
+                                   ngettext("trashed %d message", "trashed %d messages", num_trashed) % (num_trashed,))
             num_deleted = account.num_deleted - old_num_deleted
             if num_deleted > 0:
                 account.log.append("`%s`: " % (folder,) + \
@@ -1204,7 +1209,7 @@ def do_store(cfg : Namespace, state : State, account : Account, srv : IMAP4,
             if method in ["delete", "delete-noexpunge"]:
                 account.num_deleted += num_messages
             elif method == "gmail-trash":
-                account.num_moved += num_messages
+                account.num_trashed += num_messages
             else:
                 account.num_marked += num_messages
         else:
