@@ -1220,12 +1220,15 @@ def add_examples(fmt : _t.Any) -> None:
     _ = gettext
     fmt.add_text("# " + _("Notes on usage"))
 
+    fmt.add_text(_("- When specifying account-related settings `--user` and `--pass*` options should be always specified last."))
+    fmt.add_text(_("  Internally, new account definition gets emitted when a new `--pass*` option finishes processing."))
+    fmt.add_text(_("  All server connection and authentication options except `--user` and `--pass*` get reused between successively defined accounts, unless overwritten with a new value before the next `--pass*` option."))
     fmt.add_text(_('- Message search filters are connected by logical "AND"s so, e.g., `--from "github.com" --not-from "notifications@github.com"` will act on messages which have a `From:` header with `github.com` but without `notifications@github.com` as substrings.'))
     fmt.add_text(_("- `fetch` subcommand acts on `--unseen` messages by default."))
     fmt.add_text(_("- `delete` subcommand acts on `--seen` messages by default."))
-    fmt.add_text(_("- Under `for-each`, after any command that produced errors (e.g. a `fetch` that failed to deliver at least one message because `--maildir` or `--mda` failed to do their job), any `delete` commands will be automatically skipped."))
+    fmt.add_text(_("- Under `for-each`, after any command that produced errors (e.g. a `fetch` that failed to deliver at least one message because `--maildir` or `--mda` failed to do their job), any successive `delete` commands will be automatically skipped."))
     fmt.add_text(_(f"  In theory, in the case of `--maildir` or `--mda` failing to deliver some messages `{__package__}` need not do this as those messages will be left unmarked on the server, but in combination with the default `--careful` delivery option (which see) this behaviour could still be helpful in preventing data loss in the event where the target filesystem starts generating random IO errors (e.g. if you HDD/SSD just failed)."))
-    fmt.add_text(_(f"  In general, this behaviour exists to prevent `delete` from accidentally deleting something important when folder hierarchy of an in-use IMAP server changes to be incompatible with in-use `{__package__}` options (e.g., you are trying to `fetch` from a folder was recently renamed, but then `delete` from `--all-folders`)."))
+    fmt.add_text(_(f"  In general, this behaviour exists to prevent `delete` from accidentally deleting something important when folder hierarchy on the IMAP server changes to be incompatible with in-use `{__package__}` options. For instance, say you are trying to `fetch` from a folder that was recently renamed and then try to `delete` from `--all-folders`. The behaviour described above will prevent this from happening."))
 
     fmt.add_text("# " + _("Examples"))
 
@@ -1589,7 +1592,7 @@ def make_argparser(real : bool = True) -> _t.Any:
                               _(f"with this specified `{__package__}` will simply drop raw RFC822 messages, one message per file, into `DIRECTORY/new` (creating it, `DIRECTORY/cur`, and `DIRECTORY/tmp` if any of those do not exists)"))
         grp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
                          help=_("shell command to use as an MDA to deliver the messages to;") + "\n" + \
-                              _(f"with this specified `{__package__}` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc;") + "\n" + \
+                              _(f"with this specified `{__package__}` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `Maildir`, `mbox`, etc;") + "\n" + \
                               _("`maildrop` from Courier Mail Server project is a good KISS default"))
 
         agrp = cmd.add_argument_group(_("delivery mode (mutually exclusive)"))

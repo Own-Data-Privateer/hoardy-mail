@@ -14,7 +14,7 @@ Also, it fetches mail >150 times faster and (when using `--maildir` option) gene
 
 Click the above image to see the full terminal recording video of `imaparms` invocation (with account data edited out and replaced by fake GMail accounts in post-processing) running `new-mail-hook` indexing new mail with [`notmuch`](https://notmuchmail.org/) ([see workflow example below](#workflow)), followed by a full-text search in Emacs UI of `notmuch`.
 
-It was recorded on a 2012-era laptop (Thinkpad X230 with Intel Core i5-3230M CPU @ 2.60GHz with 16GB RAM and Samsung 870 EVO SSD), my `notmuch` database contains ~4 millions messages, and the whole search takes only 0.25 seconds in person (but about 2 seconds in the video because rendering an [`asciinema`](https://github.com/asciinema/asciinema) file to gif and then compressing it into webm adds extra time between frames, so it looks much more laggy than it actually is at the end there).
+It was recorded on a 2013-era laptop (Thinkpad X230 with Intel Core i5-3230M CPU @ 2.60GHz upgraded with 16GB RAM and Samsung 870 EVO SSD), my `notmuch` database contains ~4 millions messages, and the whole search takes only 0.25 seconds in person (but about 2 seconds in the video because rendering an [`asciinema`](https://github.com/asciinema/asciinema) file to gif and then compressing it into webm adds extra time between frames, so it looks much more laggy than it actually is at the end there).
 
 # <span id="why"/>Why does `imaparms` exist?
 
@@ -45,7 +45,7 @@ In short, `imaparms` is designed to be used as a IMAP-server-to-local-`Maildir` 
 
 Which is to say, the main use case I made this for is as follows:
 
-- you periodically fetch your mail to a local `Maildir` (or `mbox`) with this tool's `imaparms fetch` subcommand (which does what `fetchmail --softbounce --invisible --norewrite --mda MDA` does but much faster), then
+- you periodically fetch your mail to a local `Maildir` with this tool's `imaparms fetch` subcommand (which does what `fetchmail --softbounce --invisible --norewrite --mda MDA` does but much faster), then
 - you backup your `Maildir` with `syncthing`/`bup`/`rsync`/`git`/etc to make at least one other copy somewhere, and then, after your backup succeeds,
 - you run this tool's `imaparms delete` subcommand to expire old already-fetched messages from the server (I prefer to expire messages `--older-than` some number of intervals between backups, just to be safe, but if you do backups directly after the `fetch`, or you like to live dangerously, you could delete old messages immediately), so that
 - when/if your account get cracked/hacked the attacker only gets your unfetched mail (+ configurable amount of yet to be removed messages), which is much better than them getting the whole last 20 years or whatever of your correspondence. (If your personal computer gets compromised enough, attackers will eventually get everything anyway, so deleting old mail from servers does not make things worse. But see some more thoughts on this below.)
@@ -72,10 +72,12 @@ See the "subcommands" subsection of the [usage section](#usage) for the list ava
 - Alternatively, install it via Nix
   ``` {.bash}
   nix-env -i -f ./default.nix
+  imaparms --help
   ```
 - Alternatively, run without installing:
   ``` {.bash}
-  python3 -m imaparms --help
+  alias imaparms="python3 -m imaparms"
+  imaparms --help
   ```
 
 ## How to: backup all your mail from GMail, Yahoo, Hotmail, Yandex, etc
@@ -237,7 +239,11 @@ You can check your command lines by running with `--very-dry-run` option, for th
 Personally, I have a separate script `exec`-invoking `imaparms` (see the terminal recording above) for each mail service I use, my window manager spawns a terminal window with `tmux attach -t subs` on startup while I have the following at the end of my `~/.tmux.conf`:
 
 ```
+# create new session named "subs" with the first window named "shell"
 new-session -s subs -n shell
+# set remain-on-exit for all windows in this session by default
+set-option  -t subs -g remain-on-exit on
+# add new windows running imaparms instances
 new-window -t :2 -n mail imaparms-fetch-mine
 new-window -t :3 -n gmail imaparms-fetch-gmail
 # ... and so on
@@ -411,7 +417,7 @@ In theory, as an alternative to application-specific passwords, you can setup OA
 
 That is to say, I don't use OAuth2, which is why `imaparms` does not support OAuth2.
 
-# Your email will eventually get stolen anyway
+# <span id="stolen-anyway"/>Your emails will eventually get stolen anyway
 
 Note that [Snowden revelations](https://en.wikipedia.org/wiki/Global_surveillance_disclosures_(2013%E2%80%93present)) mean that Google and US Government store copies of all of your correspondence since 2007-2009 (it depends on your mail provider) even if you delete everything from all the servers.
 
@@ -715,7 +721,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
     with this specified `imaparms` will simply drop raw RFC822 messages, one message per file, into `DIRECTORY/new` (creating it, `DIRECTORY/cur`, and `DIRECTORY/tmp` if any of those do not exists)
   - `--mda COMMAND`
   : shell command to use as an MDA to deliver the messages to;
-    with this specified `imaparms` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `mbox`, `Maildir`, etc;
+    with this specified `imaparms` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `Maildir`, `mbox`, etc;
     `maildrop` from Courier Mail Server project is a good KISS default
 
 - delivery mode (mutually exclusive):
@@ -819,17 +825,23 @@ E.g., if you have several `fetch --new-mail-cmd filter-my-mail` as subcommands o
 
 ## Notes on usage
 
+- When specifying account-related settings `--user` and `--pass*` options should be always specified last.
+
+  Internally, new account definition gets emitted when a new `--pass*` option finishes processing.
+
+  All server connection and authentication options except `--user` and `--pass*` get reused between successively defined accounts, unless overwritten with a new value before the next `--pass*` option.
+
 - Message search filters are connected by logical "AND"s so, e.g., `--from "github.com" --not-from "notifications@github.com"` will act on messages which have a `From:` header with `github.com` but without `notifications@github.com` as substrings.
 
 - `fetch` subcommand acts on `--unseen` messages by default.
 
 - `delete` subcommand acts on `--seen` messages by default.
 
-- Under `for-each`, after any command that produced errors (e.g. a `fetch` that failed to deliver at least one message because `--maildir` or `--mda` failed to do their job), any `delete` commands will be automatically skipped.
+- Under `for-each`, after any command that produced errors (e.g. a `fetch` that failed to deliver at least one message because `--maildir` or `--mda` failed to do their job), any successive `delete` commands will be automatically skipped.
 
   In theory, in the case of `--maildir` or `--mda` failing to deliver some messages `imaparms` need not do this as those messages will be left unmarked on the server, but in combination with the default `--careful` delivery option (which see) this behaviour could still be helpful in preventing data loss in the event where the target filesystem starts generating random IO errors (e.g. if you HDD/SSD just failed).
 
-  In general, this behaviour exists to prevent `delete` from accidentally deleting something important when folder hierarchy of an in-use IMAP server changes to be incompatible with in-use `imaparms` options (e.g., you are trying to `fetch` from a folder was recently renamed, but then `delete` from `--all-folders`).
+  In general, this behaviour exists to prevent `delete` from accidentally deleting something important when folder hierarchy on the IMAP server changes to be incompatible with in-use `imaparms` options. For instance, say you are trying to `fetch` from a folder that was recently renamed and then try to `delete` from `--all-folders`. The behaviour described above will prevent this from happening.
 
 ## Examples
 
