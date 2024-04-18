@@ -365,6 +365,15 @@ class Account:
     log : _t.List[str] = _dc.field(default_factory = lambda: [])
     errors : _t.List[str] = _dc.field(default_factory = lambda: [])
 
+    def reset(self) -> None:
+        self.num_delivered = 0
+        self.num_undelivered = 0
+        self.num_marked = 0
+        self.num_trashed = 0
+        self.num_deleted = 0
+        self.log = []
+        self.errors = []
+
 def account_error(account : Account, message : str) -> None:
     account.errors.append(message)
     error(message)
@@ -492,10 +501,11 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
     for account in cfg.accounts:
         if want_stop: raise KeyboardInterrupt()
 
+        account.reset()
+
         try:
             srv = connect(account, cfg.debug)
         except AccountFailure as exc:
-            state.num_errors += 1
             account_error(account, str(exc))
         else:
             do_logout = True
@@ -532,11 +542,9 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
 
                 func(cfg, state, account, srv, *args)
             except AccountFailure as exc:
-                state.num_errors += 1
                 account_error(account, str(exc))
             except OSError as exc:
                 do_logout = False
-                state.num_errors += 1
                 account_error(account, gettext("unexpected failure while working with host %s port %s: %s") % (account.host, account.port, repr(exc)))
             finally:
                 if do_logout:
@@ -557,12 +565,8 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
                 log.append(gettext("%s on %s:") % \
                            (account.user, account.host) + \
                            "\n- " + "\n- ".join(account.log))
+            state.num_errors += len(account.errors)
             errors += account.errors
-
-            account.num_delivered, account.num_undelivered = 0, 0
-            account.num_marked, account.num_trashed, account.num_deleted = 0, 0, 0
-            account.log = []
-            account.errors = []
 
     if len(state.hooks) > 0:
         for hook in state.hooks:
@@ -583,9 +587,10 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
     bad = []
     if num_undelivered > 0:
         bad.append(ngettext("failed to fetch %d message", "failed to fetch %d messages", num_undelivered) % (num_undelivered,))
-    num_errors = len(errors)
-    if num_errors > 0:
-        bad.append(ngettext("produced %d new error", "produced %d new errors", num_errors) % (num_errors,))
+
+    num_new_errors = len(errors)
+    if num_new_errors > 0:
+        bad.append(ngettext("produced %d new error", "produced %d new errors", num_new_errors) % (num_new_errors,))
 
     if len(good) > 0:
         title = gettext(", ").join(good)
@@ -726,15 +731,12 @@ def for_each_folder_(cfg : Namespace, state : State, account : Account, srv : IM
 
         typ, data = srv.select(imap_quote(folder))
         if typ != "OK":
-            state.num_errors += 1
-            error(format_imap_error("SELECT", typ, data))
-            account_error(account, gettext("failed to IMAP SELECT folder `%s`, skipping") % (folder,))
+            account_error(account, format_imap_error("SELECT", typ, data))
             continue
 
         try:
             func(cfg, state, account, srv, folder, *args)
         except FolderFailure as exc:
-            state.num_errors += 1
             account_error(account, str(exc))
         finally:
             srv.close()
@@ -861,8 +863,7 @@ def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, mes
         typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)") # type: ignore
         if typ != "OK":
             account.num_undelivered += len(to_fetch)
-            state.num_errors += 1
-            error(format_imap_error("FETCH", typ, data))
+            account_error(account, format_imap_error("FETCH", typ, data))
             continue
 
         new = []
@@ -883,8 +884,7 @@ def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, mes
 
         if len(to_fetch_set) > 0:
             account.num_undelivered += len(to_fetch)
-            state.num_errors += 1
-            error(format_imap_error("FETCH", "did not get enough elements"))
+            account_error(account, format_imap_error("FETCH", "the result does not have all requested messages"))
             continue
 
         while True:
@@ -944,8 +944,7 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
     typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])") # type: ignore
     if typ != "OK":
         account.num_undelivered += len(message_uids)
-        state.num_errors += 1
-        error(format_imap_error("FETCH", typ, data))
+        account_error(account, format_imap_error("FETCH", typ, data))
         return
 
     if cfg.maildir is not None:
@@ -1159,8 +1158,7 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
         info(cfg, "... " + ngettext("delivered %d message via `%s`", "delivered %d messages via `%s`", num_delivered) % (num_delivered, how))
 
     if num_undelivered > 0:
-        state.num_errors += 1
-        error(ngettext("failed to deliver %d message via `%s`", "failed to deliver %d messages via `%s`", num_undelivered) % (num_undelivered, how))
+        account_error(account, ngettext("failed to deliver %d message via `%s`", "failed to deliver %d messages via `%s`", num_undelivered) % (num_undelivered, how))
         if cfg.paranoid is not None:
             if num_delivered == 0:
                 raise AccountFailure(gettext("failed to deliver any messages, aborting `fetch`"))
@@ -1213,8 +1211,7 @@ def do_store(cfg : Namespace, state : State, account : Account, srv : IMAP4,
             else:
                 account.num_marked += num_messages
         else:
-            state.num_errors += 1
-            error(format_imap_error("STORE", typ, data))
+            account_error(account, format_imap_error("STORE", typ, data))
 
 def add_examples(fmt : _t.Any) -> None:
     _ = gettext
