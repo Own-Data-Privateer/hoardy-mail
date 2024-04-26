@@ -329,6 +329,7 @@ def notify_error(cfg : Namespace, title : str, body : str = "") -> None:
         pass
 
 class AccountFailure(Failure): pass
+class AccountSoftFailure(AccountFailure): pass
 class FolderFailure(AccountFailure): pass
 
 def format_imap_error(command : str, typ : str, data : _t.Any = None) -> _t.Any:
@@ -520,9 +521,7 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
 
         try:
             srv = connect(account, cfg.debug)
-        except AccountFailure as exc:
-            account_error(account, str(exc))
-        else:
+
             do_logout = True
             try:
                 data = imap_check(AccountFailure, "CAPABILITY", srv.capability())
@@ -556,11 +555,11 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
                 report("# " + gettext("logged in (%s) as %s to host %s port %d (%s)") % (method, account.user, account.host, account.port, account.socket.upper()))
 
                 func(cfg, state, account, srv, *args)
-            except AccountFailure as exc:
+            except AccountSoftFailure as exc:
                 account_error(account, str(exc))
-            except OSError as exc:
+            except BaseException:
                 do_logout = False
-                account_error(account, gettext("unexpected failure while working with host %s port %s: %s") % (account.host, account.port, repr(exc)))
+                raise
             finally:
                 if do_logout:
                     try:
@@ -570,6 +569,12 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
                 else:
                     srv.shutdown()
                 srv = None
+        except AccountFailure as exc:
+            account_error(account, str(exc))
+        except IMAP4.abort as exc:
+            account_error(account, gettext("imaplib") + ": " + str(exc))
+        except OSError as exc:
+            account_error(account, gettext("unexpected failure while working with host %s port %s: %s") % (account.host, account.port, repr(exc)))
         finally:
             num_delivered += account.num_delivered
             num_marked += account.num_marked
@@ -1157,7 +1162,7 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
         account_error(account, ngettext("failed to deliver %d message via `%s`", "failed to deliver %d messages via `%s`", num_undelivered) % (num_undelivered, how))
         if cfg.paranoid is not None:
             if num_delivered == 0:
-                raise AccountFailure(gettext("failed to deliver any messages, aborting `fetch`"))
+                raise AccountSoftFailure(gettext("failed to deliver any messages, aborting this `fetch` and any following commands"))
             elif cfg.paranoid:
                 raise CatastrophicFailure(gettext("failed to deliver %d messages in paranoid mode"), num_undelivered)
 
