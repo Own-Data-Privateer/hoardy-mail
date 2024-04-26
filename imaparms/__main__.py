@@ -753,8 +753,8 @@ def for_each_folder_(cfg : Namespace, state : State, account : Account, srv : IM
             func(cfg, state, account, srv, folder, *args)
         except FolderFailure as exc:
             account_error(account, str(exc))
-        finally:
-            srv.close()
+
+        srv.close()
 
 def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IMAP4,
                      folder : str, command : str) -> None:
