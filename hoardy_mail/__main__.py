@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 #
-# This file is a part of imaparms project.
+# This file is a part of `hoardy-mail` project.
 #
-# Copyright (c) 2023 Jan Malakhovski <oxij@oxij.org>
+# Copyright (c) 2023-2024 Jan Malakhovski <oxij@oxij.org>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -39,6 +39,7 @@ from . import argparse_better as argparse
 from .argparse_better import Namespace
 from .exceptions import *
 
+__prog__ = "hoardy-mail"
 defenc = sys.getdefaultencoding()
 myhostname = _socket.gethostname()
 smypid = str(os.getpid())
@@ -302,7 +303,7 @@ def run_hook_stdin(hook : str, data : bytes) -> None:
 
 def notify_send(typ : str, title : str, body : str) -> None:
     try:
-        with subprocess.Popen(["notify-send", "-a", "imaparms", "-i", typ, "--", title, body]) as p:
+        with subprocess.Popen(["notify-send", "-a", "hoardy-mail", "-i", typ, "--", title, body]) as p:
             pass
     except Exception as exc:
         traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
@@ -1225,31 +1226,31 @@ def add_examples(fmt : _t.Any) -> None:
     fmt.add_text(_("- `fetch` subcommand acts on `--unseen` messages by default."))
     fmt.add_text(_("- `delete` subcommand acts on `--seen` messages by default."))
     fmt.add_text(_("- Under `for-each`, after any command that produced errors (e.g. a `fetch` that failed to deliver at least one message because `--maildir` or `--mda` failed to do their job), any successive `delete` commands will be automatically skipped."))
-    fmt.add_text(_(f"  In theory, in the case of `--maildir` or `--mda` failing to deliver some messages `{__package__}` need not do this as those messages will be left unmarked on the server, but in combination with the default `--careful` delivery option (which see) this behaviour could still be helpful in preventing data loss in the event where the target filesystem starts generating random IO errors (e.g. if you HDD/SSD just failed)."))
-    fmt.add_text(_(f"  In general, this behaviour exists to prevent `delete` from accidentally deleting something important when folder hierarchy on the IMAP server changes to be incompatible with in-use `{__package__}` options. For instance, say you are trying to `fetch` from a folder that was recently renamed and then try to `delete` from `--all-folders`. The behaviour described above will prevent this from happening."))
+    fmt.add_text(_(f"  In theory, in the case of `--maildir` or `--mda` failing to deliver some messages `{__prog__}` need not do this as those messages will be left unmarked on the server, but in combination with the default `--careful` delivery option (which see) this behaviour could still be helpful in preventing data loss in the event where the target filesystem starts generating random IO errors (e.g. if you HDD/SSD just failed)."))
+    fmt.add_text(_(f"  In general, this behaviour exists to prevent `delete` from accidentally deleting something important when folder hierarchy on the IMAP server changes to be incompatible with in-use `{__prog__}` options. For instance, say you are trying to `fetch` from a folder that was recently renamed and then try to `delete` from `--all-folders`. The behaviour described above will prevent this from happening."))
 
     fmt.add_text("# " + _("Examples"))
 
     fmt.start_section(_("List all available IMAP folders and count how many messages they contain"))
 
     fmt.start_section(_("with the password taken from `pinentry`"))
-    fmt.add_code(f'{__package__} count --host imap.example.com --user account@example.com --pass-pinentry')
+    fmt.add_code(f'{__prog__} count --host imap.example.com --user account@example.com --pass-pinentry')
     fmt.end_section()
 
     fmt.start_section(_("with the password taken from the first line of the given file"))
-    fmt.add_code(f"""{__package__} count --host imap.example.com --user account@example.com \\
+    fmt.add_code(f"""{__prog__} count --host imap.example.com --user account@example.com \\
   --passfile /path/to/file/containing/account@example.com.password
 """)
     fmt.end_section()
 
     fmt.start_section(_("with the password taken from the output of password-store utility"))
-    fmt.add_code(f"""{__package__} count --host imap.example.com --user account@example.com \\
+    fmt.add_code(f"""{__prog__} count --host imap.example.com --user account@example.com \\
   --passcmd "pass show mail/account@example.com"
 """)
     fmt.end_section()
 
     fmt.start_section(_("with two accounts on the same server"))
-    fmt.add_code(f"""{__package__} count --porcelain \\
+    fmt.add_code(f"""{__prog__} count --porcelain \\
   --host imap.example.com \\
   --user account@example.com --passcmd "pass show mail/account@example.com" \\
   --user another@example.com --passcmd "pass show mail/another@example.com"
@@ -1266,61 +1267,61 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 """)
 
     fmt.start_section(_("Count how many messages older than 7 days are in `[Gmail]/All Mail` folder"))
-    fmt.add_code(f'{__package__} count "${{gmail_common[@]}}" --folder "[Gmail]/All Mail" --older-than 7')
+    fmt.add_code(f'{__prog__} count "${{gmail_common[@]}}" --folder "[Gmail]/All Mail" --older-than 7')
     fmt.end_section()
 
     fmt.start_section(_(f"Mark all messages in `INBOX` as not `SEEN`, fetch all not `SEEN` messages marking them `SEEN` as you download them so that if the process gets interrupted you could continue from where you left off"))
     fmt.add_code(f"""# {_("setup: do once")}
-{__package__} mark "${{common[@]}}" --folder INBOX unseen
+{__prog__} mark "${{common[@]}}" --folder INBOX unseen
 
 # {_("repeatable part")}
-{__package__} fetch "${{common_mda[@]}}" --folder INBOX
+{__prog__} fetch "${{common_mda[@]}}" --folder INBOX
 """)
     fmt.end_section()
 
-    fmt.start_section(_(f"Similarly to the above, but use `FLAGGED` instead of `SEEN`. This allows to use this in parallel with another instance of `{__package__}` using the `SEEN` flag, e.g. if you want to backup to two different machines independently, or if you want to use `{__package__}` simultaneously in parallel with `fetchmail` or other similar tool"))
+    fmt.start_section(_(f"Similarly to the above, but use `FLAGGED` instead of `SEEN`. This allows to use this in parallel with another instance of `{__prog__}` using the `SEEN` flag, e.g. if you want to backup to two different machines independently, or if you want to use `{__prog__}` simultaneously in parallel with `fetchmail` or other similar tool"))
     fmt.add_code(f"""# {_("setup: do once")}
-{__package__} mark "${{common[@]}}" --folder INBOX unflagged
+{__prog__} mark "${{common[@]}}" --folder INBOX unflagged
 
 # {_("repeatable part")}
-{__package__} fetch "${{common_mda[@]}}" --folder INBOX --any-seen --unflagged
+{__prog__} fetch "${{common_mda[@]}}" --folder INBOX --any-seen --unflagged
 
 # {_("this will work as if nothing of the above was run")}
 fetchmail
 
 # {_(f"in this use case you should use both `--seen` and `--flagged` when expiring old messages")}
-# {_(f"so that it would only delete messages fetched by both {__package__} and fetchmail")}
-{__package__} delete "${{common[@]}}" --folder INBOX --older-than 7 --seen --flagged
+# {_(f"so that it would only delete messages fetched by both {__prog__} and fetchmail")}
+{__prog__} delete "${{common[@]}}" --folder INBOX --older-than 7 --seen --flagged
 """)
     fmt.end_section()
 
-    fmt.start_section(_(f"Similarly to the above, but run `{__package__} fetch` as a daemon to download updates every hour"))
+    fmt.start_section(_(f"Similarly to the above, but run `{__prog__} fetch` as a daemon to download updates every hour"))
     fmt.add_code(f"""# {_("setup: do once")}
-{__package__} mark "${{common[@]}}" --folder INBOX unseen
+{__prog__} mark "${{common[@]}}" --folder INBOX unseen
 
 # {_("repeatable part")}
-{__package__} fetch "${{common_mda[@]}}" --folder INBOX --every 3600
+{__prog__} fetch "${{common_mda[@]}}" --folder INBOX --every 3600
 """)
     fmt.end_section()
 
     fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered in the last 7 days (the resulting date is rounded down to the start of the day by server time), but don't change any flags"))
-    fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder INBOX --any-seen --newer-than 7')
+    fmt.add_code(f'{__prog__} fetch "${{common_mda[@]}}" --folder INBOX --any-seen --newer-than 7')
     fmt.end_section()
 
     fmt.start_section(_("Fetch all messages from `INBOX` folder that were delivered from the beginning of today (by server time), without changing any flags"))
-    fmt.add_code(f'{__package__} fetch "${{common_mda[@]}}" --folder INBOX --any-seen --newer-than 0')
+    fmt.add_code(f'{__prog__} fetch "${{common_mda[@]}}" --folder INBOX --any-seen --newer-than 0')
     fmt.end_section()
 
     fmt.start_section(_("Delete all `SEEN` messages older than 7 days from `INBOX` folder"))
     fmt.add_text("")
     fmt.add_text(_(f"Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets cracked/hacked, you won't be as vulnerable."))
-    fmt.add_code(f'{__package__} delete "${{common[@]}}" --folder INBOX --older-than 7')
+    fmt.add_code(f'{__prog__} delete "${{common[@]}}" --folder INBOX --older-than 7')
     fmt.add_text(_("(`--seen` is implied by default)"))
     fmt.end_section()
 
     fmt.start_section(_("**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `SEEN` messages instead"))
-    fmt.add_code(f'{__package__} delete "${{common[@]}}" --folder INBOX')
-    fmt.add_text(_(f"Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `{__package__}` or another IMAP client that changes message flags is highly recommended."))
+    fmt.add_code(f'{__prog__} delete "${{common[@]}}" --folder INBOX')
+    fmt.add_text(_(f"Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `{__prog__}` or another IMAP client that changes message flags is highly recommended."))
     fmt.end_section()
 
     fmt.start_section(_("Fetch everything GMail considers to be Spam for local filtering"))
@@ -1331,19 +1332,19 @@ cat > ~/.mailfilter-spam << EOF
 DEFAULT="\\$HOME/Mail/spam"
 EOF
 
-{__package__} mark "${{gmail_common[@]}}" --folder "[Gmail]/Spam" unseen
+{__prog__} mark "${{gmail_common[@]}}" --folder "[Gmail]/Spam" unseen
 
 # {_("repeatable part")}
-{__package__} fetch "${{gmail_common_mda[@]}}" --mda "maildrop ~/.mailfilter-spam" --folder "[Gmail]/Spam"
+{__prog__} fetch "${{gmail_common_mda[@]}}" --mda "maildrop ~/.mailfilter-spam" --folder "[Gmail]/Spam"
 """)
     fmt.end_section()
 
     fmt.start_section(_("Fetch everything from all folders, except for `INBOX`, `[Gmail]/Starred` (because in GMail these two are included in `[Gmail]/All Mail`), and `[Gmail]/Trash` (for illustrative purposes)"))
-    fmt.add_code(f"""{__package__} fetch "${{gmail_common_mda[@]}}" --all-folders \\
+    fmt.add_code(f"""{__prog__} fetch "${{gmail_common_mda[@]}}" --all-folders \\
   --not-folder INBOX --not-folder "[Gmail]/Starred" --not-folder "[Gmail]/Trash"
 """)
     fmt.add_text("Note that, in GMail, all messages except for those in `[Gmail]/Trash` and `[Gmail]/Spam` are included in `[Gmail]/All Mail`. So, if you want to fetch everything, you should probably just fetch from those three folders instead:")
-    fmt.add_code(f"""{__package__} fetch "${{gmail_common_mda[@]}}" \\
+    fmt.add_code(f"""{__prog__} fetch "${{gmail_common_mda[@]}}" \\
   --folder "[Gmail]/All Mail" --folder "[Gmail]/Trash" --folder "[Gmail]/Spam"
 """)
     fmt.end_section()
@@ -1353,17 +1354,17 @@ EOF
     fmt.add_text("")
     fmt.add_text(_("In GMail, deleting messages from `INBOX` does not actually delete them, nor moves them to trash, just removes them from `INBOX` while keeping them available from `[Gmail]/All Mail`."))
     fmt.add_text(_("To work around this, this tool provides a GMail-specific `--method gmail-trash` that moves messages to `[Gmail]/Trash` in a GMail-specific way (this is not a repetition, it does require issuing special IMAP `STORE` commands to achieve this):"))
-    fmt.add_code(f'{__package__} delete "${{gmail_common[@]}}" --folder "[Gmail]/All Mail" --older-than 7')
+    fmt.add_code(f'{__prog__} delete "${{gmail_common[@]}}" --folder "[Gmail]/All Mail" --older-than 7')
     fmt.add_text(_("(`--method gmail-trash` is implied by `--host imap.gmail.com` and `--folder` not being `[Gmail]/Trash`, `--seen` is still implied by default)"))
 
     fmt.add_text(_("Messages in `[Gmail]/Trash` will be automatically removed by GMail in 30 days, but you can also delete them immediately with:"))
 
-    fmt.add_code(f'{__package__} delete "${{gmail_common[@]}}" --folder "[Gmail]/Trash" --any-seen --older-than 7')
+    fmt.add_code(f'{__prog__} delete "${{gmail_common[@]}}" --folder "[Gmail]/Trash" --any-seen --older-than 7')
     fmt.add_text(_("(`--method delete` is implied by `--host imap.gmail.com` but `--folder` being `[Gmail]/Trash`)"))
     fmt.end_section()
 
     fmt.start_section(_("Every hour, fetch messages from different folders using different MDA settings and then expire messages older than 7 days, all in a single pass (reusing the server connection between subcommands)"))
-    fmt.add_code(f"""{__package__} for-each "${{gmail_common[@]}}" --every 3600 -- \\
+    fmt.add_code(f"""{__prog__} for-each "${{gmail_common[@]}}" --every 3600 -- \\
   fetch --folder "[Gmail]/All Mail" --mda maildrop \\; \\
   fetch --folder "[Gmail]/Spam" --mda "maildrop ~/.mailfilter-spam" \\; \\
   delete --folder "[Gmail]/All Mail" --folder "[Gmail]/Spam" --folder "[Gmail]/Trash" \\
@@ -1371,7 +1372,7 @@ EOF
 """)
     fmt.add_text(_("Note the `--` and `\\;` tokens, without them the above will fail to parse."))
     fmt.add_text(_("Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash` even though they are specified together."))
-    fmt.add_text(_(f"Also, when running in parallel with another IMAP client that changes IMAP flags, `{__package__} for-each` will notice the other client doing it while `fetch`ing and will skip all following `delete`s of that `--every` cycle to prevent data loss."))
+    fmt.add_text(_(f"Also, when running in parallel with another IMAP client that changes IMAP flags, `{__prog__} for-each` will notice the other client doing it while `fetch`ing and will skip all following `delete`s of that `--every` cycle to prevent data loss."))
     fmt.end_section()
 
 class ArgumentParser(argparse.BetterArgumentParser):
@@ -1383,7 +1384,7 @@ def make_argparser(real : bool = True) -> _t.Any:
     _ = gettext
 
     parser = ArgumentParser(
-        prog=__package__,
+        prog=__prog__,
         description=_("A handy Swiss-army-knife-like utility for performing batch operations on messages residing on IMAP servers.") + "\n" + \
                     _("Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out."),
         additional_sections = [add_examples],
@@ -1458,9 +1459,9 @@ def make_argparser(real : bool = True) -> _t.Any:
         agrp.add_argument("--debug", action="store_true", help=_("dump IMAP conversation to stderr"))
 
         agrp = cmd.add_argument_group(_("hooks"))
-        agrp.add_argument("--notify-success", action="store_true", help=_(f"generate notifications (via `notify-send`) describing server-side changes, if any, at the end of each program cycle; most useful if you run `{__package__}` in background with `--every` argument in a graphical environment"))
+        agrp.add_argument("--notify-success", action="store_true", help=_(f"generate notifications (via `notify-send`) describing server-side changes, if any, at the end of each program cycle; most useful if you run `{__prog__}` in background with `--every` argument in a graphical environment"))
         agrp.add_argument("--success-cmd", metavar = "CMD", action = "append", type=str, default = [], help=_(f"shell command to run at the end of each program cycle that performed some changes on the server, i.e. a generalized version of `--notify-success`; the spawned process will receive the description of the performed changes via stdin; can be specified multiple times"))
-        agrp.add_argument("--notify-failure", action="store_true", help=_(f"generate notifications (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `{__package__}` in background with `--every` argument in a graphical environment"))
+        agrp.add_argument("--notify-failure", action="store_true", help=_(f"generate notifications (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `{__prog__}` in background with `--every` argument in a graphical environment"))
         agrp.add_argument("--failure-cmd", metavar = "CMD", action = "append", type=str, default = [], help=_(f"shell command to run at the end of each program cycle that had some of its command fail, i.e. a generalized version of `--notify-failure`; the spawned process will receive the description of the failured via stdin; can be specified multiple times"))
         agrp.set_defaults(notify = False)
 
@@ -1500,15 +1501,15 @@ def make_argparser(real : bool = True) -> _t.Any:
         agrp.add_argument("--store-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `STORE` requests (default: %(default)s)"))
         agrp.add_argument("--fetch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: %(default)s)"))
         agrp.add_argument("--batch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
-        agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_(f"batch `FETCH` at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `{__package__}` is batching (default: %(default)s)"))
+        agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_(f"batch `FETCH` at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `{__prog__}` is batching (default: %(default)s)"))
 
         agrp = cmd.add_argument_group("polling/daemon options")
         agrp.add_argument("--every", metavar = "INTERVAL", type=int, help=_("repeat the command every `INTERVAL` seconds") + ";\n" +\
-                                                                         _(f"`{__package__}` will do its best to repeat the command precisely every `INTERVAL` seconds even if the command involes `fetch`ing of new messages and `--new-mail-cmd` invocations take different time each cycle; if program cycle takes more than `INTERVAL` seconds or `INTERVAL < 60` then `{__package__}` would sleep for `60` seconds either way") + ",\n" + \
+                                                                         _(f"`{__prog__}` will do its best to repeat the command precisely every `INTERVAL` seconds even if the command involes `fetch`ing of new messages and `--new-mail-cmd` invocations take different time each cycle; if program cycle takes more than `INTERVAL` seconds or `INTERVAL < 60` then `{__prog__}` would sleep for `60` seconds either way") + ",\n" + \
                                                                          _("this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle"))
         agrp.add_argument("--every-add-random", metavar = "ADD", default = 60, type=int, help=_("sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle, including the very first one (default: %(default)s)") + ";\n" + \
                                                                                              _("if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers") + ";\n" + \
-                                                                                             _(f"if you run `{__package__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
+                                                                                             _(f"if you run `{__prog__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
         return cmd
 
     def add_folders(cmd : _t.Any, all_by_default : _t.Optional[bool]) -> _t.Any:
@@ -1592,17 +1593,17 @@ def make_argparser(real : bool = True) -> _t.Any:
         grp = agrp.add_mutually_exclusive_group()
         grp.add_argument("--maildir", metavar = "DIRECTORY", type=str,
                          help=_("Maildir to deliver the messages to;") + "\n" + \
-                              _(f"with this specified `{__package__}` will simply drop raw RFC822 messages, one message per file, into `DIRECTORY/new` (creating it, `DIRECTORY/cur`, and `DIRECTORY/tmp` if any of those do not exists)"))
+                              _(f"with this specified `{__prog__}` will simply drop raw RFC822 messages, one message per file, into `DIRECTORY/new` (creating it, `DIRECTORY/cur`, and `DIRECTORY/tmp` if any of those do not exists)"))
         grp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
                          help=_("shell command to use as an MDA to deliver the messages to;") + "\n" + \
-                              _(f"with this specified `{__package__}` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `Maildir`, `mbox`, etc;") + "\n" + \
+                              _(f"with this specified `{__prog__}` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `Maildir`, `mbox`, etc;") + "\n" + \
                               _("`maildrop` from Courier Mail Server project is a good KISS default"))
 
         agrp = cmd.add_argument_group(_("delivery mode (mutually exclusive)"))
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--yolo", dest="paranoid", action="store_const", const = None, help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected and currently running `{__package__} fetch` continues as if nothing is amiss"))
-        grp.add_argument("--careful", dest="paranoid", action="store_false", help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server, no other messages get affected, but `{__package__}` aborts currently running `fetch` and all the following commands of the `for-each` (if any) if zero messages from the current batch got successfully delivered --- as that usually means that the target file system is out of space, read-only, or generates IO errors (default)"))
-        grp.add_argument("--paranoid", dest="paranoid", action="store_true", help=_(f"`{__package__}` aborts the process immediately if any of the messages in the current batch fail to be delivered into the `--maildir` or by the `--mda`, the whole batch gets left un`--mark`ed on the server"))
+        grp.add_argument("--yolo", dest="paranoid", action="store_const", const = None, help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected and currently running `{__prog__} fetch` continues as if nothing is amiss"))
+        grp.add_argument("--careful", dest="paranoid", action="store_false", help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server, no other messages get affected, but `{__prog__}` aborts currently running `fetch` and all the following commands of the `for-each` (if any) if zero messages from the current batch got successfully delivered --- as that usually means that the target file system is out of space, read-only, or generates IO errors (default)"))
+        grp.add_argument("--paranoid", dest="paranoid", action="store_true", help=_(f"`{__prog__}` aborts the process immediately if any of the messages in the current batch fail to be delivered into the `--maildir` or by the `--mda`, the whole batch gets left un`--mark`ed on the server"))
         grp.set_defaults(paranoid = False)
 
         agrp = cmd.add_argument_group(_("hooks"))
@@ -1695,7 +1696,7 @@ def make_argparser(real : bool = True) -> _t.Any:
 - `auto`: {_('`gmail-trash` when `--host imap.gmail.com` and the current folder is not `[Gmail]/Trash`, `delete` otherwise')} {_("(default)")}
 - `delete`: {_('mark messages as deleted and then use IMAP `EXPUNGE` command, i.e. this does what you would expect a "delete" command to do, works for most IMAP servers')}
 - `delete-noexpunge`: {_('mark messages as deleted but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly')}
-- `gmail-trash`: {_(f'move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `Deleted` flag and `EXPUNGE` command outside of `[Gmail]/Trash`); you can then `{__package__} delete --folder "[Gmail]/Trash"` them after (which will default to `--method delete`), or you could just leave them there and GMail will delete them in 30 days')}
+- `gmail-trash`: {_(f'move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `Deleted` flag and `EXPUNGE` command outside of `[Gmail]/Trash`); you can then `{__prog__} delete --folder "[Gmail]/Trash"` them after (which will default to `--method delete`), or you could just leave them there and GMail will delete them in 30 days')}
 """)
         return cmd
     add_delete(cmd)
@@ -1703,7 +1704,7 @@ def make_argparser(real : bool = True) -> _t.Any:
 
     def cmd_for_each(cfg : Namespace, state : State) -> None:
         # generate parser for our cfg
-        fe_parser = argparse.BetterArgumentParser(prog = __package__ + " for-each", add_help = True)
+        fe_parser = argparse.BetterArgumentParser(prog = __prog__ + " for-each", add_help = True)
 
         # we do this to force the user to specify `--folder` or such
         # for each command if the global one is not specified

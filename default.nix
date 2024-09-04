@@ -6,7 +6,7 @@
 with pkgs.python3Packages;
 
 buildPythonApplication (rec {
-  pname = "imaparms";
+  pname = "hoardy-mail";
   version = "2.6.1";
   format = "pyproject";
 
