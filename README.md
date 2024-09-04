@@ -625,7 +625,7 @@ Logins to a specified server, performs specified actions on all messages matchin
     - `mark`
     : mark matching messages in specified folders in a specified way
     - `fetch`
-    : fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds
+    : fetch matching messages from specified folders, put them into a Maildir or feed them to a MDA/LDA, and then mark them in a specified way if it succeeds
     - `delete`
     : delete matching messages from specified folders
     - `for-each`
@@ -634,6 +634,10 @@ Logins to a specified server, performs specified actions on all messages matchin
 ### imaparms list
 
 Login, perform IMAP `LIST` command to get all folders, print them one per line.
+
+- options:
+  - `--porcelain`
+  : print in a machine-readable format (the default at the moment)
 
 ### imaparms count
 
@@ -705,7 +709,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
 
 ### imaparms fetch
 
-Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands.
+Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, put each batch of message into the specified Maildir and `fsync` them to disk or feed them to the specified MDA/LDA, and, if and only if all of the above succeeds, mark each message in the batch on the server in a specified way by issuing IMAP `STORE` commands.
 
 - folder search filters:
   - `--all-folders`
@@ -726,9 +730,9 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
 
 - delivery mode (mutually exclusive):
   - `--yolo`
-  : messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected, current `imaparms fetch` continues as if nothing is amiss
+  : messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected and currently running `imaparms fetch` continues as if nothing is amiss
   - `--careful`
-  : messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected, `imaparms` aborts currently running `fetch` if zero messages from the current batch get delivered as that usually means that the target file system is out of space, read-only, or generates IO errors (default)
+  : messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server, no other messages get affected, but `imaparms` aborts currently running `fetch` and all the following commands of the `for-each` (if any) if zero messages from the current batch got successfully delivered --- as that usually means that the target file system is out of space, read-only, or generates IO errors (default)
   - `--paranoid`
   : `imaparms` aborts the process immediately if any of the messages in the current batch fail to be delivered into the `--maildir` or by the `--mda`, the whole batch gets left un`--mark`ed on the server
 
@@ -755,7 +759,7 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
 - marking:
   - `--mark {auto,noop,seen,unseen,flagged,unflagged}`
   : after the message was fetched:
-    - `auto`: `seen` when only `--unseen` is set (default), `flagged` when only `--unflagged` is set, `noop` otherwise
+    - `auto`: `seen` when only `--unseen` is set (which it is by default), `flagged` when only `--unflagged` is set, `noop` otherwise (default)
     - `noop`: do nothing
     - `seen`: add `SEEN` flag
     - `unseen`: remove `SEEN` flag
@@ -906,7 +910,8 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   # this will work as if nothing of the above was run
   fetchmail
 
-  # in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both imaparms and fetchmail
+  # in this use case you should use both `--seen` and `--flagged` when expiring old messages
+  # so that it would only delete messages fetched by both imaparms and fetchmail
   imaparms delete "${common[@]}" --folder INBOX --older-than 7 --seen --flagged
   ```
 
@@ -944,7 +949,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   imaparms delete "${common[@]}" --folder INBOX
   ```
 
-  Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `imaparms` or another IMAP client that changes message flags (`imaparms` will abort if it notices another client doing it, but better be safe than sorry), is highly recommended anyway.
+  Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `imaparms` or another IMAP client that changes message flags is highly recommended.
 
 - Fetch everything GMail considers to be Spam for local filtering:
   ```
@@ -961,13 +966,18 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   imaparms fetch "${gmail_common_mda[@]}" --mda "maildrop ~/.mailfilter-spam" --folder "[Gmail]/Spam"
   ```
 
-- Fetch everything from all folders, except `INBOX`, `[Gmail]/Starred` (because in GMail there are included in `[Gmail]/All Mail`), and `[Gmail]/Trash`:
+- Fetch everything from all folders, except for `INBOX`, `[Gmail]/Starred` (because in GMail these two are included in `[Gmail]/All Mail`), and `[Gmail]/Trash` (for illustrative purposes):
   ```
   imaparms fetch "${gmail_common_mda[@]}" --all-folders \
     --not-folder INBOX --not-folder "[Gmail]/Starred" --not-folder "[Gmail]/Trash"
   ```
 
-  The purpose of this is purely illustrative. In GMail all messages outside of `[Gmail]/Trash` and `[Gmail]/Spam` are included in `[Gmail]/All Mail` so you should probably just fetch that folder instead.
+  Note that, in GMail, all messages except for those in `[Gmail]/Trash` and `[Gmail]/Spam` are included in `[Gmail]/All Mail`. So, if you want to fetch everything, you should probably just fetch from those three folders instead:
+
+  ```
+  imaparms fetch "${gmail_common_mda[@]}" \
+    --folder "[Gmail]/All Mail" --folder "[Gmail]/Trash" --folder "[Gmail]/Spam"
+  ```
 
 - GMail-specific deletion mode: move (expire) old messages to `[Gmail]/Trash` and then delete them:
 
@@ -1001,4 +1011,6 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   Note the `--` and `\;` tokens, without them the above will fail to parse.
 
   Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash` even though they are specified together.
+
+  Also, when running in parallel with another IMAP client that changes IMAP flags, `imaparms for-each` will notice the other client doing it while `fetch`ing and will skip all following `delete`s of that `--every` cycle to prevent data loss.
 

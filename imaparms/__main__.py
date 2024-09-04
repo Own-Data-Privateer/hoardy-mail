@@ -1288,7 +1288,8 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 # {_("this will work as if nothing of the above was run")}
 fetchmail
 
-# {_(f"in this use case you should use both `--seen` and `--flagged` when expiring old messages to only delete messages fetched by both {__package__} and fetchmail")}
+# {_(f"in this use case you should use both `--seen` and `--flagged` when expiring old messages")}
+# {_(f"so that it would only delete messages fetched by both {__package__} and fetchmail")}
 {__package__} delete "${{common[@]}}" --folder INBOX --older-than 7 --seen --flagged
 """)
     fmt.end_section()
@@ -1319,7 +1320,7 @@ fetchmail
 
     fmt.start_section(_("**DANGEROUS!** If you fetched and backed up all your messages already, you can skip `--older-than` and just delete all `SEEN` messages instead"))
     fmt.add_code(f'{__package__} delete "${{common[@]}}" --folder INBOX')
-    fmt.add_text(_(f"Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `{__package__}` or another IMAP client that changes message flags (`{__package__}` will abort if it notices another client doing it, but better be safe than sorry), is highly recommended anyway."))
+    fmt.add_text(_(f"Though, setting at least `--older-than 1`, to make sure you won't lose any data in case you forgot you are running another instance of `{__package__}` or another IMAP client that changes message flags is highly recommended."))
     fmt.end_section()
 
     fmt.start_section(_("Fetch everything GMail considers to be Spam for local filtering"))
@@ -1337,11 +1338,14 @@ EOF
 """)
     fmt.end_section()
 
-    fmt.start_section(_("Fetch everything from all folders, except `INBOX`, `[Gmail]/Starred` (because in GMail there are included in `[Gmail]/All Mail`), and `[Gmail]/Trash`"))
+    fmt.start_section(_("Fetch everything from all folders, except for `INBOX`, `[Gmail]/Starred` (because in GMail these two are included in `[Gmail]/All Mail`), and `[Gmail]/Trash` (for illustrative purposes)"))
     fmt.add_code(f"""{__package__} fetch "${{gmail_common_mda[@]}}" --all-folders \\
   --not-folder INBOX --not-folder "[Gmail]/Starred" --not-folder "[Gmail]/Trash"
 """)
-    fmt.add_text("The purpose of this is purely illustrative. In GMail all messages outside of `[Gmail]/Trash` and `[Gmail]/Spam` are included in `[Gmail]/All Mail` so you should probably just fetch that folder instead.")
+    fmt.add_text("Note that, in GMail, all messages except for those in `[Gmail]/Trash` and `[Gmail]/Spam` are included in `[Gmail]/All Mail`. So, if you want to fetch everything, you should probably just fetch from those three folders instead:")
+    fmt.add_code(f"""{__package__} fetch "${{gmail_common_mda[@]}}" \\
+  --folder "[Gmail]/All Mail" --folder "[Gmail]/Trash" --folder "[Gmail]/Spam"
+""")
     fmt.end_section()
 
     fmt.start_section(_("GMail-specific deletion mode: move (expire) old messages to `[Gmail]/Trash` and then delete them"))
@@ -1367,6 +1371,7 @@ EOF
 """)
     fmt.add_text(_("Note the `--` and `\\;` tokens, without them the above will fail to parse."))
     fmt.add_text(_("Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash` even though they are specified together."))
+    fmt.add_text(_(f"Also, when running in parallel with another IMAP client that changes IMAP flags, `{__package__} for-each` will notice the other client doing it while `fetch`ing and will skip all following `delete`s of that `--every` cycle to prevent data loss."))
     fmt.end_section()
 
 class ArgumentParser(argparse.BetterArgumentParser):
@@ -1595,8 +1600,8 @@ def make_argparser(real : bool = True) -> _t.Any:
 
         agrp = cmd.add_argument_group(_("delivery mode (mutually exclusive)"))
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--yolo", dest="paranoid", action="store_const", const = None, help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected, current `{__package__} fetch` continues as if nothing is amiss"))
-        grp.add_argument("--careful", dest="paranoid", action="store_false", help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected, `{__package__}` aborts currently running `fetch` if zero messages from the current batch get delivered as that usually means that the target file system is out of space, read-only, or generates IO errors (default)"))
+        grp.add_argument("--yolo", dest="paranoid", action="store_const", const = None, help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected and currently running `{__package__} fetch` continues as if nothing is amiss"))
+        grp.add_argument("--careful", dest="paranoid", action="store_false", help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server, no other messages get affected, but `{__package__}` aborts currently running `fetch` and all the following commands of the `for-each` (if any) if zero messages from the current batch got successfully delivered --- as that usually means that the target file system is out of space, read-only, or generates IO errors (default)"))
         grp.add_argument("--paranoid", dest="paranoid", action="store_true", help=_(f"`{__package__}` aborts the process immediately if any of the messages in the current batch fail to be delivered into the `--maildir` or by the `--mda`, the whole batch gets left un`--mark`ed on the server"))
         grp.set_defaults(paranoid = False)
 
@@ -1618,6 +1623,7 @@ def make_argparser(real : bool = True) -> _t.Any:
     cmd = subparsers.add_parser("list", help=_("list all available folders on the server, one per line"),
                                 description = _("Login, perform IMAP `LIST` command to get all folders, print them one per line."))
     if real: add_common(cmd)
+    cmd.add_argument("--porcelain", action="store_true", help=_("print in a machine-readable format (the default at the moment)"))
     cmd.set_defaults(command="list")
     cmd.set_defaults(func=cmd_list)
 
@@ -1654,8 +1660,8 @@ def make_argparser(real : bool = True) -> _t.Any:
     add_mark(cmd)
     cmd.set_defaults(func=cmd_action)
 
-    cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, feed them to an MDA, and then mark them in a specified way if MDA succeeds"),
-                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, feed each batch of messages to an MDA, mark each message for which MDA succeeded in a specified way by issuing IMAP `STORE` commands."))
+    cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, put them into a Maildir or feed them to a MDA/LDA, and then mark them in a specified way if it succeeds"),
+                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, put each batch of message into the specified Maildir and `fsync` them to disk or feed them to the specified MDA/LDA, and, if and only if all of the above succeeds, mark each message in the batch on the server in a specified way by issuing IMAP `STORE` commands."))
     if real: add_common(cmd)
     add_folders(cmd, True)
     def add_fetch(cmd : _t.Any) -> _t.Any:
@@ -1665,7 +1671,7 @@ def make_argparser(real : bool = True) -> _t.Any:
         add_flag_filters(cmd, False)
         agrp = cmd.add_argument_group("marking")
         agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
-- `auto`: {_('`seen` when only `--unseen` is set (default), `flagged` when only `--unflagged` is set, `noop` otherwise')}
+- `auto`: {_('`seen` when only `--unseen` is set (which it is by default), `flagged` when only `--unflagged` is set, `noop` otherwise (default)')}
 - `noop`: {_("do nothing")}
 - `seen`: {_("add `SEEN` flag")}
 - `unseen`: {_("remove `SEEN` flag")}
