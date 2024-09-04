@@ -7,7 +7,7 @@ with pkgs.python3Packages;
 
 buildPythonApplication (rec {
   pname = "hoardy-mail";
-  version = "2.6.1";
+  version = "2.6.2";
   format = "pyproject";
 
   src = lib.cleanSourceWith {
