@@ -1385,8 +1385,8 @@ def make_argparser(real : bool = True) -> _t.Any:
 
     parser = ArgumentParser(
         prog=__prog__,
-        description=_("A handy Swiss-army-knife-like utility for performing batch operations on messages residing on IMAP servers.") + "\n" + \
-                    _("Logins to a specified server, performs specified actions on all messages matching specified criteria in all specified folders, logs out."),
+        description=_("A handy Swiss-army-knife-like utility for fetching and performing batch operations on messages residing on IMAP servers.") + "\n" + \
+                    _("I.e., for each specified IMAP server: login, perform specified actions on all messages matching specified criteria in all specified folders, log out."),
         additional_sections = [add_examples],
         allow_abbrev = False,
         add_version = True,
