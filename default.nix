@@ -34,6 +34,6 @@ buildPythonApplication (rec {
     pkgs.pandoc
   ];
 
-  preBuild = "find . ; mypy";
+  preBuild = "find . ; black --check . && mypy && pylint hoardy_mail/__main__.py";
   postInstall = "find $out";
 })
