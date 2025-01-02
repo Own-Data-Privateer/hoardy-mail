@@ -1708,7 +1708,7 @@ def make_argparser(real : bool = True) -> _t.Any:
 
         # we do this to force the user to specify `--folder` or such
         # for each command if the global one is not specified
-        add_folders_here = add_folders_sub
+        add_folders_here : _t.Callable[[_t.Any], _t.Any] = add_folders_sub
         if not cfg.all_folders and len(cfg.folders) == 0:
             add_folders_here = lambda x: add_folders(x, False)
 
