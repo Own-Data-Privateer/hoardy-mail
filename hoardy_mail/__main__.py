@@ -123,8 +123,10 @@ def pinentry(host: str, user: str) -> str:
         return pin
 
 
-def imap_parse_data(
-    data: bytes, literals: _t.List[bytes] = [], top_level: bool = True
+def imap_parse_data(  # pylint: disable=dangerous-default-value
+    data: bytes,
+    literals: _t.List[bytes] = [],
+    top_level: bool = True,
 ) -> _t.Tuple[_t.Any, bytes]:
     "Parse IMAP response string into a tree of strings."
     acc: _t.List[bytes] = []
@@ -134,7 +136,7 @@ def imap_parse_data(
     while i < len(data):
         c = data[i : i + 1]
         # print(c)
-        if state == False:
+        if state is False:
             if c == b'"':
                 if res != b"":
                     raise ValueError("unexpected quote")
@@ -152,7 +154,7 @@ def imap_parse_data(
                 i = 0
                 if len(data) == 0:
                     return acc, b""
-                elif data[i : i + 1] not in [b" ", b")"]:
+                if data[i : i + 1] not in [b" ", b")"]:
                     raise ValueError("expecting space or end parens")
             elif c == b")":
                 acc.append(res)
@@ -167,13 +169,13 @@ def imap_parse_data(
                 i = endcurly + 1
                 if i >= len(data):
                     return acc, b""
-                elif data[i : i + 1] not in [b" ", b")"]:
+                if data[i : i + 1] not in [b" ", b")"]:
                     raise ValueError("expecting space or end parens")
             else:
-                if type(res) is not bytes:
+                if not isinstance(res, bytes):
                     raise ValueError("unexpected char")
                 res += c
-        elif state == True:
+        elif state is True:
             if c == b'"':
                 state = False
             elif c == b"\\":
@@ -191,7 +193,9 @@ def imap_parse_data(
     return acc, b""
 
 
-def imap_parse(line: bytes, literals: _t.List[bytes] = []) -> _t.Any:
+def imap_parse(  # pylint: disable=dangerous-default-value
+    line: bytes, literals: _t.List[bytes] = []
+) -> _t.Any:
     res, rest = imap_parse_data(line, literals)
     if rest != b"":
         raise ValueError("unexpected tail", rest)
@@ -306,8 +310,8 @@ def make_search_filter(cfg: Namespace, now: int) -> _t.Tuple[str, bool]:
 
     if len(filters) == 0:
         return "(ALL)", dynamic
-    else:
-        return "(" + " ".join(filters) + ")", dynamic
+
+    return "(" + " ".join(filters) + ")", dynamic
 
 
 def report(message: str) -> None:
@@ -390,8 +394,7 @@ class FolderFailure(AccountFailure):
 def format_imap_error(command: str, typ: str, data: _t.Any = None) -> _t.Any:
     if data is None:
         return gettext("IMAP %s command failed: %s") % (command, typ)
-    else:
-        return gettext("IMAP %s command failed: %s %s") % (command, typ, repr(data))
+    return gettext("IMAP %s command failed: %s %s") % (command, typ, repr(data))
 
 
 def imap_exc(exc: _t.Any, command: str, typ: str, data: _t.Any) -> _t.Any:
@@ -628,9 +631,9 @@ def for_each_account_(
                     def do_cram_md5(challenge: bytes) -> str:
                         import hmac
 
-                        pwd = account.password.encode("utf-8")
+                        pwd = account.password.encode("utf-8")  # pylint: disable=cell-var-from-loop
                         return (
-                            imap_quote(account.user)
+                            imap_quote(account.user)  # pylint: disable=cell-var-from-loop
                             + " "
                             + hmac.HMAC(pwd, challenge, "md5").hexdigest()
                         )
@@ -639,7 +642,7 @@ def for_each_account_(
                     typ, data = srv.authenticate("CRAM-MD5", do_cram_md5)
                 elif account.allow_login:
                     method = "LOGIN PLAIN"
-                    typ, data = srv._simple_command(
+                    typ, data = srv._simple_command(  # pylint: disable=protected-access
                         "LOGIN", imap_quote(account.user), imap_quote(account.password)
                     )
                 else:
@@ -656,7 +659,7 @@ def for_each_account_(
                         account.port,
                         repr(data),
                     )
-                srv.state = "AUTH"
+                srv.state = "AUTH"  # pylint: disable=attribute-defined-outside-init
 
                 report(
                     "# "
@@ -793,7 +796,7 @@ def get_folders(srv: IMAP4) -> _t.List[str]:
     res = []
     data = imap_check(AccountFailure, "LIST", srv.list())
     for el in data:
-        tags, _, arg = imap_parse(el)
+        tags, _, arg = imap_parse(el)  # pylint: disable=unbalanced-tuple-unpacking
         if b"\\Noselect" in tags:
             continue
         res.append(arg.decode("utf-8"))
@@ -829,9 +832,9 @@ def prepare_cmd(cfg: Namespace, now: int) -> str:
                 cfg.flagged = True
     elif cfg.command == "fetch":
         if cfg.mark == "auto":
-            if cfg.seen == False and cfg.flagged is None:
+            if cfg.seen is False and cfg.flagged is None:
                 cfg.mark = "seen"
-            elif cfg.seen is None and cfg.flagged == False:
+            elif cfg.seen is None and cfg.flagged is False:
                 cfg.mark = "flagged"
             else:
                 cfg.mark = "noop"
@@ -942,7 +945,7 @@ def do_folder_action(
     result: _t.Optional[bytes] = data[0]
     if result is None:
         raise imap_exc(FolderFailure, "SEARCH", typ, data)
-    elif result == b"":
+    if result == b"":
         message_uids = []
     else:
         message_uids = result.split(b" ")
@@ -984,7 +987,7 @@ def do_folder_action(
             act = "deleting %d messages matching %s from folder `%s`"
             actargs = (num_messages, cfg.search_filter, folder)
         elif method == "gmail-trash":
-            act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
+            act = "moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
             actargs = (num_messages, cfg.search_filter, folder)
         else:
             assert False
@@ -994,13 +997,13 @@ def do_folder_action(
     if cfg.dry_run:
         report(gettext("dry-run: (not) " + act) % actargs)
         return
-    elif command == "delete" and (not account.no_conflicts or len(account.errors) > 0):
+    if command == "delete" and (not account.no_conflicts or len(account.errors) > 0):
         account_error(
             account, gettext("one of the previous commands reported issues, not " + act) % actargs
         )
         return
-    else:
-        report(gettext(act) % actargs)
+
+    report(gettext(act) % actargs)
 
     if num_messages == 0:
         # nothing to do
@@ -1014,7 +1017,7 @@ def do_folder_action(
             num_marked = account.num_marked - old_num_marked
             if num_marked > 0:
                 account.log.append(
-                    "`%s`: " % (folder,)
+                    f"`{folder}`: "
                     + ngettext("marked %d message", "marked %d messages", num_marked)
                     % (num_marked,)
                 )
@@ -1039,7 +1042,7 @@ def do_folder_action(
                         "fetched %d but marked %d messages",
                         max(num_delivered, num_marked),
                     ) % (num_delivered, num_marked)
-                account.log.append("`%s`: " % (folder,) + msg)
+                account.log.append(f"`{folder}`: {msg}")
 
                 for hook in cfg.new_mail_cmd:
                     if hook not in state.hooks:
@@ -1054,14 +1057,14 @@ def do_folder_action(
             num_trashed = account.num_trashed - old_num_trashed
             if num_trashed > 0:
                 account.log.append(
-                    "`%s`: " % (folder,)
+                    f"`{folder}`: "
                     + ngettext("trashed %d message", "trashed %d messages", num_trashed)
                     % (num_trashed,)
                 )
             num_deleted = account.num_deleted - old_num_deleted
             if num_deleted > 0:
                 account.log.append(
-                    "`%s`: " % (folder,)
+                    f"`{folder}`: "
                     + ngettext("deleted %d message", "deleted %d messages", num_deleted)
                     % (num_deleted,)
                 )
@@ -1087,7 +1090,7 @@ def do_fetch(
 
         new = []
         for el in data:
-            _, attrs_ = imap_parse(el)
+            _, attrs_ = imap_parse(el)  # pylint: disable=unbalanced-tuple-unpacking
             attrs = imap_parse_attrs(attrs_)
             # print(attrs)
 
@@ -1203,7 +1206,7 @@ def do_fetch_batch(
                     break
 
         line = b"".join(chunks)
-        _, attrs_ = imap_parse(line, literals)
+        _, attrs_ = imap_parse(line, literals)  # pylint: disable=unbalanced-tuple-unpacking
         attrs = imap_parse_attrs(attrs_)
         # print(attrs)
 
@@ -1215,7 +1218,7 @@ def do_fetch_batch(
             account_conflict(account, attrs)
             continue
 
-        if True:
+        if True:  # pylint: disable=using-constant-test
             # strip \r like fetchmail does
             header = header.replace(b"\r\n", b"\n")
             body = body.replace(b"\r\n", b"\n")
@@ -1240,7 +1243,7 @@ def do_fetch_batch(
                     tmp_num += 1
 
                     try:
-                        tf = open(tmp_path, "xb")
+                        tf = open(tmp_path, "xb")  # pylint: disable=consider-using-with
                     except FileExistsError:
                         continue
                     break
@@ -1418,7 +1421,7 @@ def do_fetch_batch(
                         "failed to deliver any messages, aborting this `fetch` and any following commands"
                     )
                 )
-            elif cfg.paranoid:
+            if cfg.paranoid:
                 raise CatastrophicFailure(
                     gettext("failed to deliver %d messages in paranoid mode"), num_undelivered
                 )
@@ -1544,7 +1547,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
     fmt.add_code(f'{__prog__} count "${{gmail_common[@]}}" --folder "[Gmail]/All Mail" --older-than 7')
     fmt.end_section()
 
-    fmt.start_section(_(f"Mark all messages in `INBOX` as not `SEEN`, fetch all not `SEEN` messages marking them `SEEN` as you download them so that if the process gets interrupted you could continue from where you left off"))
+    fmt.start_section(_("Mark all messages in `INBOX` as not `SEEN`, fetch all not `SEEN` messages marking them `SEEN` as you download them so that if the process gets interrupted you could continue from where you left off"))
     fmt.add_code(f"""# {_("setup: do once")}
 {__prog__} mark "${{common[@]}}" --folder INBOX unseen
 
@@ -1563,7 +1566,7 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
 # {_("this will work as if nothing of the above was run")}
 fetchmail
 
-# {_(f"in this use case you should use both `--seen` and `--flagged` when expiring old messages")}
+# {_("in this use case you should use both `--seen` and `--flagged` when expiring old messages")}
 # {_(f"so that it would only delete messages fetched by both {__prog__} and fetchmail")}
 {__prog__} delete "${{common[@]}}" --folder INBOX --older-than 7 --seen --flagged
 """)
@@ -1588,7 +1591,7 @@ fetchmail
 
     fmt.start_section(_("Delete all `SEEN` messages older than 7 days from `INBOX` folder"))
     fmt.add_text("")
-    fmt.add_text(_(f"Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets cracked/hacked, you won't be as vulnerable."))
+    fmt.add_text(_("Assuming you fetched and backed up all your messages already this allows you to keep as little as possible on the server, so that if your account gets cracked/hacked, you won't be as vulnerable."))
     fmt.add_code(f'{__prog__} delete "${{common[@]}}" --folder INBOX --older-than 7')
     fmt.add_text(_("(`--seen` is implied by default)"))
     fmt.end_section()
@@ -1680,7 +1683,11 @@ def make_argparser(real: bool = True) -> _t.Any:
 
     class EmitAccount(argparse.Action):
         def __init__(
-            self, option_strings: str, dest: str, type: _t.Any = None, **kwargs: _t.Any
+            self,
+            option_strings: str,
+            dest: str,
+            type: _t.Any = None,  # pylint: disable=redefined-builtin
+            **kwargs: _t.Any
         ) -> None:
             self.ptype = type
             super().__init__(option_strings, dest, type=str, **kwargs)
@@ -1770,13 +1777,13 @@ def make_argparser(real: bool = True) -> _t.Any:
             help=_(f"generate notifications (via `notify-send`) describing server-side changes, if any, at the end of each program cycle; most useful if you run `{__prog__}` in background with `--every` argument in a graphical environment"),
         )
         agrp.add_argument("--success-cmd", metavar="CMD", action="append", type=str, default=[],
-            help=_(f"shell command to run at the end of each program cycle that performed some changes on the server, i.e. a generalized version of `--notify-success`; the spawned process will receive the description of the performed changes via stdin; can be specified multiple times"),
+            help=_("shell command to run at the end of each program cycle that performed some changes on the server, i.e. a generalized version of `--notify-success`; the spawned process will receive the description of the performed changes via stdin; can be specified multiple times"),
         )
         agrp.add_argument("--notify-failure", action="store_true",
             help=_(f"generate notifications (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `{__prog__}` in background with `--every` argument in a graphical environment"),
         )
         agrp.add_argument("--failure-cmd", metavar="CMD", action="append", type=str, default=[],
-            help=_(f"shell command to run at the end of each program cycle that had some of its command fail, i.e. a generalized version of `--notify-failure`; the spawned process will receive the description of the failured via stdin; can be specified multiple times"),
+            help=_("shell command to run at the end of each program cycle that had some of its command fail, i.e. a generalized version of `--notify-failure`; the spawned process will receive the description of the failured via stdin; can be specified multiple times"),
         )
         agrp.set_defaults(notify=False)
 
@@ -1887,8 +1894,8 @@ def make_argparser(real: bool = True) -> _t.Any:
 
         agrp = cmd.add_argument_group(_("folder search filters") + def_freq)
 
-        egrp = agrp.add_mutually_exclusive_group(required=all_by_default == False)
-        egrp.add_argument("--all-folders", action="store_true", default=all_by_default == True,
+        egrp = agrp.add_mutually_exclusive_group(required=all_by_default is False)
+        egrp.add_argument("--all-folders", action="store_true", default=all_by_default is True,
             help=_("operate on all folders") + def_fall,
         )
         egrp.add_argument("--folder", metavar="NAME", dest="folders", action="append", type=str, default=[],
@@ -1947,9 +1954,9 @@ def make_argparser(real: bool = True) -> _t.Any:
         def_any, def_seen, def_unseen, def_flag = "", "", "", def_str
         if default is None:
             def_any = def_str
-        elif default == True:
+        elif default is True:
             def_seen = def_str
-        elif default == False:
+        elif default is False:
             def_unseen = def_str
         elif default == "depends":
             def_req = " " + _("(mutually exclusive, default: depends on other arguments)")
@@ -2168,7 +2175,7 @@ def make_argparser(real: bool = True) -> _t.Any:
         # for each command if the global one is not specified
         add_folders_here: _t.Callable[[_t.Any], _t.Any] = add_folders_sub
         if not cfg.all_folders and len(cfg.folders) == 0:
-            add_folders_here = lambda x: add_folders(x, False)
+            add_folders_here = lambda x: add_folders(x, False)  # pylint: disable=unnecessary-lambda-assignment
 
         fe_subparsers = fe_parser.add_subparsers(title="subcommands")
         add_count(fe_subparsers.add_parser("count"))
