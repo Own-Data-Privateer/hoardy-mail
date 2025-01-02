@@ -2005,7 +2005,7 @@ def make_argparser(real: bool = True) -> _t.Any:
         grp.add_argument("--mda", dest="mda", metavar="COMMAND", type=str,
             help=_("shell command to use as an MDA to deliver the messages to;")
             + "\n"
-            + _(f"with this specified `{__prog__}` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `Maildir`, `mbox`, etc;")
+            + _(f"with this specified `{__prog__}` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to Maildir, mbox, etc;")
             + "\n"
             + _("`maildrop` from Courier Mail Server project is a good KISS default"),
         )
