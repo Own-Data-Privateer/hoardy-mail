@@ -204,7 +204,7 @@ def imap_quote(arg : str) -> str:
     arg = arg.replace('"', '\\"')
     return '"' + arg + '"'
 
-imap_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+imap_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]  # fmt: skip
 
 def imap_date(date : time.struct_time) -> str:
     return f"{str(date.tm_mday)}-{imap_months[date.tm_mon-1]}-{str(date.tm_year)}"
@@ -1217,6 +1217,8 @@ def do_store(cfg : Namespace, state : State, account : Account, srv : IMAP4,
 
 def add_examples(fmt : _t.Any) -> None:
     _ = gettext
+
+    # fmt: off
     fmt.add_text("# " + _("Notes on usage"))
 
     fmt.add_text(_("- When specifying account-related settings `--user` and `--pass*` options should be always specified last."))
@@ -1374,6 +1376,7 @@ EOF
     fmt.add_text(_("Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash` even though they are specified together."))
     fmt.add_text(_(f"Also, when running in parallel with another IMAP client that changes IMAP flags, `{__prog__} for-each` will notice the other client doing it while `fetch`ing and will skip all following `delete`s of that `--every` cycle to prevent data loss."))
     fmt.end_section()
+    # fmt: on
 
 class ArgumentParser(argparse.BetterArgumentParser):
     def error(self, message : str) -> _t.NoReturn:
@@ -1383,6 +1386,7 @@ class ArgumentParser(argparse.BetterArgumentParser):
 def make_argparser(real : bool = True) -> _t.Any:
     _ = gettext
 
+    # fmt: off
     parser = ArgumentParser(
         prog=__prog__,
         description=_("A handy Swiss-army-knife-like utility for fetching and performing batch operations on messages residing on IMAP servers.") + "\n" + \
@@ -1760,6 +1764,7 @@ E.g., if you have several `fetch --new-mail-cmd filter-my-mail` as subcommands o
     add_folders(cmd, None)
     cmd.add_argument("rest", metavar="ARG", nargs="+", type=str, help=_("arguments, these will be split by `;` and parsed into other subcommands"))
     cmd.set_defaults(func=cmd_for_each)
+    # fmt: on
 
     return parser
 
