@@ -1661,27 +1661,41 @@ def make_argparser(real: bool = True) -> _t.Any:
     # fmt: off
     parser = ArgumentParser(
         prog=__prog__,
-        description=_("A handy Swiss-army-knife-like utility for fetching and performing batch operations on messages residing on IMAP servers.") + "\n" + \
-                    _("I.e., for each specified IMAP server: login, perform specified actions on all messages matching specified criteria in all specified folders, log out."),
-        additional_sections = [add_examples],
-        allow_abbrev = False,
-        add_version = True,
-        add_help = False)
-    parser.add_argument("-h", "--help", action="store_true", help=_("show this help message and exit"))
-    parser.add_argument("--markdown", action="store_true", help=_("show help messages formatted in Markdown"))
+        description=_("A handy Swiss-army-knife-like utility for fetching and performing batch operations on messages residing on IMAP servers.")
+        + "\n"
+        + _("I.e., for each specified IMAP server: login, perform specified actions on all messages matching specified criteria in all specified folders, log out."),
+        additional_sections=[add_examples],
+        allow_abbrev=False,
+        add_version=True,
+        add_help=False,
+    )
+    parser.add_argument("-h", "--help", action="store_true",
+        help=_("show this help message and exit")
+    )
+    parser.add_argument("--markdown", action="store_true",
+        help=_("show help messages formatted in Markdown")
+    )
 
     class EmitAccount(argparse.Action):
-        def __init__(self, option_strings : str, dest : str, type : _t.Any = None, **kwargs : _t.Any) -> None:
+        def __init__(
+            self, option_strings: str, dest: str, type: _t.Any = None, **kwargs: _t.Any
+        ) -> None:
             self.ptype = type
             super().__init__(option_strings, dest, type=str, **kwargs)
 
-        def __call__(self, parser : _t.Any, cfg : Namespace, value : _t.Any, option_string : _t.Optional[str] = None) -> None:
+        def __call__(
+            self,
+            parser: _t.Any,
+            cfg: Namespace,
+            value: _t.Any,
+            option_string: _t.Optional[str] = None,
+        ) -> None:
             if cfg.host is None:
                 die(_("`--host` is required"))
 
-            host : str = cfg.host
+            host: str = cfg.host
 
-            IMAP_base : type
+            IMAP_base: type
             if cfg.socket in ["plain", "starttls"]:
                 port = 143
                 IMAP_base = IMAP4
@@ -1708,12 +1722,17 @@ def make_argparser(real: bool = True) -> _t.Any:
                 with open(value, "rb") as f:
                     password = f.readline().decode(defenc)
             elif self.ptype == "cmd":
-                with subprocess.Popen(value, stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True) as p:
-                    p.stdin.close() # type: ignore
-                    password = p.stdout.readline().decode(defenc) # type: ignore
+                with subprocess.Popen(
+                    value, stdin=subprocess.PIPE, stdout=subprocess.PIPE, shell=True
+                ) as p:
+                    p.stdin.close()  # type: ignore
+                    password = p.stdout.readline().decode(defenc)  # type: ignore
                     retcode = p.wait()
                     if retcode != 0:
-                        die(_("`--passcmd` (`%s`) failed with non-zero exit code %d") % (value, retcode))
+                        die(
+                            _("`--passcmd` (`%s`) failed with non-zero exit code %d")
+                            % (value, retcode)
+                        )
             else:
                 assert False
 
@@ -1722,73 +1741,140 @@ def make_argparser(real: bool = True) -> _t.Any:
             if password[-1:] == "\r":
                 password = password[:-1]
 
-            cfg.accounts.append(Account(cfg.socket, cfg.timeout, host, port, user, password, allow_login, IMAP_base))
+            cfg.accounts.append(
+                Account(cfg.socket, cfg.timeout, host, port, user, password, allow_login, IMAP_base)
+            )
 
-    def add_common(cmd : _t.Any) -> _t.Any:
-        cmd.set_defaults(accounts = [])
+    def add_common(cmd: _t.Any) -> _t.Any:
+        cmd.set_defaults(accounts=[])
 
-        cmd.add_argument("-q", "--quieter", dest = "quiet", action="store_true", help=_("be less verbose"))
+        cmd.add_argument("-q", "--quieter", dest="quiet", action="store_true",
+            help=_("be less verbose")
+        )
 
         agrp = cmd.add_argument_group(_("debugging"))
-        agrp.add_argument("--very-dry-run", action="store_true", help=_("verbosely describe what the given command line would do and exit"))
-        agrp.add_argument("--dry-run", action="store_true", help=_("perform a trial run without actually performing any changes"))
-        agrp.add_argument("--debug", action="store_true", help=_("dump IMAP conversation to stderr"))
+        agrp.add_argument("--very-dry-run", action="store_true",
+            help=_("verbosely describe what the given command line would do and exit"),
+        )
+        agrp.add_argument("--dry-run", action="store_true",
+            help=_("perform a trial run without actually performing any changes"),
+        )
+        agrp.add_argument("--debug", action="store_true",
+            help=_("dump IMAP conversation to stderr")
+        )
 
         agrp = cmd.add_argument_group(_("hooks"))
-        agrp.add_argument("--notify-success", action="store_true", help=_(f"generate notifications (via `notify-send`) describing server-side changes, if any, at the end of each program cycle; most useful if you run `{__prog__}` in background with `--every` argument in a graphical environment"))
-        agrp.add_argument("--success-cmd", metavar = "CMD", action = "append", type=str, default = [], help=_(f"shell command to run at the end of each program cycle that performed some changes on the server, i.e. a generalized version of `--notify-success`; the spawned process will receive the description of the performed changes via stdin; can be specified multiple times"))
-        agrp.add_argument("--notify-failure", action="store_true", help=_(f"generate notifications (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `{__prog__}` in background with `--every` argument in a graphical environment"))
-        agrp.add_argument("--failure-cmd", metavar = "CMD", action = "append", type=str, default = [], help=_(f"shell command to run at the end of each program cycle that had some of its command fail, i.e. a generalized version of `--notify-failure`; the spawned process will receive the description of the failured via stdin; can be specified multiple times"))
-        agrp.set_defaults(notify = False)
+        agrp.add_argument("--notify-success", action="store_true",
+            help=_(f"generate notifications (via `notify-send`) describing server-side changes, if any, at the end of each program cycle; most useful if you run `{__prog__}` in background with `--every` argument in a graphical environment"),
+        )
+        agrp.add_argument("--success-cmd", metavar="CMD", action="append", type=str, default=[],
+            help=_(f"shell command to run at the end of each program cycle that performed some changes on the server, i.e. a generalized version of `--notify-success`; the spawned process will receive the description of the performed changes via stdin; can be specified multiple times"),
+        )
+        agrp.add_argument("--notify-failure", action="store_true",
+            help=_(f"generate notifications (via `notify-send`) describing recent failures, if any, at the end of each program cycle; most useful if you run `{__prog__}` in background with `--every` argument in a graphical environment"),
+        )
+        agrp.add_argument("--failure-cmd", metavar="CMD", action="append", type=str, default=[],
+            help=_(f"shell command to run at the end of each program cycle that had some of its command fail, i.e. a generalized version of `--notify-failure`; the spawned process will receive the description of the failured via stdin; can be specified multiple times"),
+        )
+        agrp.set_defaults(notify=False)
 
         agrp = cmd.add_argument_group(_("authentication settings"))
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--auth-allow-login", dest="allow_login", action="store_true", help=_("allow the use of IMAP `LOGIN` command (default)"))
-        grp.add_argument("--auth-forbid-login", dest="allow_login", action="store_false", help=_("forbid the use of IMAP `LOGIN` command, fail if challenge-response authentication is not available"))
-        grp.set_defaults(allow_login = True)
+        grp.add_argument("--auth-allow-login", dest="allow_login", action="store_true",
+            help=_("allow the use of IMAP `LOGIN` command (default)"),
+        )
+        grp.add_argument("--auth-forbid-login", dest="allow_login", action="store_false",
+            help=_("forbid the use of IMAP `LOGIN` command, fail if challenge-response authentication is not available"),
+        )
+        grp.set_defaults(allow_login=True)
 
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--auth-allow-plain", dest="allow_plain", action="store_true", help=_("allow passwords to be transmitted over the network in plain-text"))
-        grp.add_argument("--auth-forbid-plain", dest="allow_plain", action="store_false", help=_("forbid passwords from being transmitted over the network in plain-text, plain-text authentication would still be possible over SSL if `--auth-allow-login` is set (default)"))
-        grp.set_defaults(allow_plain = False)
+        grp.add_argument("--auth-allow-plain", dest="allow_plain", action="store_true",
+            help=_("allow passwords to be transmitted over the network in plain-text"),
+        )
+        grp.add_argument("--auth-forbid-plain", dest="allow_plain", action="store_false",
+            help=_("forbid passwords from being transmitted over the network in plain-text, plain-text authentication would still be possible over SSL if `--auth-allow-login` is set (default)"),
+        )
+        grp.set_defaults(allow_plain=False)
 
-        agrp = cmd.add_argument_group("server connection", description = _("can be specified multiple times"))
+        agrp = cmd.add_argument_group("server connection",
+            description=_("can be specified multiple times")
+        )
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--plain", dest="socket", action="store_const", const = "plain", help=_("connect via plain-text socket"))
-        grp.add_argument("--ssl", dest="socket", action="store_const", const = "ssl", help=_("connect over SSL socket") + " " + _("(default)"))
-        grp.add_argument("--starttls", dest="socket", action="store_const", const = "starttls", help=_("connect via plain-text socket, but then use STARTTLS command"))
-        grp.set_defaults(socket = "ssl")
+        grp.add_argument("--plain", dest="socket", action="store_const", const="plain",
+            help=_("connect via plain-text socket"),
+        )
+        grp.add_argument("--ssl", dest="socket", action="store_const", const="ssl",
+            help=_("connect over SSL socket") + " " + _("(default)"),
+        )
+        grp.add_argument("--starttls", dest="socket", action="store_const", const="starttls",
+            help=_("connect via plain-text socket, but then use STARTTLS command"),
+        )
+        grp.set_defaults(socket="ssl")
 
         agrp.add_argument("--host", type=str, help=_("IMAP server to connect to (required)"))
-        agrp.add_argument("--port", type=int, help=_("port to use") + " " + _("(default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)"))
+        agrp.add_argument("--port", type=int,
+            help=_("port to use")
+            + " "
+            + _("(default: 143 for `--plain` and `--starttls`, 993 for `--ssl`)"),
+        )
 
-        agrp.add_argument("--timeout", type=int, default = 60, help=_("socket timeout, in seconds (default: %(default)s)"))
+        agrp.add_argument("--timeout", type=int, default=60,
+            help=_("socket timeout, in seconds (default: %(default)s)"),
+        )
 
-        agrp = cmd.add_argument_group(_("authentication to the server"), description=_("either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required; can be specified multiple times"))
+        agrp = cmd.add_argument_group(_("authentication to the server"),
+            description=_("either of `--pass-pinentry`, `--passfile`, or `--passcmd` are required; can be specified multiple times"),
+        )
         agrp.add_argument("--user", type=str, help=_("username on the server (required)"))
 
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--pass-pinentry", nargs=0, action=EmitAccount, type="pinentry", help=_("read the password via `pinentry`"))
-        grp.add_argument("--passfile", "--pass-file", action=EmitAccount, type="file", help=_("file containing the password on its first line"))
-        grp.add_argument("--passcmd", "--pass-cmd", action=EmitAccount, type="cmd", help=_("shell command that returns the password as the first line of its stdout"))
-        grp.set_defaults(password = None)
+        grp.add_argument("--pass-pinentry", nargs=0, action=EmitAccount, type="pinentry",
+            help=_("read the password via `pinentry`"),
+        )
+        grp.add_argument("--passfile", "--pass-file", action=EmitAccount, type="file",
+            help=_("file containing the password on its first line"),
+        )
+        grp.add_argument("--passcmd", "--pass-cmd", action=EmitAccount, type="cmd",
+            help=_("shell command that returns the password as the first line of its stdout"),
+        )
+        grp.set_defaults(password=None)
 
-        agrp = cmd.add_argument_group(_("batching settings"), description=_("larger values improve performance but produce longer IMAP command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen"))
-        agrp.add_argument("--store-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `STORE` requests (default: %(default)s)"))
-        agrp.add_argument("--fetch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: %(default)s)"))
-        agrp.add_argument("--batch-number", metavar = "INT", type=int, default = 150, help=_("batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: %(default)s)"))
-        agrp.add_argument("--batch-size", metavar = "INT", type=int, default = 4 * 1024 * 1024, help=_(f"batch `FETCH` at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `{__prog__}` is batching (default: %(default)s)"))
+        agrp = cmd.add_argument_group(_("batching settings"),
+            description=_("larger values improve performance but produce longer IMAP command lines (which some servers reject) and cause more stuff to be re-downloaded when networking issues happen"),
+        )
+        agrp.add_argument("--store-number", metavar="INT", type=int, default=150,
+            help=_("batch at most this many message UIDs in IMAP `STORE` requests (default: %(default)s)"),
+        )
+        agrp.add_argument("--fetch-number", metavar="INT", type=int, default=150,
+            help=_("batch at most this many message UIDs in IMAP `FETCH` metadata requests (default: %(default)s)"),
+        )
+        agrp.add_argument("--batch-number", metavar="INT", type=int, default=150,
+            help=_("batch at most this many message UIDs in IMAP `FETCH` data requests; essentially, this controls the largest possible number of messages you will have to re-download if connection to the server gets interrupted (default: %(default)s)"),
+        )
+        agrp.add_argument("--batch-size", metavar="INT", type=int, default=4 * 1024 * 1024,
+            help=_(f"batch `FETCH` at most this many bytes of RFC822 messages at once; RFC822 messages larger than this will be fetched one by one (i.e. without batching); essentially, this controls the largest possible number of bytes you will have to re-download if connection to the server gets interrupted while `{__prog__}` is batching (default: %(default)s)"),
+        )
 
         agrp = cmd.add_argument_group("polling/daemon options")
-        agrp.add_argument("--every", metavar = "INTERVAL", type=int, help=_("repeat the command every `INTERVAL` seconds") + ";\n" +\
-                                                                         _(f"`{__prog__}` will do its best to repeat the command precisely every `INTERVAL` seconds even if the command involes `fetch`ing of new messages and `--new-mail-cmd` invocations take different time each cycle; if program cycle takes more than `INTERVAL` seconds or `INTERVAL < 60` then `{__prog__}` would sleep for `60` seconds either way") + ",\n" + \
-                                                                         _("this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle"))
-        agrp.add_argument("--every-add-random", metavar = "ADD", default = 60, type=int, help=_("sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle, including the very first one (default: %(default)s)") + ";\n" + \
-                                                                                             _("if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers") + ";\n" + \
-                                                                                             _(f"if you run `{__prog__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"))
+        agrp.add_argument("--every", metavar="INTERVAL", type=int,
+            help=_("repeat the command every `INTERVAL` seconds")
+            + ";\n"
+            + _(f"`{__prog__}` will do its best to repeat the command precisely every `INTERVAL` seconds even if the command involes `fetch`ing of new messages and `--new-mail-cmd` invocations take different time each cycle; if program cycle takes more than `INTERVAL` seconds or `INTERVAL < 60` then `{__prog__}` would sleep for `60` seconds either way")
+            + ",\n"
+            + _("this prevents the servers accessed earlier in the cycle from learning about the amount of new data fetched from the servers accessed later in the cycle"),
+        )
+        agrp.add_argument("--every-add-random", metavar="ADD", default=60, type=int,
+            help=_("sleep a random number of seconds in [0, ADD] range (uniform distribution) before each `--every` cycle, including the very first one (default: %(default)s)")
+            + ";\n"
+            + _("if you set it large enough to cover the longest single-server `fetch`, it will prevent any of the servers learning anything about the data on other servers")
+            + ";\n"
+            + _(f"if you run `{__prog__}` on a machine that disconnects from the Internet when you go to sleep and you set it large enough, it will help in preventing the servers from collecting data about your sleep cycle"),
+        )
+
         return cmd
 
-    def add_folders(cmd : _t.Any, all_by_default : _t.Optional[bool]) -> _t.Any:
+    def add_folders(cmd: _t.Any, all_by_default: _t.Optional[bool]) -> _t.Any:
         def_fall, def_freq = "", ""
         if all_by_default is None:
             def_freq = " " + _("(will be used as default for subcommands)")
@@ -1799,39 +1885,60 @@ def make_argparser(real: bool = True) -> _t.Any:
 
         agrp = cmd.add_argument_group(_("folder search filters") + def_freq)
 
-        egrp = agrp.add_mutually_exclusive_group(required = all_by_default == False)
-        egrp.add_argument("--all-folders", action="store_true", default = all_by_default == True,
-                          help=_("operate on all folders") + def_fall)
-        egrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=[],
-                          help=_("mail folders to include; can be specified multiple times"))
+        egrp = agrp.add_mutually_exclusive_group(required=all_by_default == False)
+        egrp.add_argument("--all-folders", action="store_true", default=all_by_default == True,
+            help=_("operate on all folders") + def_fall,
+        )
+        egrp.add_argument("--folder", metavar="NAME", dest="folders", action="append", type=str, default=[],
+            help=_("mail folders to include; can be specified multiple times"),
+        )
 
-        agrp.add_argument("--not-folder", metavar = "NAME", dest="not_folders", action="append", type=str, default=[],
-                          help=_("mail folders to exclude; can be specified multiple times"))
+        agrp.add_argument("--not-folder", metavar="NAME", dest="not_folders", action="append", type=str, default=[],
+            help=_("mail folders to exclude; can be specified multiple times"),
+        )
+
         return cmd
 
-    def add_folders_sub(cmd : _t.Any) -> _t.Any:
+    def add_folders_sub(cmd: _t.Any) -> _t.Any:
         egrp = cmd.add_mutually_exclusive_group()
-        egrp.add_argument("--all-folders", action="store_true", default = argparse.SUPPRESS)
-        egrp.add_argument("--folder", metavar = "NAME", dest="folders", action="append", type=str, default=argparse.SUPPRESS)
-        cmd.add_argument("--not-folder", metavar = "NAME", dest="not_folders", action="append", type=str, default=argparse.SUPPRESS)
+        egrp.add_argument("--all-folders", action="store_true", default=argparse.SUPPRESS)
+        egrp.add_argument("--folder", metavar="NAME", dest="folders", action="append", type=str, default=argparse.SUPPRESS)
+        cmd.add_argument("--not-folder", metavar="NAME", dest="not_folders", action="append", type=str, default=argparse.SUPPRESS)
         return cmd
 
-    def add_common_filters(cmd : _t.Any) -> _t.Any:
+    def add_common_filters(cmd: _t.Any) -> _t.Any:
         agrp = cmd.add_argument_group(_("message search filters"))
-        agrp.add_argument("--older-than", metavar = "DAYS", action="append", default=[], type=int, help=_("operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc; can be specified multiple times, in which case the earliest (the most old) date on the list will be chosen"))
-        agrp.add_argument("--newer-than", metavar = "DAYS", action="append", default=[], type=int, help=_("operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc; can be specified multiple times, in which case the latest (the least old) date on the list will be chosen"))
+        agrp.add_argument("--older-than", metavar="DAYS", action="append", default=[], type=int,
+            help=_("operate on messages older than this many days, **the date will be rounded down to the start of the day; actual matching happens on the server, so all times are server time**; e.g. `--older-than 0` means older than the start of today by server time, `--older-than 1` means older than the start of yesterday, etc; can be specified multiple times, in which case the earliest (the most old) date on the list will be chosen"),
+        )
+        agrp.add_argument("--newer-than", metavar="DAYS", action="append", default=[], type=int,
+            help=_("operate on messages newer than this many days, a negation of`--older-than`, so **everything from `--older-than` applies**; e.g., `--newer-than -1` will match files dated into the future, `--newer-than 0` will match files delivered from the beginning of today, etc; can be specified multiple times, in which case the latest (the least old) date on the list will be chosen"),
+        )
 
-        agrp.add_argument("--older-than-timestamp-in", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as described above; can be specified multiple times, in which case it will processed as described above"))
-        agrp.add_argument("--newer-than-timestamp-in", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as described above; can be specified multiple times, in which case it will processed as described above"))
+        agrp.add_argument("--older-than-timestamp-in", metavar="PATH", action="append", default=[], type=str,
+            help=_("operate on messages older than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as described above; can be specified multiple times, in which case it will processed as described above"),
+        )
+        agrp.add_argument("--newer-than-timestamp-in", metavar="PATH", action="append", default=[], type=str,
+            help=_("operate on messages newer than the timestamp (in seconds since UNIX Epoch) recorded on the first line of this PATH, rounded as described above; can be specified multiple times, in which case it will processed as described above"),
+        )
 
-        agrp.add_argument("--older-than-mtime-of", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages older than `mtime` of this PATH, rounded as described above; can be specified multiple times, in which case it will processed as described above"))
-        agrp.add_argument("--newer-than-mtime-of", metavar = "PATH", action="append", default=[], type=str, help=_("operate on messages newer than `mtime` of this PATH, rounded as described above; can be specified multiple times, in which case it will processed as described above"))
+        agrp.add_argument("--older-than-mtime-of", metavar="PATH", action="append", default=[], type=str,
+            help=_("operate on messages older than `mtime` of this PATH, rounded as described above; can be specified multiple times, in which case it will processed as described above"),
+        )
+        agrp.add_argument("--newer-than-mtime-of", metavar="PATH", action="append", default=[], type=str,
+            help=_("operate on messages newer than `mtime` of this PATH, rounded as described above; can be specified multiple times, in which case it will processed as described above"),
+        )
 
-        agrp.add_argument("--from", dest="hfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that have this string as substring of their header's FROM field; can be specified multiple times"))
-        agrp.add_argument("--not-from", dest="hnotfrom", metavar = "ADDRESS", action = "append", type=str, default = [], help=_("operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times"))
+        agrp.add_argument("--from", dest="hfrom", metavar="ADDRESS", action="append", type=str, default=[],
+            help=_("operate on messages that have this string as substring of their header's FROM field; can be specified multiple times"),
+        )
+        agrp.add_argument("--not-from", dest="hnotfrom", metavar="ADDRESS", action="append", type=str, default=[],
+            help=_("operate on messages that don't have this string as substring of their header's FROM field; can be specified multiple times"),
+        )
+
         return cmd
 
-    def add_flag_filters(cmd : _t.Any, default : _t.Union[_t.Optional[bool], str]) -> _t.Any:
+    def add_flag_filters(cmd: _t.Any, default: _t.Union[_t.Optional[bool], str]) -> _t.Any:
         def_mex = " " + _("(mutually exclusive)")
         def_str = " " + _("(default)")
         def_req = def_mex
@@ -1851,44 +1958,72 @@ def make_argparser(real: bool = True) -> _t.Any:
         agrp = cmd.add_argument_group(_("message IMAP `SEEN` flag filters") + def_req)
 
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--any-seen", dest="seen", action="store_const", const = None, help=_("operate on both `SEEN` and not `SEEN` messages") + def_any)
-        grp.add_argument("--seen", dest="seen", action="store_true", help=_("operate on messages marked as `SEEN`") + def_seen)
-        grp.add_argument("--unseen", dest="seen", action="store_false", help=_("operate on messages not marked as `SEEN`") + def_unseen)
-        grp.set_defaults(seen = default)
+        grp.add_argument("--any-seen", dest="seen", action="store_const", const=None,
+            help=_("operate on both `SEEN` and not `SEEN` messages") + def_any,
+        )
+        grp.add_argument("--seen", dest="seen", action="store_true",
+            help=_("operate on messages marked as `SEEN`") + def_seen,
+        )
+        grp.add_argument("--unseen", dest="seen", action="store_false",
+            help=_("operate on messages not marked as `SEEN`") + def_unseen,
+        )
+        grp.set_defaults(seen=default)
 
         agrp = cmd.add_argument_group(_("message IMAP `FLAGGED` flag filters") + def_req)
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--any-flagged", dest="flagged", action="store_const", const = None, help=_("operate on both `FLAGGED` and not `FLAGGED` messages") + def_flag)
-        grp.add_argument("--flagged", dest="flagged", action="store_true", help=_("operate on messages marked as `FLAGGED`"))
-        grp.add_argument("--unflagged", dest="flagged", action="store_false", help=_("operate on messages not marked as `FLAGGED`"))
-        grp.set_defaults(flagged = None)
+        grp.add_argument("--any-flagged", dest="flagged", action="store_const", const=None,
+            help=_("operate on both `FLAGGED` and not `FLAGGED` messages") + def_flag,
+        )
+        grp.add_argument("--flagged", dest="flagged", action="store_true",
+            help=_("operate on messages marked as `FLAGGED`"),
+        )
+        grp.add_argument("--unflagged", dest="flagged", action="store_false",
+            help=_("operate on messages not marked as `FLAGGED`"),
+        )
+        grp.set_defaults(flagged=None)
+
         return cmd
 
-    def add_delivery(cmd : _t.Any) -> _t.Any:
+    def add_delivery(cmd: _t.Any) -> _t.Any:
         agrp = cmd.add_argument_group(_("delivery target (required, mutually exclusive)"))
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--maildir", metavar = "DIRECTORY", type=str,
-                         help=_("Maildir to deliver the messages to;") + "\n" + \
-                              _(f"with this specified `{__prog__}` will simply drop raw RFC822 messages, one message per file, into `DIRECTORY/new` (creating it, `DIRECTORY/cur`, and `DIRECTORY/tmp` if any of those do not exists)"))
-        grp.add_argument("--mda", dest="mda", metavar = "COMMAND", type=str,
-                         help=_("shell command to use as an MDA to deliver the messages to;") + "\n" + \
-                              _(f"with this specified `{__prog__}` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `Maildir`, `mbox`, etc;") + "\n" + \
-                              _("`maildrop` from Courier Mail Server project is a good KISS default"))
+        grp.add_argument("--maildir", metavar="DIRECTORY", type=str,
+            help=_("Maildir to deliver the messages to;")
+            + "\n"
+            + _(f"with this specified `{__prog__}` will simply drop raw RFC822 messages, one message per file, into `DIRECTORY/new` (creating it, `DIRECTORY/cur`, and `DIRECTORY/tmp` if any of those do not exists)"),
+        )
+        grp.add_argument("--mda", dest="mda", metavar="COMMAND", type=str,
+            help=_("shell command to use as an MDA to deliver the messages to;")
+            + "\n"
+            + _(f"with this specified `{__prog__}` will spawn `COMMAND` via the shell and then feed raw RFC822 message into its `stdin`, the resulting process is then responsible for delivering the message to `Maildir`, `mbox`, etc;")
+            + "\n"
+            + _("`maildrop` from Courier Mail Server project is a good KISS default"),
+        )
 
         agrp = cmd.add_argument_group(_("delivery mode (mutually exclusive)"))
         grp = agrp.add_mutually_exclusive_group()
-        grp.add_argument("--yolo", dest="paranoid", action="store_const", const = None, help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected and currently running `{__prog__} fetch` continues as if nothing is amiss"))
-        grp.add_argument("--careful", dest="paranoid", action="store_false", help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server, no other messages get affected, but `{__prog__}` aborts currently running `fetch` and all the following commands of the `for-each` (if any) if zero messages from the current batch got successfully delivered --- as that usually means that the target file system is out of space, read-only, or generates IO errors (default)"))
-        grp.add_argument("--paranoid", dest="paranoid", action="store_true", help=_(f"`{__prog__}` aborts the process immediately if any of the messages in the current batch fail to be delivered into the `--maildir` or by the `--mda`, the whole batch gets left un`--mark`ed on the server"))
-        grp.set_defaults(paranoid = False)
+        grp.add_argument("--yolo", dest="paranoid", action="store_const", const=None,
+            help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server but no other messages get affected and currently running `{__prog__} fetch` continues as if nothing is amiss"),
+        )
+        grp.add_argument("--careful", dest="paranoid", action="store_false",
+            help=_(f"messages that fail to be delivered into the `--maildir` or by the `--mda` are left un`--mark`ed on the server, no other messages get affected, but `{__prog__}` aborts currently running `fetch` and all the following commands of the `for-each` (if any) if zero messages from the current batch got successfully delivered --- as that usually means that the target file system is out of space, read-only, or generates IO errors (default)"),
+        )
+        grp.add_argument("--paranoid", dest="paranoid", action="store_true",
+            help=_(f"`{__prog__}` aborts the process immediately if any of the messages in the current batch fail to be delivered into the `--maildir` or by the `--mda`, the whole batch gets left un`--mark`ed on the server"),
+        )
+        grp.set_defaults(paranoid=False)
 
         agrp = cmd.add_argument_group(_("hooks"))
-        agrp.add_argument("--new-mail-cmd", metavar="CMD", action = "append", type=str, default = [], help=_("shell command to run at the end of each program cycle that had new messages successfully delivered into the `--maildir` or by the `--mda` of this `fetch` subcommand; can be specified multiple times"))
+        agrp.add_argument("--new-mail-cmd", metavar="CMD", action="append", type=str, default=[],
+            help=_("shell command to run at the end of each program cycle that had new messages successfully delivered into the `--maildir` or by the `--mda` of this `fetch` subcommand; can be specified multiple times"),
+        )
+
         return cmd
 
-    def no_cmd(cfg : Namespace, state : State) -> None:
+    def no_cmd(cfg: Namespace, state: State) -> None:
         parser.print_help(sys.stderr)
         die(_("no subcommand specified"), 2)
+
     parser.set_defaults(func=no_cmd)
 
     if not real:
@@ -1897,94 +2032,139 @@ def make_argparser(real: bool = True) -> _t.Any:
 
     subparsers = parser.add_subparsers(title="subcommands")
 
-    cmd = subparsers.add_parser("list", help=_("list all available folders on the server, one per line"),
-                                description = _("Login, perform IMAP `LIST` command to get all folders, print them one per line."))
-    if real: add_common(cmd)
-    cmd.add_argument("--porcelain", action="store_true", help=_("print in a machine-readable format (the default at the moment)"))
+    cmd = subparsers.add_parser(
+        "list",
+        help=_("list all available folders on the server, one per line"),
+        description=_("Login, perform IMAP `LIST` command to get all folders, print them one per line."),
+    )
+    if real:
+        add_common(cmd)
+    cmd.add_argument(
+        "--porcelain",
+        action="store_true",
+        help=_("print in a machine-readable format (the default at the moment)"),
+    )
     cmd.set_defaults(command="list")
     cmd.set_defaults(func=cmd_list)
 
-    cmd = subparsers.add_parser("count", help=_("count how many matching messages each specified folder has"),
-                                description = _("Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line."))
-    if real: add_common(cmd)
+    cmd = subparsers.add_parser("count",
+        help=_("count how many matching messages each specified folder has"),
+        description=_("Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line."),
+    )
+    if real:
+        add_common(cmd)
     add_folders(cmd, True)
-    def add_count(cmd : _t.Any) -> _t.Any:
+
+    def add_count(cmd: _t.Any) -> _t.Any:
         cmd.set_defaults(command="count")
-        if real: add_common_filters(cmd)
+        if real:
+            add_common_filters(cmd)
         add_flag_filters(cmd, None)
-        cmd.add_argument("--porcelain", action="store_true", help=_("print in a machine-readable format"))
+        cmd.add_argument("--porcelain", action="store_true",
+            help=_("print in a machine-readable format")
+        )
         return cmd
+
     add_count(cmd)
     cmd.set_defaults(func=cmd_action)
 
-    cmd = subparsers.add_parser("mark", help=_("mark matching messages in specified folders in a specified way"),
-                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands."))
-    if real: add_common(cmd)
+    cmd = subparsers.add_parser("mark",
+        help=_("mark matching messages in specified folders in a specified way"),
+        description=_("Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands."),
+    )
+    if real:
+        add_common(cmd)
     add_folders(cmd, False)
-    def add_mark(cmd : _t.Any) -> _t.Any:
+
+    def add_mark(cmd: _t.Any) -> _t.Any:
         cmd.set_defaults(command="mark")
-        if real: add_common_filters(cmd)
+        if real:
+            add_common_filters(cmd)
         add_flag_filters(cmd, "depends")
         agrp = cmd.add_argument_group("marking")
         sets_x_if = _("sets `%s` if no message flag filter is specified")
-        agrp.add_argument("mark", choices=["seen", "unseen", "flagged", "unflagged"], help=_("mark how") + " " + _("(required)") + f""":
+        agrp.add_argument("mark", choices=["seen", "unseen", "flagged", "unflagged"],
+            help=_("mark how")
+            + " "
+            + _("(required)")
+            + f""":
 - `seen`: {_("add `SEEN` flag")}, {sets_x_if % ("--unseen",)}
 - `unseen`: {_("remove `SEEN` flag")}, {sets_x_if % ("--seen",)}
 - `flag`: {_("add `FLAGGED` flag")}, {sets_x_if % ("--unflagged",)}
 - `unflag`: {_("remove `FLAGGED` flag")}, {sets_x_if % ("--flagged",)}
-""")
+""",
+        )
         return cmd
+
     add_mark(cmd)
     cmd.set_defaults(func=cmd_action)
 
-    cmd = subparsers.add_parser("fetch", help=_("fetch matching messages from specified folders, put them into a Maildir or feed them to a MDA/LDA, and then mark them in a specified way if it succeeds"),
-                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, put each batch of message into the specified Maildir and `fsync` them to disk or feed them to the specified MDA/LDA, and, if and only if all of the above succeeds, mark each message in the batch on the server in a specified way by issuing IMAP `STORE` commands."))
-    if real: add_common(cmd)
+    cmd = subparsers.add_parser("fetch",
+        help=_("fetch matching messages from specified folders, put them into a Maildir or feed them to a MDA/LDA, and then mark them in a specified way if it succeeds"),
+        description=_("Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, put each batch of message into the specified Maildir and `fsync` them to disk or feed them to the specified MDA/LDA, and, if and only if all of the above succeeds, mark each message in the batch on the server in a specified way by issuing IMAP `STORE` commands."),
+    )
+    if real:
+        add_common(cmd)
     add_folders(cmd, True)
-    def add_fetch(cmd : _t.Any) -> _t.Any:
+
+    def add_fetch(cmd: _t.Any) -> _t.Any:
         cmd.set_defaults(command="fetch")
         add_delivery(cmd)
-        if real: add_common_filters(cmd)
+        if real:
+            add_common_filters(cmd)
         add_flag_filters(cmd, False)
         agrp = cmd.add_argument_group("marking")
-        agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default = "auto", help=_("after the message was fetched") + f""":
+        agrp.add_argument("--mark", choices=["auto", "noop", "seen", "unseen", "flagged", "unflagged"], default="auto",
+            help=_("after the message was fetched")
+            + f""":
 - `auto`: {_('`seen` when only `--unseen` is set (which it is by default), `flagged` when only `--unflagged` is set, `noop` otherwise (default)')}
 - `noop`: {_("do nothing")}
 - `seen`: {_("add `SEEN` flag")}
 - `unseen`: {_("remove `SEEN` flag")}
 - `flagged`: {_("add `FLAGGED` flag")}
 - `unflagged`: {_("remove `FLAGGED` flag")}
-""")
+""",
+        )
         return cmd
+
     add_fetch(cmd)
     cmd.set_defaults(func=cmd_action)
 
-    cmd = subparsers.add_parser("delete", help=_("delete matching messages from specified folders"),
-                                description = _("Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method."))
-    if real: add_common(cmd)
+    cmd = subparsers.add_parser("delete",
+        help=_("delete matching messages from specified folders"),
+        description=_("Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method."),
+    )
+    if real:
+        add_common(cmd)
     add_folders(cmd, False)
-    def add_delete(cmd : _t.Any) -> _t.Any:
+
+    def add_delete(cmd: _t.Any) -> _t.Any:
         cmd.set_defaults(command="delete")
-        if real: add_common_filters(cmd)
+        if real:
+            add_common_filters(cmd)
         add_flag_filters(cmd, True)
         agrp = cmd.add_argument_group(_("deletion method"))
-        agrp.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto", help=_("delete messages how") + f""":
+        agrp.add_argument("--method", choices=["auto", "delete", "delete-noexpunge", "gmail-trash"], default="auto",
+            help=_("delete messages how")
+            + f""":
 - `auto`: {_('`gmail-trash` when `--host imap.gmail.com` and the current folder is not `[Gmail]/Trash`, `delete` otherwise')} {_("(default)")}
 - `delete`: {_('mark messages as deleted and then use IMAP `EXPUNGE` command, i.e. this does what you would expect a "delete" command to do, works for most IMAP servers')}
 - `delete-noexpunge`: {_('mark messages as deleted but skip issuing IMAP `EXPUNGE` command hoping the server does as RFC2060 says and auto-`EXPUNGE`s messages on IMAP `CLOSE`; this is much faster than `delete` but some servers (like GMail) fail to implement this properly')}
 - `gmail-trash`: {_(f'move messages to `[Gmail]/Trash` in GMail-specific way instead of trying to delete them immediately (GMail ignores IMAP `Deleted` flag and `EXPUNGE` command outside of `[Gmail]/Trash`); you can then `{__prog__} delete --folder "[Gmail]/Trash"` them after (which will default to `--method delete`), or you could just leave them there and GMail will delete them in 30 days')}
-""")
+""",
+        )
         return cmd
+
     add_delete(cmd)
     cmd.set_defaults(func=cmd_action)
 
-    def cmd_for_each(cfg : Namespace, state : State) -> None:
+    def cmd_for_each(cfg: Namespace, state: State) -> None:
         # generate parser for our cfg
-        fe_parser = argparse.BetterArgumentParser(prog = __prog__ + " for-each", add_help = True)
+        fe_parser = argparse.BetterArgumentParser(prog=__prog__ + " for-each", add_help=True)
 
         # we do this to force the user to specify `--folder` or such
         # for each command if the global one is not specified
-        add_folders_here : _t.Callable[[_t.Any], _t.Any] = add_folders_sub
+        add_folders_here: _t.Callable[[_t.Any], _t.Any] = add_folders_sub
         if not cfg.all_folders and len(cfg.folders) == 0:
             add_folders_here = lambda x: add_folders(x, False)
 
@@ -1995,7 +2175,9 @@ def make_argparser(real: bool = True) -> _t.Any:
         add_folders_here(add_delete(fe_subparsers.add_parser("delete")))
 
         # set defaults from cfg
-        fe_parser.set_defaults(**{name: value for name, value in cfg.__dict__.items() if name != "rest"})
+        fe_parser.set_defaults(
+            **{name: value for name, value in cfg.__dict__.items() if name != "rest"}
+        )
 
         # split command line by ";" tokens
         commands = []
@@ -2020,8 +2202,9 @@ def make_argparser(real: bool = True) -> _t.Any:
         # run them
         cmd_multi_action(cfg, state, subcfgs)
 
-    cmd = subparsers.add_parser("for-each", help=_("perform multiple other subcommands, sequentially, on a single server connection"),
-                                description = _("""For each account: login, perform other subcommands given in `ARG`s, logout.
+    cmd = subparsers.add_parser("for-each",
+        help=_("perform multiple other subcommands, sequentially, on a single server connection"),
+        description=_("""For each account: login, perform other subcommands given in `ARG`s, logout.
 
 This is most useful for performing complex changes `--every` once in while in daemon mode.
 Or if you want to set different `--folder`s for different subcommands but run them all at once.
@@ -2031,10 +2214,14 @@ Run with `--very-dry-run` to see the interpretation of the given command line.
 
 All generated hooks are deduplicated and run after all other subcommands are done.
 E.g., if you have several `fetch --new-mail-cmd filter-my-mail` as subcommands of `for-each`, then `filter-my-mail` *will be run **once** after all other subcommands finish*.
-"""))
-    if real: add_common(cmd)
+"""),
+    )
+    if real:
+        add_common(cmd)
     add_folders(cmd, None)
-    cmd.add_argument("rest", metavar="ARG", nargs="+", type=str, help=_("arguments, these will be split by `;` and parsed into other subcommands"))
+    cmd.add_argument("rest", metavar="ARG", nargs="+", type=str,
+        help=_("arguments, these will be split by `;` and parsed into other subcommands"),
+    )
     cmd.set_defaults(func=cmd_for_each)
     # fmt: on
 
