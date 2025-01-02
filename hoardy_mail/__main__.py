@@ -269,8 +269,10 @@ def make_search_filter(cfg: Namespace, now: int) -> _t.Tuple[str, bool]:
                 data = f.readline().decode(defenc).strip()
                 # converting via Decimal to preserve all 9 digits after the dot
                 return int(decimal.Decimal(data) * 10**9)
-            except Exception:
-                raise Failure("failed to decode a timestamp from the first line of %s", path)
+            except Exception as exc:
+                raise Failure(
+                    "failed to decode a timestamp from the first line of %s", path
+                ) from exc
 
     older_than = []
     for dt in cfg.older_than:
@@ -500,7 +502,7 @@ def connect(account: Account, debug: bool) -> _t.Any:
             account.host,
             account.port,
             repr(exc),
-        )
+        ) from exc
 
     return srv
 
@@ -611,12 +613,12 @@ def for_each_account_(
                     capabilities = data[0].decode("ascii").split(" ")
                     if "IMAP4rev1" not in capabilities:
                         raise ValueError()
-                except (UnicodeDecodeError, KeyError, ValueError):
+                except (UnicodeDecodeError, KeyError, ValueError) as exc:
                     raise AccountFailure(
                         "host %s port %s does not speak IMAP4rev1, your IMAP server appears to be too old",
                         cfg.host,
                         cfg.port,
-                    )
+                    ) from exc
 
                 # print(capabilities)
 
@@ -1170,8 +1172,8 @@ def do_fetch_batch(
             os.makedirs(os.path.join(destdir, "tmp"), exist_ok=True)
             os.makedirs(os.path.join(destdir, "new"), exist_ok=True)
             os.makedirs(os.path.join(destdir, "cur"), exist_ok=True)
-        except Exception:
-            raise CatastrophicFailure(gettext("failed to create `--maildir %s`"), destdir)
+        except Exception as exc:
+            raise CatastrophicFailure(gettext("failed to create `--maildir %s`"), destdir) from exc
 
         sepoch_ms = str(epoch_ms)
         tmp_num = 0
