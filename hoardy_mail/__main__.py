@@ -44,24 +44,30 @@ defenc = sys.getdefaultencoding()
 myhostname = _socket.gethostname()
 smypid = str(os.getpid())
 
-def issue(message : str) -> None:
+
+def issue(message: str) -> None:
     if sys.stderr.isatty():
         sys.stderr.write("\033[31m" + message + "\033[0m\n")
     else:
         sys.stderr.write(message + "\n")
     sys.stderr.flush()
 
-def error(message : str) -> None:
+
+def error(message: str) -> None:
     issue(gettext("error") + ": " + message)
 
-def die(message : str, code : int = 1) -> _t.NoReturn:
+
+def die(message: str, code: int = 1) -> _t.NoReturn:
     error(message)
     sys.exit(code)
+
 
 interrupt_msg = "\n" + gettext("Gently finishing up... Press ^C again to forcefully interrupt.")
 want_stop = False
 should_raise = True
-def sig_handler(sig : int, frame : _t.Any) -> None:
+
+
+def sig_handler(sig: int, frame: _t.Any) -> None:
     global want_stop
     global should_raise
     want_stop = True
@@ -71,45 +77,63 @@ def sig_handler(sig : int, frame : _t.Any) -> None:
         issue(interrupt_msg)
     should_raise = True
 
-class SleepInterrupt(BaseException): pass
+
+class SleepInterrupt(BaseException):
+    pass
+
 
 should_unsleep = False
-def sig_unsleep(sig : int, frame : _t.Any) -> None:
+
+
+def sig_unsleep(sig: int, frame: _t.Any) -> None:
     global should_unsleep
     if should_unsleep:
         raise SleepInterrupt()
+
 
 def handle_signals() -> None:
     signal.signal(signal.SIGINT, sig_handler)
     signal.signal(signal.SIGTERM, sig_handler)
     signal.signal(signal.SIGUSR1, sig_unsleep)
 
-def pinentry(host : str, user : str) -> str:
+
+def pinentry(host: str, user: str) -> str:
     with subprocess.Popen(["pinentry"], stdin=subprocess.PIPE, stdout=subprocess.PIPE) as p:
-        def check(beginning : str) -> str:
-            res = p.stdout.readline().decode(defenc) # type: ignore
+
+        def check(beginning: str) -> str:
+            res = p.stdout.readline().decode(defenc)  # type: ignore
             if not res.endswith("\n") or not res.startswith(beginning):
                 raise Failure("pinentry conversation failed")
-            return res[len(beginning):-1]
+            return res[len(beginning) : -1]
+
         check("OK ")
-        def opt(what : str, beginning : str) -> str:
-            p.stdin.write(what.encode(defenc) + b"\n") # type: ignore
-            p.stdin.flush() # type: ignore
+
+        def opt(what: str, beginning: str) -> str:
+            p.stdin.write(what.encode(defenc) + b"\n")  # type: ignore
+            p.stdin.flush()  # type: ignore
             return check(beginning)
-        opt("SETDESC " + gettext("Please enter the passphrase for user %s on host %s") % (user, host), "OK")
+
+        opt(
+            "SETDESC "
+            + gettext("Please enter the passphrase for user %s on host %s") % (user, host),
+            "OK",
+        )
         opt("SETPROMPT " + gettext("Passphrase:"), "OK")
         pin = opt("GETPIN", "D ")
         return pin
 
-def imap_parse_data(data : bytes, literals : _t.List[bytes] = [], top_level : bool = True) -> _t.Tuple[_t.Any, bytes]:
+
+def imap_parse_data(
+    data: bytes, literals: _t.List[bytes] = [], top_level: bool = True
+) -> _t.Tuple[_t.Any, bytes]:
     "Parse IMAP response string into a tree of strings."
-    acc : _t.List[bytes] = []
+    acc: _t.List[bytes] = []
     res = b""
     i = 0
     state = False
     while i < len(data):
-        c = data[i:i+1]
-        #print(c)
+        c = data[i : i + 1]
+        # print(c)
         if state == False:
             if c == b'"':
                 if res != b"":
@@ -122,17 +146,17 @@ def imap_parse_data(data : bytes, literals : _t.List[bytes] = [], top_level : bo
             elif c == b"(":
                 if res != b"":
                     raise ValueError("unexpected parens")
-                res, data = imap_parse_data(data[i+1:], literals, False)
+                res, data = imap_parse_data(data[i + 1 :], literals, False)
                 acc.append(res)
                 res = b""
                 i = 0
                 if len(data) == 0:
                     return acc, b""
-                elif data[i:i+1] not in [b" ", b")"]:
+                elif data[i : i + 1] not in [b" ", b")"]:
                     raise ValueError("expecting space or end parens")
             elif c == b")":
                 acc.append(res)
-                return acc, data[i+1:]
+                return acc, data[i + 1 :]
             elif c == b"{":
                 if res != b"":
                     raise ValueError("unexpected curly")
@@ -143,7 +167,7 @@ def imap_parse_data(data : bytes, literals : _t.List[bytes] = [], top_level : bo
                 i = endcurly + 1
                 if i >= len(data):
                     return acc, b""
-                elif data[i:i+1] not in [b" ", b")"]:
+                elif data[i : i + 1] not in [b" ", b")"]:
                     raise ValueError("expecting space or end parens")
             else:
                 if type(res) is not bytes:
@@ -153,63 +177,71 @@ def imap_parse_data(data : bytes, literals : _t.List[bytes] = [], top_level : bo
             if c == b'"':
                 state = False
             elif c == b"\\":
-                i+=1
+                i += 1
                 if i >= len(data):
                     raise ValueError("unfinished escape sequence")
-                res += data[i:i+1]
+                res += data[i : i + 1]
             else:
                 res += c
-        i+=1
+        i += 1
     if res != b"":
         if state or not top_level:
             raise ValueError("unfinished quote or parens")
         acc.append(res)
     return acc, b""
 
-def imap_parse(line : bytes, literals : _t.List[bytes] = []) -> _t.Any:
+
+def imap_parse(line: bytes, literals: _t.List[bytes] = []) -> _t.Any:
     res, rest = imap_parse_data(line, literals)
     if rest != b"":
         raise ValueError("unexpected tail", rest)
     return res
 
-##print(imap_parse(b'(0 1) (1 2 3'))
-#print(imap_parse(b'(\\Trash \\Nya) "." "All Mail"'))
-#print(imap_parse(b'(\\Trash \\Nya) "." "All\\"Mail"'))
-#print(imap_parse(b'(1 2 3)'))
-#print(imap_parse(b'(0 1) ((1 2 3))'))
-#print(imap_parse(b'(0 1) ((1 2 3) )'))
-#print(imap_parse(b'1 2 3 4 "\\\\Nya" 5 6 7'))
-#print(imap_parse(b'(1 2 3) 4 "\\\\Nya" 5 6 7'))
-#print(imap_parse(b'1 (UID 123 RFC822.SIZE 128)'))
-#print(imap_parse(b'1 (UID 123 BODY[HEADER] {128})', [b'128bytesofdata']))
-#sys.exit(1)
 
-def imap_parse_attrs(data : _t.List[bytes]) -> _t.Dict[bytes, bytes]:
+##print(imap_parse(b'(0 1) (1 2 3'))
+# print(imap_parse(b'(\\Trash \\Nya) "." "All Mail"'))
+# print(imap_parse(b'(\\Trash \\Nya) "." "All\\"Mail"'))
+# print(imap_parse(b'(1 2 3)'))
+# print(imap_parse(b'(0 1) ((1 2 3))'))
+# print(imap_parse(b'(0 1) ((1 2 3) )'))
+# print(imap_parse(b'1 2 3 4 "\\\\Nya" 5 6 7'))
+# print(imap_parse(b'(1 2 3) 4 "\\\\Nya" 5 6 7'))
+# print(imap_parse(b'1 (UID 123 RFC822.SIZE 128)'))
+# print(imap_parse(b'1 (UID 123 BODY[HEADER] {128})', [b'128bytesofdata']))
+# sys.exit(1)
+
+
+def imap_parse_attrs(data: _t.List[bytes]) -> _t.Dict[bytes, bytes]:
     if len(data) % 2 != 0:
         raise ValueError("data array of non-even length")
 
     res = {}
     for i in range(0, len(data), 2):
         name = data[i].upper()
-        value = data[i+1]
+        value = data[i + 1]
         res[name] = value
     return res
 
-#print(imap_parse_attrs(imap_parse(b'UID 123 BODY[HEADER] {128}', [b'128bytesofdata'])))
-#sys.exit(1)
 
-def imap_quote(arg : str) -> str:
+# print(imap_parse_attrs(imap_parse(b'UID 123 BODY[HEADER] {128}', [b'128bytesofdata'])))
+# sys.exit(1)
+
+
+def imap_quote(arg: str) -> str:
     arg = arg[:]
-    arg = arg.replace('\\', '\\\\')
+    arg = arg.replace("\\", "\\\\")
     arg = arg.replace('"', '\\"')
     return '"' + arg + '"'
 
+
 imap_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]  # fmt: skip
 
-def imap_date(date : time.struct_time) -> str:
+
+def imap_date(date: time.struct_time) -> str:
     return f"{str(date.tm_mday)}-{imap_months[date.tm_mon-1]}-{str(date.tm_year)}"
 
-def make_search_filter(cfg : Namespace, now : int) -> _t.Tuple[str, bool]:
+
+def make_search_filter(cfg: Namespace, now: int) -> _t.Tuple[str, bool]:
     filters = []
     dynamic = False
 
@@ -226,12 +258,12 @@ def make_search_filter(cfg : Namespace, now : int) -> _t.Tuple[str, bool]:
             filters.append("UNFLAGGED")
 
     for f in cfg.hfrom:
-        filters.append(f'FROM {imap_quote(f)}')
+        filters.append(f"FROM {imap_quote(f)}")
 
     for f in cfg.hnotfrom:
-        filters.append(f'NOT FROM {imap_quote(f)}')
+        filters.append(f"NOT FROM {imap_quote(f)}")
 
-    def read_timestamp(path : str) -> int:
+    def read_timestamp(path: str) -> int:
         with open(path, "rb") as f:
             try:
                 data = f.readline().decode(defenc).strip()
@@ -275,15 +307,19 @@ def make_search_filter(cfg : Namespace, now : int) -> _t.Tuple[str, bool]:
     else:
         return "(" + " ".join(filters) + ")", dynamic
 
-def report(message : str) -> None:
+
+def report(message: str) -> None:
     sys.stdout.write(message + "\n")
     sys.stdout.flush()
 
-def info(cfg : Namespace, message : str) -> None:
-    if cfg.quiet: return
+
+def info(cfg: Namespace, message: str) -> None:
+    if cfg.quiet:
+        return
     report(message)
 
-def run_hook(hook : str) -> None:
+
+def run_hook(hook: str) -> None:
     try:
         with subprocess.Popen(hook, shell=True) as p:
             # __exit__ will do everything we need
@@ -291,82 +327,101 @@ def run_hook(hook : str) -> None:
     except Exception as exc:
         traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
 
-def run_hook_stdin(hook : str, data : bytes) -> None:
+
+def run_hook_stdin(hook: str, data: bytes) -> None:
     try:
         with subprocess.Popen(hook, stdin=subprocess.PIPE, shell=True) as p:
-            fd : _t.Any = p.stdin
+            fd: _t.Any = p.stdin
             fd.write(data)
             fd.flush()
             fd.close()
     except Exception as exc:
         traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
 
-def notify_send(typ : str, title : str, body : str) -> None:
+
+def notify_send(typ: str, title: str, body: str) -> None:
     try:
-        with subprocess.Popen(["notify-send", "-a", "hoardy-mail", "-i", typ, "--", title, body]) as p:
+        with subprocess.Popen(
+            ["notify-send", "-a", "hoardy-mail", "-i", typ, "--", title, body]
+        ) as p:
             pass
     except Exception as exc:
         traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
 
-def notify_success(cfg : Namespace, title : str, body : str) -> None:
+
+def notify_success(cfg: Namespace, title: str, body: str) -> None:
     if cfg.notify_success:
         notify_send("info", title, body)
 
     for cmd in cfg.success_cmd:
         run_hook_stdin(cmd, title.encode(defenc) + b"\n" + body.encode(defenc) + b"\n")
 
-def notify_failure(cfg : Namespace, title : str, body : str) -> None:
+
+def notify_failure(cfg: Namespace, title: str, body: str) -> None:
     if cfg.notify_failure:
         notify_send("error", title, body)
 
     for cmd in cfg.failure_cmd:
         run_hook_stdin(cmd, title.encode(defenc) + b"\n" + body.encode(defenc) + b"\n")
 
-def notify_error(cfg : Namespace, title : str, body : str = "") -> None:
+
+def notify_error(cfg: Namespace, title: str, body: str = "") -> None:
     error(title)
     try:
         notify_failure(cfg, title, body)
     except Exception:
         pass
 
-class AccountFailure(Failure): pass
-class AccountSoftFailure(AccountFailure): pass
-class FolderFailure(AccountFailure): pass
 
-def format_imap_error(command : str, typ : str, data : _t.Any = None) -> _t.Any:
+class AccountFailure(Failure):
+    pass
+
+
+class AccountSoftFailure(AccountFailure):
+    pass
+
+
+class FolderFailure(AccountFailure):
+    pass
+
+
+def format_imap_error(command: str, typ: str, data: _t.Any = None) -> _t.Any:
     if data is None:
         return gettext("IMAP %s command failed: %s") % (command, typ)
     else:
         return gettext("IMAP %s command failed: %s %s") % (command, typ, repr(data))
 
-def imap_exc(exc : _t.Any, command : str, typ : str, data : _t.Any) -> _t.Any:
+
+def imap_exc(exc: _t.Any, command: str, typ: str, data: _t.Any) -> _t.Any:
     return exc(format_imap_error(command, typ, data))
 
-def imap_check(exc : _t.Any, command : str, v : _t.Tuple[str, _t.Any]) -> _t.Any:
+
+def imap_check(exc: _t.Any, command: str, v: _t.Tuple[str, _t.Any]) -> _t.Any:
     typ, data = v
     if typ != "OK":
         raise imap_exc(exc, command, typ, data)
     return data
 
+
 @_dc.dataclass
 class Account:
-    socket : str
-    timeout : int
-    host : str
-    port : int
-    user : str
-    password : str
-    allow_login : bool
-    IMAP_base : type
+    socket: str
+    timeout: int
+    host: str
+    port: int
+    user: str
+    password: str
+    allow_login: bool
+    IMAP_base: type
 
-    no_conflicts : bool = _dc.field(default = True)
-    num_delivered : int = _dc.field(default = 0)
-    num_undelivered : int = _dc.field(default = 0)
-    num_marked : int = _dc.field(default = 0)
-    num_trashed : int = _dc.field(default = 0)
-    num_deleted : int = _dc.field(default = 0)
-    log : _t.List[str] = _dc.field(default_factory = lambda: [])
-    errors : _t.List[str] = _dc.field(default_factory = lambda: [])
+    no_conflicts: bool = _dc.field(default=True)
+    num_delivered: int = _dc.field(default=0)
+    num_undelivered: int = _dc.field(default=0)
+    num_marked: int = _dc.field(default=0)
+    num_trashed: int = _dc.field(default=0)
+    num_deleted: int = _dc.field(default=0)
+    log: _t.List[str] = _dc.field(default_factory=lambda: [])
+    errors: _t.List[str] = _dc.field(default_factory=lambda: [])
 
     def reset(self) -> None:
         self.no_conflicts = True
@@ -378,15 +433,19 @@ class Account:
         self.log = []
         self.errors = []
 
-def account_error(account : Account, message : str) -> None:
+
+def account_error(account: Account, message: str) -> None:
     account.errors.append(message)
     error(message)
 
-def account_conflict(account : Account, attrs : _t.Dict[bytes, bytes]) -> None:
+
+def account_conflict(account: Account, attrs: _t.Dict[bytes, bytes]) -> None:
     chmsg = gettext("the other client changed: %s") % (repr(attrs),)
     if account.no_conflicts:
         account.no_conflicts = False
-        errmsg = gettext("another IMAP client is performing potentially conflicting actions in parallel with us")
+        errmsg = gettext(
+            "another IMAP client is performing potentially conflicting actions in parallel with us"
+        )
         account.errors.append(errmsg)
         error(errmsg + "\n" + chmsg)
     else:
@@ -395,28 +454,31 @@ def account_conflict(account : Account, attrs : _t.Dict[bytes, bytes]) -> None:
     # nothing if any `account.no_conflicts` is False or `account.errors` is
     # not empty
 
-def connect(account : Account, debug : bool) -> _t.Any:
+
+def connect(account: Account, debug: bool) -> _t.Any:
     if debug:
         binstderr = os.fdopen(sys.stderr.fileno(), "wb")
-        class IMAP(account.IMAP_base): # type: ignore
-            def send(self, data : bytes) -> int:
+
+        class IMAP(account.IMAP_base):  # type: ignore
+            def send(self, data: bytes) -> int:
                 binstderr.write(b"C: " + data)
                 binstderr.flush()
-                return super().send(data) # type: ignore
+                return super().send(data)  # type: ignore
 
-            def read(self, size : int) -> bytes:
+            def read(self, size: int) -> bytes:
                 res = super().read(size)
                 binstderr.write(b"S: " + res)
                 binstderr.flush()
-                return res # type: ignore
+                return res  # type: ignore
 
             def readline(self) -> bytes:
                 res = super().readline()
                 binstderr.write(b"S: " + res)
                 binstderr.flush()
-                return res # type: ignore
+                return res  # type: ignore
+
     else:
-        IMAP = account.IMAP_base # type: ignore
+        IMAP = account.IMAP_base  # type: ignore
 
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ssl_context.verify_mode = ssl.CERT_REQUIRED
@@ -427,17 +489,23 @@ def connect(account : Account, debug : bool) -> _t.Any:
 
     try:
         if account.socket == "ssl":
-            srv = IMAP(account.host, account.port, ssl_context = ssl_context)
+            srv = IMAP(account.host, account.port, ssl_context=ssl_context)
         else:
             srv = IMAP(account.host, account.port)
             if account.socket == "starttls":
                 srv.starttls(ssl_context)
     except Exception as exc:
-        raise AccountFailure("failed to connect to host %s port %s: %s", account.host, account.port, repr(exc))
+        raise AccountFailure(
+            "failed to connect to host %s port %s: %s",
+            account.host,
+            account.port,
+            repr(exc),
+        )
 
     return srv
 
-def unsleep(seconds : _t.Union[int, float]) -> None:
+
+def unsleep(seconds: _t.Union[int, float]) -> None:
     global should_unsleep
 
     should_unsleep = True
@@ -449,15 +517,17 @@ def unsleep(seconds : _t.Union[int, float]) -> None:
     finally:
         should_unsleep = False
 
+
 @_dc.dataclass
 class State:
-    num_errors : int = _dc.field(default = 0)
-    hooks : _t.List[str] = _dc.field(init = False)
+    num_errors: int = _dc.field(default=0)
+    hooks: _t.List[str] = _dc.field(init=False)
 
     def __post_init__(self) -> None:
         self.hooks = []
 
-def for_each_account_poll(cfg : Namespace, state : State, *args : _t.Any) -> None:
+
+def for_each_account_poll(cfg: Namespace, state: State, *args: _t.Any) -> None:
     if cfg.every is None:
         for_each_account(cfg, state, *args)
         return
@@ -465,8 +535,14 @@ def for_each_account_poll(cfg : Namespace, state : State, *args : _t.Any) -> Non
     fmt = "[%Y-%m-%d %H:%M:%S]"
     cycle = cfg.every
 
-    def do_sleep(ttime : str) -> None:
-        report("# " + gettext("sleeping until %s, send SIGUSR1 to PID %s or hit ^C to start immediately, hit ^C twice to abort") % (ttime, smypid))
+    def do_sleep(ttime: str) -> None:
+        report(
+            "# "
+            + gettext(
+                "sleeping until %s, send SIGUSR1 to PID %s or hit ^C to start immediately, hit ^C twice to abort"
+            )
+            % (ttime, smypid)
+        )
         try:
             unsleep(to_sleep)
         except KeyboardInterrupt:
@@ -500,7 +576,8 @@ def for_each_account_poll(cfg : Namespace, state : State, *args : _t.Any) -> Non
         ttime = time.strftime(fmt, time.localtime(now + to_sleep))
         do_sleep(ttime)
 
-def for_each_account(cfg : Namespace, state : State, *args : _t.Any) -> None:
+
+def for_each_account(cfg: Namespace, state: State, *args: _t.Any) -> None:
     global should_raise
     should_raise = False
     try:
@@ -508,15 +585,19 @@ def for_each_account(cfg : Namespace, state : State, *args : _t.Any) -> None:
     finally:
         should_raise = True
 
-def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., None], *args : _t.Any) -> None:
+
+def for_each_account_(
+    cfg: Namespace, state: State, func: _t.Callable[..., None], *args: _t.Any
+) -> None:
     num_delivered, num_undelivered = 0, 0
     num_marked, num_trashed, num_deleted = 0, 0, 0
     log = []
     errors = []
 
-    account : Account
+    account: Account
     for account in cfg.accounts:
-        if want_stop: raise KeyboardInterrupt()
+        if want_stop:
+            raise KeyboardInterrupt()
 
         account.reset()
 
@@ -531,29 +612,61 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
                     if "IMAP4rev1" not in capabilities:
                         raise ValueError()
                 except (UnicodeDecodeError, KeyError, ValueError):
-                    raise AccountFailure("host %s port %s does not speak IMAP4rev1, your IMAP server appears to be too old", cfg.host, cfg.port)
+                    raise AccountFailure(
+                        "host %s port %s does not speak IMAP4rev1, your IMAP server appears to be too old",
+                        cfg.host,
+                        cfg.port,
+                    )
 
-                #print(capabilities)
+                # print(capabilities)
 
-                method : str
+                method: str
                 if "AUTH=CRAM-MD5" in capabilities:
-                    def do_cram_md5(challenge : bytes) -> str:
+
+                    def do_cram_md5(challenge: bytes) -> str:
                         import hmac
+
                         pwd = account.password.encode("utf-8")
-                        return imap_quote(account.user) + " " + hmac.HMAC(pwd, challenge, "md5").hexdigest()
+                        return (
+                            imap_quote(account.user)
+                            + " "
+                            + hmac.HMAC(pwd, challenge, "md5").hexdigest()
+                        )
+
                     method = "AUTHENTICATE CRAM-MD5"
                     typ, data = srv.authenticate("CRAM-MD5", do_cram_md5)
                 elif account.allow_login:
                     method = "LOGIN PLAIN"
-                    typ, data = srv._simple_command("LOGIN", imap_quote(account.user), imap_quote(account.password))
+                    typ, data = srv._simple_command(
+                        "LOGIN", imap_quote(account.user), imap_quote(account.password)
+                    )
                 else:
-                    raise AccountFailure("authentication with plain-text credentials is disabled, set both `--auth-allow-login` and `--auth-allow-plain` if you really want to do this")
+                    raise AccountFailure(
+                        "authentication with plain-text credentials is disabled, set both `--auth-allow-login` and `--auth-allow-plain` if you really want to do this"
+                    )
 
                 if typ != "OK":
-                    raise AccountFailure("failed to login (%s) as %s to host %s port %d: %s", method, account.user, account.host, account.port, repr(data))
+                    raise AccountFailure(
+                        "failed to login (%s) as %s to host %s port %d: %s",
+                        method,
+                        account.user,
+                        account.host,
+                        account.port,
+                        repr(data),
+                    )
                 srv.state = "AUTH"
 
-                report("# " + gettext("logged in (%s) as %s to host %s port %d (%s)") % (method, account.user, account.host, account.port, account.socket.upper()))
+                report(
+                    "# "
+                    + gettext("logged in (%s) as %s to host %s port %d (%s)")
+                    % (
+                        method,
+                        account.user,
+                        account.host,
+                        account.port,
+                        account.socket.upper(),
+                    )
+                )
 
                 func(cfg, state, account, srv, *args)
             except AccountSoftFailure as exc:
@@ -575,7 +688,11 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
         except IMAP4.abort as exc:
             account_error(account, gettext("imaplib") + ": " + str(exc))
         except OSError as exc:
-            account_error(account, gettext("unexpected failure while working with host %s port %s: %s") % (account.host, account.port, repr(exc)))
+            account_error(
+                account,
+                gettext("unexpected failure while working with host %s port %s: %s")
+                % (account.host, account.port, repr(exc)),
+            )
         finally:
             num_delivered += account.num_delivered
             num_marked += account.num_marked
@@ -583,9 +700,11 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
             num_deleted += account.num_deleted
             num_undelivered += account.num_undelivered
             if len(account.log) > 0:
-                log.append(gettext("%s on %s:") % \
-                           (account.user, account.host) + \
-                           "\n- " + "\n- ".join(account.log))
+                log.append(
+                    gettext("%s on %s:") % (account.user, account.host)
+                    + "\n- "
+                    + "\n- ".join(account.log)
+                )
             state.num_errors += len(account.errors)
             errors += account.errors
 
@@ -597,21 +716,38 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
 
     good = []
     if num_delivered > 0:
-        good.append(ngettext("fetched %d new message", "fetched %d new messages", num_delivered) % (num_delivered,))
+        good.append(
+            ngettext("fetched %d new message", "fetched %d new messages", num_delivered)
+            % (num_delivered,)
+        )
     if num_marked > 0:
         good.append(ngettext("marked %d message", "marked %d messages", num_marked) % (num_marked,))
     if num_trashed > 0:
-        good.append(ngettext("trashed %d message", "trashed %d messages", num_trashed) % (num_trashed,))
+        good.append(
+            ngettext("trashed %d message", "trashed %d messages", num_trashed) % (num_trashed,)
+        )
     if num_deleted > 0:
-        good.append(ngettext("deleted %d message", "deleted %d messages", num_deleted) % (num_deleted,))
+        good.append(
+            ngettext("deleted %d message", "deleted %d messages", num_deleted) % (num_deleted,)
+        )
 
     bad = []
     if num_undelivered > 0:
-        bad.append(ngettext("failed to fetch %d message", "failed to fetch %d messages", num_undelivered) % (num_undelivered,))
+        bad.append(
+            ngettext(
+                "failed to fetch %d message",
+                "failed to fetch %d messages",
+                num_undelivered,
+            )
+            % (num_undelivered,)
+        )
 
     num_new_errors = len(errors)
     if num_new_errors > 0:
-        bad.append(ngettext("produced %d new error", "produced %d new errors", num_new_errors) % (num_new_errors,))
+        bad.append(
+            ngettext("produced %d new error", "produced %d new errors", num_new_errors)
+            % (num_new_errors,)
+        )
 
     if len(good) > 0:
         title = gettext(", ").join(good)
@@ -623,14 +759,20 @@ def for_each_account_(cfg : Namespace, state : State, func : _t.Callable[..., No
         issue("# " + gettext("poll: ") + title)
         notify_failure(cfg, title, "\n".join(errors))
 
-def check_cmd(cfg : Namespace) -> None:
+
+def check_cmd(cfg: Namespace) -> None:
     if len(cfg.accounts) == 0:
-        die(gettext("no accounts are specified, need at least one `--host`, `--user`, and either of `--passfile` or `--passcmd`"))
+        die(
+            gettext(
+                "no accounts are specified, need at least one `--host`, `--user`, and either of `--passfile` or `--passcmd`"
+            )
+        )
 
     if cfg.command == "fetch" and cfg.maildir is None and cfg.mda is None:
         die(gettext("no delivery method is specified, either `--maildir` or `--mda` is required"))
 
-def cmd_list(cfg : Namespace, state : State) -> None:
+
+def cmd_list(cfg: Namespace, state: State) -> None:
     check_cmd(cfg)
 
     if cfg.very_dry_run:
@@ -638,12 +780,14 @@ def cmd_list(cfg : Namespace, state : State) -> None:
 
     for_each_account_poll(cfg, state, do_list)
 
-def do_list(cfg : Namespace, state : State, account : Account, srv : IMAP4) -> None:
+
+def do_list(cfg: Namespace, state: State, account: Account, srv: IMAP4) -> None:
     folders = get_folders(srv)
     for e in folders:
         print(e)
 
-def get_folders(srv : IMAP4) -> _t.List[str]:
+
+def get_folders(srv: IMAP4) -> _t.List[str]:
     res = []
     data = imap_check(AccountFailure, "LIST", srv.list())
     for el in data:
@@ -653,17 +797,24 @@ def get_folders(srv : IMAP4) -> _t.List[str]:
         res.append(arg.decode("utf-8"))
     return res
 
-def print_prelude(cfg : Namespace) -> None:
+
+def print_prelude(cfg: Namespace) -> None:
     _ = gettext
     every = ""
     if cfg.every is not None:
         every = _("every %d seconds, ") % (cfg.every,)
     info(cfg, "# " + every + _("for each of"))
     for acc in cfg.accounts:
-        info(cfg, "... " + _("user %s on host %s port %d (%s)") % (acc.user, acc.host, acc.port, acc.socket.upper()))
+        info(
+            cfg,
+            "... "
+            + _("user %s on host %s port %d (%s)")
+            % (acc.user, acc.host, acc.port, acc.socket.upper()),
+        )
     info(cfg, "# " + _("do"))
 
-def prepare_cmd(cfg : Namespace, now : int) -> str:
+
+def prepare_cmd(cfg: Namespace, now: int) -> str:
     if cfg.command == "mark":
         if cfg.seen is None and cfg.flagged is None:
             if cfg.mark == "seen":
@@ -700,7 +851,10 @@ def prepare_cmd(cfg : Namespace, now : int) -> str:
         sf += " " + gettext("{dynamic}")
 
     if "mark" in cfg:
-        what = gettext(f"search %s, perform {cfg.command}, mark them as %s") % (sf, cfg.mark.upper())
+        what = gettext(f"search %s, perform {cfg.command}, mark them as %s") % (
+            sf,
+            cfg.mark.upper(),
+        )
     else:
         what = gettext(f"search %s, perform {cfg.command}") % (sf,)
 
@@ -708,7 +862,8 @@ def prepare_cmd(cfg : Namespace, now : int) -> str:
 
     return search_filter
 
-def cmd_action(cfg : Namespace, state : State) -> None:
+
+def cmd_action(cfg: Namespace, state: State) -> None:
     check_cmd(cfg)
     print_prelude(cfg)
     now = time.time_ns()
@@ -719,7 +874,8 @@ def cmd_action(cfg : Namespace, state : State) -> None:
 
     for_each_account_poll(cfg, state, for_each_folder_multi, [cfg])
 
-def cmd_multi_action(common_cfg : Namespace, state : State, subcfgs : _t.List[Namespace]) -> None:
+
+def cmd_multi_action(common_cfg: Namespace, state: State, subcfgs: _t.List[Namespace]) -> None:
     print_prelude(common_cfg)
     now = time.time_ns()
     for subcfg in subcfgs:
@@ -730,8 +886,10 @@ def cmd_multi_action(common_cfg : Namespace, state : State, subcfgs : _t.List[Na
 
     for_each_account_poll(common_cfg, state, for_each_folder_multi, subcfgs)
 
-def for_each_folder_multi(common_cfg : Namespace, state : State, account : Account, srv : IMAP4,
-                          subcfgs : _t.List[Namespace]) -> None:
+
+def for_each_folder_multi(
+    common_cfg: Namespace, state: State, account: Account, srv: IMAP4, subcfgs: _t.List[Namespace]
+) -> None:
     if common_cfg.every is not None:
         now = time.time_ns()
         for subcfg in subcfgs:
@@ -740,15 +898,23 @@ def for_each_folder_multi(common_cfg : Namespace, state : State, account : Accou
     for subcfg in subcfgs:
         for_each_folder_(subcfg, state, account, srv, do_folder_action, subcfg.command)
 
-def for_each_folder_(cfg : Namespace, state : State, account : Account, srv : IMAP4,
-                     func : _t.Callable[..., None], *args : _t.Any) -> None:
+
+def for_each_folder_(
+    cfg: Namespace,
+    state: State,
+    account: Account,
+    srv: IMAP4,
+    func: _t.Callable[..., None],
+    *args: _t.Any,
+) -> None:
     if cfg.all_folders:
         folders = get_folders(srv)
     else:
         folders = cfg.folders
 
     for folder in filter(lambda f: f not in cfg.not_folders, folders):
-        if want_stop: raise KeyboardInterrupt()
+        if want_stop:
+            raise KeyboardInterrupt()
 
         typ, data = srv.select(imap_quote(folder))
         if typ != "OK":
@@ -762,14 +928,16 @@ def for_each_folder_(cfg : Namespace, state : State, account : Account, srv : IM
 
         srv.close()
 
-def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IMAP4,
-                     folder : str, command : str) -> None:
+
+def do_folder_action(
+    cfg: Namespace, state: State, account: Account, srv: IMAP4, folder: str, command: str
+) -> None:
 
     typ, data = srv.uid("SEARCH", cfg.search_filter)
     if typ != "OK":
         raise imap_exc(FolderFailure, "SEARCH", typ, data)
 
-    result : _t.Optional[bytes] = data[0]
+    result: _t.Optional[bytes] = data[0]
     if result is None:
         raise imap_exc(FolderFailure, "SEARCH", typ, data)
     elif result == b"":
@@ -782,18 +950,25 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
         if cfg.porcelain:
             print(f"{num_messages} {folder}")
         else:
-            report(ngettext("folder `%s` has %d message matching %s", "folder `%s` has %d messages matching %s", num_messages) % (folder, num_messages, cfg.search_filter))
+            report(
+                ngettext(
+                    "folder `%s` has %d message matching %s",
+                    "folder `%s` has %d messages matching %s",
+                    num_messages,
+                )
+                % (folder, num_messages, cfg.search_filter)
+            )
         return
 
-    act : str
-    actargs : _t.Any
+    act: str
+    actargs: _t.Any
     method = None
     if command == "mark":
         act = "marking as %s %d messages matching %s from folder `%s`"
-        actargs  = (cfg.mark.upper(), num_messages, cfg.search_filter, folder)
+        actargs = (cfg.mark.upper(), num_messages, cfg.search_filter, folder)
     elif command == "fetch":
         act = "fetching %d messages matching %s from folder `%s`"
-        actargs  = (num_messages, cfg.search_filter, folder)
+        actargs = (num_messages, cfg.search_filter, folder)
     elif command == "delete":
         if cfg.method == "auto":
             if account.host == "imap.gmail.com" and folder != "[Gmail]/Trash":
@@ -805,10 +980,10 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
 
         if method in ["delete", "delete-noexpunge"]:
             act = "deleting %d messages matching %s from folder `%s`"
-            actargs  = (num_messages, cfg.search_filter, folder)
+            actargs = (num_messages, cfg.search_filter, folder)
         elif method == "gmail-trash":
             act = f"moving %d messages matching %s from folder `%s` to `[GMail]/Trash`"
-            actargs  = (num_messages, cfg.search_filter, folder)
+            actargs = (num_messages, cfg.search_filter, folder)
         else:
             assert False
     else:
@@ -818,7 +993,9 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
         report(gettext("dry-run: (not) " + act) % actargs)
         return
     elif command == "delete" and (not account.no_conflicts or len(account.errors) > 0):
-        account_error(account, gettext("one of the previous commands reported issues, not " + act) % actargs)
+        account_error(
+            account, gettext("one of the previous commands reported issues, not " + act) % actargs
+        )
         return
     else:
         report(gettext(act) % actargs)
@@ -834,8 +1011,11 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
         finally:
             num_marked = account.num_marked - old_num_marked
             if num_marked > 0:
-                account.log.append("`%s`: " % (folder,) + \
-                                   ngettext("marked %d message", "marked %d messages", num_marked) % (num_marked,))
+                account.log.append(
+                    "`%s`: " % (folder,)
+                    + ngettext("marked %d message", "marked %d messages", num_marked)
+                    % (num_marked,)
+                )
     elif command == "fetch":
         old_num_delivered = account.num_delivered
         old_num_marked = account.num_marked
@@ -846,11 +1026,17 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
             num_marked = account.num_marked - old_num_marked
             if num_delivered > 0:
                 if num_delivered == num_marked:
-                    msg = ngettext("fetched and marked %d message", "fetched and marked %d messages", \
-                                   num_delivered) % (num_delivered,)
+                    msg = ngettext(
+                        "fetched and marked %d message",
+                        "fetched and marked %d messages",
+                        num_delivered,
+                    ) % (num_delivered,)
                 else:
-                    msg = ngettext("fetched %d but marked %d message", "fetched %d but marked %d messages", \
-                                   max(num_delivered, num_marked)) % (num_delivered, num_marked)
+                    msg = ngettext(
+                        "fetched %d but marked %d message",
+                        "fetched %d but marked %d messages",
+                        max(num_delivered, num_marked),
+                    ) % (num_delivered, num_marked)
                 account.log.append("`%s`: " % (folder,) + msg)
 
                 for hook in cfg.new_mail_cmd:
@@ -865,23 +1051,33 @@ def do_folder_action(cfg : Namespace, state : State, account : Account, srv : IM
         finally:
             num_trashed = account.num_trashed - old_num_trashed
             if num_trashed > 0:
-                account.log.append("`%s`: " % (folder,) + \
-                                   ngettext("trashed %d message", "trashed %d messages", num_trashed) % (num_trashed,))
+                account.log.append(
+                    "`%s`: " % (folder,)
+                    + ngettext("trashed %d message", "trashed %d messages", num_trashed)
+                    % (num_trashed,)
+                )
             num_deleted = account.num_deleted - old_num_deleted
             if num_deleted > 0:
-                account.log.append("`%s`: " % (folder,) + \
-                                   ngettext("deleted %d message", "deleted %d messages", num_deleted) % (num_deleted,))
+                account.log.append(
+                    "`%s`: " % (folder,)
+                    + ngettext("deleted %d message", "deleted %d messages", num_deleted)
+                    % (num_deleted,)
+                )
 
-def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, message_uids : _t.List[bytes]) -> None:
+
+def do_fetch(
+    cfg: Namespace, state: State, account: Account, srv: IMAP4, message_uids: _t.List[bytes]
+) -> None:
     fetch_num = cfg.fetch_number
-    batch : _t.List[bytes] = []
+    batch: _t.List[bytes] = []
     batch_total = 0
     while len(message_uids) > 0:
-        if want_stop: raise KeyboardInterrupt()
+        if want_stop:
+            raise KeyboardInterrupt()
 
         to_fetch, message_uids = message_uids[:fetch_num], message_uids[fetch_num:]
-        to_fetch_set : _t.Set[bytes] = set(to_fetch)
-        typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)") # type: ignore
+        to_fetch_set: _t.Set[bytes] = set(to_fetch)
+        typ, data = srv.uid("FETCH", b",".join(to_fetch), "(RFC822.SIZE)")  # type: ignore
         if typ != "OK":
             account.num_undelivered += len(to_fetch)
             account_error(account, format_imap_error("FETCH", typ, data))
@@ -891,7 +1087,7 @@ def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, mes
         for el in data:
             _, attrs_ = imap_parse(el)
             attrs = imap_parse_attrs(attrs_)
-            #print(attrs)
+            # print(attrs)
 
             try:
                 uid = attrs[b"UID"]
@@ -905,7 +1101,10 @@ def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, mes
 
         if len(to_fetch_set) > 0:
             account.num_undelivered += len(to_fetch)
-            account_error(account, format_imap_error("FETCH", "the result does not have all requested messages"))
+            account_error(
+                account,
+                format_imap_error("FETCH", "the result does not have all requested messages"),
+            )
             continue
 
         while True:
@@ -933,17 +1132,31 @@ def do_fetch(cfg : Namespace, state : State, account : Account, srv : IMAP4, mes
 
     do_fetch_batch(cfg, state, account, srv, batch, batch_total)
 
-def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP4, message_uids : _t.List[bytes], total_size : int) -> None:
-    if want_stop: raise KeyboardInterrupt()
 
-    if len(message_uids) == 0: return
-    info(cfg, "... " + gettext("fetching a batch of %d messages (%d bytes)") % (len(message_uids), total_size))
+def do_fetch_batch(
+    cfg: Namespace,
+    state: State,
+    account: Account,
+    srv: IMAP4,
+    message_uids: _t.List[bytes],
+    total_size: int,
+) -> None:
+    if want_stop:
+        raise KeyboardInterrupt()
+
+    if len(message_uids) == 0:
+        return
+    info(
+        cfg,
+        "... "
+        + gettext("fetching a batch of %d messages (%d bytes)") % (len(message_uids), total_size),
+    )
 
     # because time.time() gives a float
     epoch_ms = time.time_ns() // 1000000
 
     joined = b",".join(message_uids)
-    typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])") # type: ignore
+    typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])")  # type: ignore
     if typ != "OK":
         account.num_undelivered += len(message_uids)
         account_error(account, format_imap_error("FETCH", typ, data))
@@ -990,7 +1203,7 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
         line = b"".join(chunks)
         _, attrs_ = imap_parse(line, literals)
         attrs = imap_parse_attrs(attrs_)
-        #print(attrs)
+        # print(attrs)
 
         try:
             uid = attrs[b"UID"]
@@ -1014,11 +1227,14 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
             sflen = str(len(header) + len(body))
 
             try:
-                tf : _t.Any
-                tmp_path : str
+                tf: _t.Any
+                tmp_path: str
                 while True:
-                    tmp_path = os.path.join(destdir, "tmp",
-                                            f"IAP_{smypid}_{sepoch_ms}_{str(tmp_num)}.{myhostname},S={sflen}.part")
+                    tmp_path = os.path.join(
+                        destdir,
+                        "tmp",
+                        f"IAP_{smypid}_{sepoch_ms}_{str(tmp_num)}.{myhostname},S={sflen}.part",
+                    )
                     tmp_num += 1
 
                     try:
@@ -1032,10 +1248,14 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
                     tf.write(body)
                     tf.flush()
                 except Exception as exc:
-                    try: tf.close()
-                    except Exception: pass
-                    try: os.unlink(tmp_path)
-                    except Exception: pass
+                    try:
+                        tf.close()
+                    except Exception:
+                        pass
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
                     raise exc
             except Exception as exc:
                 traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
@@ -1047,19 +1267,23 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
             flushed = False
             delivered = False
             with subprocess.Popen(cfg.mda, stdin=subprocess.PIPE, shell=True) as p:
-                fd : _t.Any = p.stdin
+                fd: _t.Any = p.stdin
                 try:
                     fd.write(header)
                     fd.write(body)
                     fd.flush()
                     fd.close()
                 except BrokenPipeError:
-                    try: fd.close()
-                    except Exception: pass
+                    try:
+                        fd.close()
+                    except Exception:
+                        pass
                 except Exception as exc:
                     traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
-                    try: fd.close()
-                    except Exception: pass
+                    try:
+                        fd.close()
+                    except Exception:
+                        pass
                 else:
                     flushed = True
 
@@ -1088,10 +1312,14 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
                 tf.close()
             except Exception as exc:
                 traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
-                try: tf.close()
-                except Exception: pass
-                try: os.unlink(tmp_path)
-                except Exception: pass
+                try:
+                    tf.close()
+                except Exception:
+                    pass
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
                 failed_uids.append(uid)
             else:
                 synced.append(el)
@@ -1106,8 +1334,10 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
             traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
             # cleanup
             for uid, _, _, tmp_path in synced:
-                try: os.unlink(tmp_path)
-                except Exception: pass
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
                 failed_uids.append(uid)
             del synced
             error(gettext("failed to lock `--maildir %s`") % (destdir,))
@@ -1116,8 +1346,9 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
             for uid, msghash, sflen, tmp_path in synced:
                 msg_num = 0
                 while True:
-                    msg_path = os.path.join(ddir,
-                                            f"IAH_{msghash}_{str(msg_num)}.{myhostname},S={sflen}")
+                    msg_path = os.path.join(
+                        ddir, f"IAH_{msghash}_{str(msg_num)}.{myhostname},S={sflen}"
+                    )
                     msg_num += 1
 
                     if os.path.exists(msg_path):
@@ -1128,8 +1359,10 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
                     os.rename(tmp_path, msg_path)
                 except Exception as exc:
                     traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
-                    try: os.unlink(tmp_path)
-                    except Exception: pass
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
                     failed_uids.append(uid)
                 else:
                     done_uids.append(uid)
@@ -1157,50 +1390,86 @@ def do_fetch_batch(cfg : Namespace, state : State, account : Account, srv : IMAP
         how = "--mda " + cfg.mda
 
     if num_delivered > 0:
-        info(cfg, "... " + ngettext("delivered %d message via `%s`", "delivered %d messages via `%s`", num_delivered) % (num_delivered, how))
+        info(
+            cfg,
+            "... "
+            + ngettext(
+                "delivered %d message via `%s`", "delivered %d messages via `%s`", num_delivered
+            )
+            % (num_delivered, how),
+        )
 
     if num_undelivered > 0:
-        account_error(account, ngettext("failed to deliver %d message via `%s`", "failed to deliver %d messages via `%s`", num_undelivered) % (num_undelivered, how))
+        account_error(
+            account,
+            ngettext(
+                "failed to deliver %d message via `%s`",
+                "failed to deliver %d messages via `%s`",
+                num_undelivered,
+            )
+            % (num_undelivered, how),
+        )
         if cfg.paranoid is not None:
             if num_delivered == 0:
-                raise AccountSoftFailure(gettext("failed to deliver any messages, aborting this `fetch` and any following commands"))
+                raise AccountSoftFailure(
+                    gettext(
+                        "failed to deliver any messages, aborting this `fetch` and any following commands"
+                    )
+                )
             elif cfg.paranoid:
-                raise CatastrophicFailure(gettext("failed to deliver %d messages in paranoid mode"), num_undelivered)
+                raise CatastrophicFailure(
+                    gettext("failed to deliver %d messages in paranoid mode"), num_undelivered
+                )
 
     do_store(cfg, state, account, srv, cfg.mark, done_uids, False)
 
+
 marking_as = "... " + gettext("marking a batch of %d messages as %s")
 
-def do_store(cfg : Namespace, state : State, account : Account, srv : IMAP4,
-             method : str, message_uids : _t.List[bytes], interruptable : bool = True) -> None:
-    if method == "noop": return
+
+def do_store(
+    cfg: Namespace,
+    state: State,
+    account: Account,
+    srv: IMAP4,
+    method: str,
+    message_uids: _t.List[bytes],
+    interruptable: bool = True,
+) -> None:
+    if method == "noop":
+        return
 
     store_num = cfg.store_number
     while len(message_uids) > 0:
-        if interruptable and want_stop: raise KeyboardInterrupt()
+        if interruptable and want_stop:
+            raise KeyboardInterrupt()
 
         to_store, message_uids = message_uids[:store_num], message_uids[store_num:]
         joined = b",".join(to_store)
         if method == "seen":
             info(cfg, marking_as % (len(to_store), "SEEN"))
-            typ, data = srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Seen") # type: ignore
+            typ, data = srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Seen")  # type: ignore
         elif method == "unseen":
             info(cfg, marking_as % (len(to_store), "UNSEEN"))
-            typ, data = srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Seen") # type: ignore
+            typ, data = srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Seen")  # type: ignore
         elif method == "flagged":
             info(cfg, marking_as % (len(to_store), "FLAGGED"))
-            typ, data = srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Flagged") # type: ignore
+            typ, data = srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Flagged")  # type: ignore
         elif method == "unflagged":
             info(cfg, marking_as % (len(to_store), "UNFLAGGED"))
-            typ, data = srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Flagged") # type: ignore
+            typ, data = srv.uid("STORE", joined, "-FLAGS.SILENT", "\\Flagged")  # type: ignore
         elif method in ["delete", "delete-noexpunge"]:
             info(cfg, "... " + gettext("deleting a batch of %d messages") % (len(to_store),))
-            typ, data = srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted") # type: ignore
+            typ, data = srv.uid("STORE", joined, "+FLAGS.SILENT", "\\Deleted")  # type: ignore
             if typ == "OK" and method == "delete":
                 srv.expunge()
         elif method == "gmail-trash":
-            info(cfg, "... " + gettext("moving a batch of %d messages to `[GMail]/Trash`") % (len(to_store),))
-            typ, data = srv.uid("STORE", joined, "+X-GM-LABELS", "\\Trash") # type: ignore
+            info(
+                cfg,
+                "... "
+                + gettext("moving a batch of %d messages to `[GMail]/Trash`") % (len(to_store),),
+            )
+            typ, data = srv.uid("STORE", joined, "+X-GM-LABELS", "\\Trash")  # type: ignore
         else:
             assert False
 
@@ -1215,7 +1484,8 @@ def do_store(cfg : Namespace, state : State, account : Account, srv : IMAP4,
         else:
             account_error(account, format_imap_error("STORE", typ, data))
 
-def add_examples(fmt : _t.Any) -> None:
+
+def add_examples(fmt: _t.Any) -> None:
     _ = gettext
 
     # fmt: off
@@ -1378,12 +1648,14 @@ EOF
     fmt.end_section()
     # fmt: on
 
+
 class ArgumentParser(argparse.BetterArgumentParser):
-    def error(self, message : str) -> _t.NoReturn:
+    def error(self, message: str) -> _t.NoReturn:
         self.print_usage(sys.stderr)
         die(message, 2)
 
-def make_argparser(real : bool = True) -> _t.Any:
+
+def make_argparser(real: bool = True) -> _t.Any:
     _ = gettext
 
     # fmt: off
@@ -1768,6 +2040,7 @@ E.g., if you have several `fetch --new-mail-cmd filter-my-mail` as subcommands o
 
     return parser
 
+
 def main() -> None:
     _ = gettext
 
@@ -1806,9 +2079,13 @@ def main() -> None:
         notify_error(cfg, _("A bug!"))
 
     if state.num_errors > 0:
-        error(ngettext("There was %d error!", "There were %d errors!", state.num_errors) % (state.num_errors,))
+        error(
+            ngettext("There was %d error!", "There were %d errors!", state.num_errors)
+            % (state.num_errors,)
+        )
         sys.exit(1)
     sys.exit(0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
