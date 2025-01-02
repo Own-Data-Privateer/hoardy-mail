@@ -29,7 +29,7 @@ import ssl
 import subprocess
 import sys
 import time
-import traceback as traceback
+import traceback as _traceback
 import typing as _t
 
 from imaplib import IMAP4, IMAP4_SSL
@@ -67,7 +67,7 @@ want_stop = False
 should_raise = True
 
 
-def sig_handler(sig: int, frame: _t.Any) -> None:
+def sig_handler(sig: int, _frame: _t.Any) -> None:
     global want_stop
     global should_raise
     want_stop = True
@@ -85,8 +85,7 @@ class SleepInterrupt(BaseException):
 should_unsleep = False
 
 
-def sig_unsleep(sig: int, frame: _t.Any) -> None:
-    global should_unsleep
+def sig_unsleep(_sig: int, _frame: _t.Any) -> None:
     if should_unsleep:
         raise SleepInterrupt()
 
@@ -327,11 +326,11 @@ def info(cfg: Namespace, message: str) -> None:
 
 def run_hook(hook: str) -> None:
     try:
-        with subprocess.Popen(hook, shell=True) as p:
+        with subprocess.Popen(hook, shell=True) as _p:
             # __exit__ will do everything we need
             pass
     except Exception as exc:
-        traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+        _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
 
 
 def run_hook_stdin(hook: str, data: bytes) -> None:
@@ -342,17 +341,17 @@ def run_hook_stdin(hook: str, data: bytes) -> None:
             fd.flush()
             fd.close()
     except Exception as exc:
-        traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+        _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
 
 
 def notify_send(typ: str, title: str, body: str) -> None:
     try:
         with subprocess.Popen(
             ["notify-send", "-a", "hoardy-mail", "-i", typ, "--", title, body]
-        ) as p:
+        ) as _p:
             pass
     except Exception as exc:
-        traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+        _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
 
 
 def notify_success(cfg: Namespace, title: str, body: str) -> None:
@@ -786,7 +785,7 @@ def cmd_list(cfg: Namespace, state: State) -> None:
     for_each_account_poll(cfg, state, do_list)
 
 
-def do_list(cfg: Namespace, state: State, account: Account, srv: IMAP4) -> None:
+def do_list(_cfg: Namespace, _state: State, _account: Account, srv: IMAP4) -> None:
     folders = get_folders(srv)
     for e in folders:
         print(e)
@@ -1263,7 +1262,7 @@ def do_fetch_batch(
                         pass
                     raise exc
             except Exception as exc:
-                traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
                 failed_uids.append(uid)
             else:
                 unsynced.append((tf, (uid, msghash, sflen, tmp_path)))
@@ -1284,7 +1283,7 @@ def do_fetch_batch(
                     except Exception:
                         pass
                 except Exception as exc:
-                    traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                    _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
                     try:
                         fd.close()
                     except Exception:
@@ -1316,7 +1315,7 @@ def do_fetch_batch(
                 os.fsync(tf.fileno())
                 tf.close()
             except Exception as exc:
-                traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
                 try:
                     tf.close()
                 except Exception:
@@ -1336,7 +1335,7 @@ def do_fetch_batch(
             dirfd = os.open(ddir, os.O_RDONLY | os.O_DIRECTORY)
             _fcntl.flock(dirfd, _fcntl.LOCK_EX)
         except Exception as exc:
-            traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+            _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
             # cleanup
             for uid, _, _, tmp_path in synced:
                 try:
@@ -1363,7 +1362,7 @@ def do_fetch_batch(
                 try:
                     os.rename(tmp_path, msg_path)
                 except Exception as exc:
-                    traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                    _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
                     try:
                         os.unlink(tmp_path)
                     except Exception:
@@ -1379,7 +1378,7 @@ def do_fetch_batch(
                 _fcntl.flock(dirfd, _fcntl.LOCK_UN)
                 os.close(dirfd)
             except Exception as exc:
-                traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+                _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
                 failed_uids += done_uids
                 done_uids = []
                 error(gettext("failed to sync `--maildir %s`") % (destdir,))
@@ -1434,7 +1433,7 @@ marking_as = "... " + gettext("marking a batch of %d messages as %s")
 
 def do_store(
     cfg: Namespace,
-    state: State,
+    _state: State,
     account: Account,
     srv: IMAP4,
     method: str,
@@ -2029,7 +2028,7 @@ def make_argparser(real: bool = True) -> _t.Any:
 
         return cmd
 
-    def no_cmd(cfg: Namespace, state: State) -> None:
+    def no_cmd(_cfg: Namespace, _state: State) -> None:
         parser.print_help(sys.stderr)
         die(_("no subcommand specified"), 2)
 
@@ -2270,7 +2269,7 @@ def main() -> None:
         state.num_errors += 1
         notify_error(cfg, str(exc))
     except Exception as exc:
-        traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
+        _traceback.print_exception(type(exc), exc, exc.__traceback__, 100, sys.stderr)
         state.num_errors += 1
         notify_error(cfg, _("A bug!"))
 
