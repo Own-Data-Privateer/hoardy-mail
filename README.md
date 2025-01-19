@@ -1,6 +1,6 @@
 # What is `hoardy-mail`?
 
-`hoardy-mail` is a tool that can help you quickly fetch your email from a remote IMAP server to a local file system (~150x faster than [fetchmail](https://www.fetchmail.info/)/[getmail](https://github.com/getmail6/getmail6)), programmatically change flags on messages on the IMAP server (e.g. mark all messages newer than a day old in some folder as unread), delete or expire old messages from the IMAP server, and do other similar things.
+`hoardy-mail` is a tool that can help you quickly fetch your email from remote IMAP servers to a local file system (150x faster and using 150x less disk writes than [fetchmail](https://www.fetchmail.info/)/[getmail](https://github.com/getmail6/getmail6)), programmatically change flags on messages on IMAP servers (e.g. mark all messages newer than a day old in some folder as unread), delete or expire old messages from IMAP servers, and do other similar things.
 It can also perform several of those operations using the same IMAP connection, sequentially, allowing for complex updates.
 
 More formally, `hoardy-mail` is a utility that can fetch and/or perform various batch operations on messages residing on specified IMAP servers.
@@ -23,7 +23,7 @@ In other words, [in comparison to other things](#alternatives), `hoardy-mail` is
 
 `hoardy-mail` was previously knows as `imaparms`.
 
-# Screenshot
+# Screenshots
 
 [![](https://oxij.org/software/imaparms/imaparms-v2.5.png)](https://oxij.org/software/imaparms/imaparms-v2.5.webm)
 
@@ -32,105 +32,129 @@ Click the above image to see the full terminal recording video of `hoardy-mail` 
 
 It was recorded on a 2013-era laptop (Thinkpad X230 with Intel Core i5-3230M CPU @ 2.60GHz upgraded with 16GB RAM and Samsung 870 EVO SSD), my `notmuch` database contains ~4 millions messages, and the whole search takes only 0.25 seconds in person (but about 2 seconds in the video because rendering an [asciinema](https://github.com/asciinema/asciinema) file to gif and then compressing it into webm adds extra time between frames, so it looks much more laggy than it actually is at the end there).
 
-# <span id="why"/>Why does `hoardy-mail` exist?
+# Who `hoardy-mail` is for?
 
-In short, if you
+If you
 
 - fetch all your mail into a [Maildir](https://en.wikipedia.org/wiki/Maildir) with [fetchmail](https://www.fetchmail.info/), [getmail](https://github.com/getmail6/getmail6), or similar,
-- index it with [sup](https://sup-heliotrope.github.io/), [notmuch](https://notmuchmail.org/), or similar, and then
-- backup your index and tags/labels database with a generic file synchronization tool like [syncthing](https://syncthing.net/), [bup](https://bup.github.io/), [rsync](https://rsync.samba.org/), [git](https://git-scm.com/), or similar
+- backup your index and tags/labels database with a generic file synchronization tool like [syncthing](https://syncthing.net/), [bup](https://bup.github.io/), [rsync](https://rsync.samba.org/), [git](https://git-scm.com/), or similar,
+- and then, eventually, delete the old backed up mail from the original server,
 
-... effectively, you are using IMAP as a mail delivery protocol, not like a mail access protocol it was designed to be.
+then, effectively, you are using IMAP as a mail delivery protocol, not like a mail access protocol it was designed to be.
 
 In which case you might ask yourself, wouldn't it be nice if there was a tool that could help you automate fetching of new messages and deletion of already backed up old messages from IMAP servers in such a way that **any of your own systems crashing or losing hard drives at any point in time would not lose any of your mail**?
 
 `hoardy-mail` is a replacement for `fetchmail`/`getmail` that does this (and more, but mainly this).
 
-## Why make a replacement for `fetchmail`/`getmail`?
+# Why make a replacement for `fetchmail`/`getmail`?
 
 Originally, I made `hoardy-mail` to get a **safe combination** of [fetchmail](https://www.fetchmail.info/) and [IMAPExpire](https://gitlab.com/mikecardwell/IMAPExpire).
 The main problem there is that `fetchmail` fetches yet-*unfetched* mail, while `IMAPExpire` expires *old* mail.
 When `fetchmail` gets stuck or crashes it is entirely possible for `IMAPExpire` to delete some old yet-unfetched messages.
 (And replacing `fetchmail` with [getmail](https://github.com/getmail6/getmail6) will not help.)
 
-I used to use and (usually privately, but sometimes not) patch both `fetchmail` and `IMAPExpire` for years before getting tired of it and deciding it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and fix all the issues making it unsafe and inconvenient to run `IMAPExpire` immediately after `fetchmail` finishes fetching mail.
+I used to patch `fetchmail` and `IMAPExpire` to help with this, but then I decided it would be simpler to just write my own thingy instead of trying to make `fetchmail` fetch mail at decent speeds and fix all the issues making it unsafe and inconvenient to run `IMAPExpire` immediately after `fetchmail` finishes fetching mail.
 
-After I implemented `--maildir` (which tortures my SSD 150x times less than `fetchmail` does) and `--every-add-random` (which improves my privacy quite a bit) options I can no longer even consider going back.
-
-# <span id="use-cases"/>Supported use cases
-
-`hoardy-mail` is designed to be used as a IMAP-server-to-local-Maildir [Mail Delivery Agent](https://en.wikipedia.org/wiki/Message_delivery_agent) (MDA) that makes the IMAP server in question store as little mail as possible while preventing data loss.
-
-Which is to say, the main use case I made this for is as follows:
-
-- you periodically fetch your mail to a local Maildir with this tool's `hoardy-mail fetch` subcommand (which does what `fetchmail --softbounce --invisible --norewrite --mda MDA` does but much faster), then
-- you backup your Maildir with `syncthing`/`bup`/`rsync`/`git`/etc to make at least one other copy somewhere, and then, after your backup succeeds,
-- you run this tool's `hoardy-mail delete` subcommand to expire old already-fetched messages from the server (I prefer to expire messages `--older-than` some number of intervals between backups, just to be safe, but if you do backups directly after the `fetch`, or you like to live dangerously, you could delete old messages immediately), so that
-- when/if your account get cracked/hacked the attacker only gets your unfetched mail (+ configurable amount of yet to be removed messages), which is much better than them getting the whole last 20 years or whatever of your correspondence. (If your personal computer gets compromised enough, attackers will eventually get everything anyway, so deleting old mail from servers does not make things worse. But see some [more thoughts on this below](#stolen-anyway).)
-
-Also, `hoardy-mail` seems to be one of the fastest, if not the fastest, IMAP fetchers there is.
-By default, it fetches mail more than 150 times faster than [fetchmail](https://www.fetchmail.info/) (and [getmail](https://github.com/getmail6/getmail6)), but if your IMAP server supports long enough command lines, your system can do SSL and your hard drive can flush data fast enough, then you can saturate a gigabit Ethernet link with `hoardy-mail`.
-
-Since bootstrapping into a setup similar to the one described above requires querying into actual IMAP folder names and mass changes to flags on IMAP server-side, `hoardy-mail` provides subcommands for that too.
-
-See the "subcommands" subsection of the [usage section](#usage) for the list available of subcommands and explanations of what they do.
+After I implemented `--older-than-mtime-of`, `--older-than-timestamp-in`, etc (to automate the above in a very nice manner), `--maildir` (which tortures my SSD 150x times less than `fetchmail` does), `--every-add-random` (which improves my privacy quite a bit) options I can no longer go back.
 
 # Highlights
 
-- By default, `hoardy-mail` fetches mail more than 150 times faster and generates ~150 times less disk writes (when using the default `--maildir` option) than `fetchmail` and `getmail`, while keeping to all the usual "only mark/delete messages on the server after they are `fsync`ed to disk" guarantees.
-  It does this by batching IMAP fetches and disk writes.
-  You can make it as fast as you like, if your IMAP server supports longer command lines, thus allowing for larger batches.
+`hoardy-mail` seems to be one of the fastest, if not the fastest, IMAP fetchers there is.
+By default, it fetches mail more than 150 times faster and using 150 less disk writes than [fetchmail](https://www.fetchmail.info/) (and [getmail](https://github.com/getmail6/getmail6)) while keeping to all the usual "only mark/delete messages on the server after they are `fsync`ed to disk" guarantees.
 
-- It can do its supported actions as one operation per invocation of `hoardy-mail`, but it can also do a bunch of those actions sequentially from under a single connection to an IMAP server.
-  This is much cleaner and faster when you want to do complex things like "fetch all new mail and then, if everything was okay, delete previously fetched mail older than 3 days".
+If your IMAP server supports long enough command lines, your system can do SSL and your hard drive can flush data fast enough, then you can saturate a gigabit Ethernet link with `hoardy-mail`.
 
-- It will not lose any of your mail regardless of network connections failing unexpectedly, your IMAP server generating errors at unexpected times, other simultaneous IMAP clients making incompatible changes that could lead to future data loss, your disk failing while `hoardy-mail` tries to `fsync` your data, you calling `hoardy-mail` with wrong command line arguments, ...
-  In short, `hoardy-mail` is very careful about things.
+Also, `hoardy-mail` will not lose any of your mail regardless of network connections failing unexpectedly, your IMAP server generating errors at unexpected times, other simultaneous IMAP clients making incompatible changes that could lead to future data loss, your disk failing while `hoardy-mail` tries to `fsync` your data, you calling `hoardy-mail` with wrong command line arguments, ...
+In short, `hoardy-mail` is very careful about things.
 
-- It has a nice CLI UI and it can also generate desktop notifications (via `notify-send`) about things breaking or just happening.
+Also, `hoardy-mail` has a nice CLI UI and it can also generate desktop notifications (via `notify-send`) about things breaking or just happening.
+
+Also, since bootstrapping into a setup similar to the one described above requires querying into actual IMAP folder names and mass changes to flags on IMAP server-side, `hoardy-mail` provides subcommands for that too.
+
+See the "subcommands" subsection of the [usage section](#usage) for the list available of subcommands and explanations of what they do.
 
 # Quickstart
 
-## Install `Python 3`
+## Pre-installation
 
-- On Windows: [Download Python from the official website](https://www.python.org/downloads/windows/).
-- On a POSIX system (Linux/MacOS X/etc): Install `python3` via your package manager. Realistically, who am I kidding, it probably is installed already.
+- Install `Python 3`:
 
-## Install `hoardy-mail`
+  - On a Windows system: [Download Python installer from the official website](https://www.python.org/downloads/windows/), run it, **set `Add python.exe to PATH` checkbox**, then `Install` (the default options are fine).
+  - On a conventional POSIX system like most GNU/Linux distros and MacOS X: Install `python3` via your package manager. Realistically, it probably is installed already.
 
-- On a POSIX system or on a Windows system with configured `PATH` environment variable, install with:
+## Installation
 
-  ``` {.bash}
+- On a Windows system:
+
+  Open `cmd.exe` (press `Windows+R`, enter `cmd.exe`, press `Enter`), install this with
+  ```bash
+  python -m pip install hoardy-mail
+  ```
+  and run as
+  ```bash
+  python -m hoardy_mail --help
+  ```
+
+- On a POSIX system or on a Windows system with Python's `/Scripts` added to `PATH`:
+
+  Open a terminal/`cmd.exe`, install this with
+  ```bash
   pip install hoardy-mail
   ```
   and run as
-  ``` {.bash}
+  ```bash
   hoardy-mail --help
   ```
 
-- Alternatively, on a Windows system with unconfigured `PATH`, install with:
+- Alternatively, for light development (without development tools, for those see `nix-shell` below):
 
-  ``` {.bash}
-  pip install hoardy-mail
+  Open a terminal/`cmd.exe`, `cd` into this directory, then install with
+  ```bash
+  python -m pip install -e .
+  # or
+  pip install -e .
   ```
-  and run as
-  ``` {.bash}
-  python3 -m hoardy_mail --help
+  and run as:
+  ```bash
+  python -m hoardy_mail --help
+  # or
+  hoardy-mail --help
   ```
 
-- Alternatively, on a POSIX system with [Nix package manager](https://nixos.org/nix/), install and run with:
+- Alternatively, on a system with [Nix package manager](https://nixos.org/nix/)
 
-  ``` {.bash}
+  ```bash
   nix-env -i -f ./default.nix
   hoardy-mail --help
   ```
 
-- Alternatively, on a POSIX system, run without installing:
+- Alternatively, to replicate my development environment:
 
-  ``` {.bash}
-  alias hoardy-mail="python3 -m hoardy_mail"
-  hoardy-mail --help
+  ```bash
+  nix-shell ./default.nix --arg developer true
   ```
+
+## Check that it works
+
+```bash
+hoardy-mail count --host imap.gmail.com --user account@gmail.com --pass-pinentry
+```
+
+# Recipes
+
+`hoardy-mail` is designed to be used as a IMAP-server-to-local-Maildir [Mail Delivery Agent](https://en.wikipedia.org/wiki/Message_delivery_agent) (MDA) that makes the IMAP server in question store as little mail as possible while preventing data loss.
+
+Which is to say, the main use case `hoardy-mail` is made for is as follows:
+
+- you `touch ~/.last-mail-backup.new` or some such,
+- you fetch your mail to a local Maildir with `hoardy-mail fetch` subcommand (which does what `fetchmail --softbounce --invisible --norewrite --mda MDA` does but much faster), then
+- backup your Maildir with `syncthing`/`bup`/`rsync`/`git`/etc to make at least one other copy somewhere, and then,
+- after your backup succeeds, you do `mv ~/.last-mail-backup.new ~/.last-mail-backup` or some such,
+- you then run `hoardy-mail delete --older-than-mtime-of ~/.last-mail-backup --older-than 3` or some such to expire old already-fetched and backed up messages from the server (I prefer to expire messages `--older-than` some number of intervals between backups, just to be safe, but if you do backups directly after the `fetch`, or you like to live dangerously, you could delete old messages immediately),
+- you can then do `hoardy-mail for-each` to run both `fetch` and `delete` on the same connection, and run the backup process asynchronously, and it will still work as expected,
+- when/if your account get cracked/hacked the attacker only gets your unfetched mail (+ configurable amount of yet to be removed messages), which is much better than them getting the whole last 20 years or whatever of your correspondence. (If your personal computer gets compromised enough, attackers will eventually get everything anyway, so deleting old mail from servers does not make things worse. But see some [more thoughts on this below](#stolen-anyway).)
+
+This section starts with simple example invocations of `hoardy-mail`, builds up to the above use case, and then shows how to do even more advanced things.
 
 ## How to: backup all your mail from GMail, Yahoo, Hotmail, Yandex, etc
 
@@ -140,11 +164,11 @@ If you want to keep a synchronized copy of your mail locally and on your mail se
 However, `hoardy-mail` can be used for efficient incremental backups of IMAP server data if you are willing to sacrifice either of `SEEN` or `FLAGGED` ("starred") IMAP flags for it.
 Also, making email backups with `hoardy-mail` is pretty simple, [useful](#why-not-gmail), and illustrative, so a couple of examples follow.
 
-### How to: fetch all your emails from GMail, Yahoo, Hotmail, Yandex, etc
+## How to: fetch all your emails from GMail, Yahoo, Hotmail, Yandex, etc
 
 The following will fetch all messages from all the folders on the server (without changing message flags on the server side) and just put them all into `~/Mail/backup` Maildir (creating it if it does not exists).
 
-``` {.bash}
+```bash
 # backup all your mail from GMail
 hoardy-mail fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry \
   --maildir ~/Mail/backup --all-folders --any-seen
@@ -154,11 +178,11 @@ For GMail you will have to create and use application-specific password, which r
 
 Also, if you have a lot of mail, this will be very inefficient, as it will try to re-download everything again if it ever gets interrupted.
 
-### How to: efficiently incrementally backup all your mail from GMail, Yahoo, Hotmail, Yandex, etc
+## How to: efficiently incrementally backup all your mail from GMail, Yahoo, Hotmail, Yandex, etc
 
 To make the above efficient you have to sacrifice either `SEEN` or `FLAGGED` IMAP flags to allow `hoardy-mail` to track which messages are yet to be fetched, i.e. either:
 
-``` {.bash}
+```bash
 # mark all messages as UNSEEN
 hoardy-mail mark --host imap.gmail.com --user account@gmail.com --pass-pinentry \
   --folder "[Gmail]/All Mail" unseen
@@ -171,7 +195,7 @@ hoardy-mail fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry
 
 or
 
-``` {.bash}
+```bash
 # mark all messages as UNFLAGGED
 hoardy-mail mark --host imap.gmail.com --user account@gmail.com --pass-pinentry \
   --folder "[Gmail]/All Mail" unflagged
@@ -183,11 +207,11 @@ hoardy-mail fetch --host imap.gmail.com --user account@gmail.com --pass-pinentry
 
 This, of course, means that if you open or "mark as read" a message in GMail's web-mail UI while using `--unseen`, or mark it as flagged ("star") it there while using `--unflagged`, `hoardy-mail` will ignore the message on the next `fetch`.
 
-### How to: efficiently incrementally backup millions and/or decades of messages from GMail, Yahoo, Hotmail, Yandex, etc
+## How to: efficiently incrementally backup millions and/or decades of messages from GMail, Yahoo, Hotmail, Yandex, etc
 
 In cases where you want to fetch *millions* of messages spanning *decades*, you'll probably want invoke `hoardy-mail fetch` multiple times with progressively smaller ` --older-than` arguments so that IMAP `SEARCH` command responses will be smaller to re-fetch if the process gets interrupted, i.e.:
 
-``` {.bash}
+```bash
 # mark all messages as UNSEEN
 hoardy-mail mark --host imap.gmail.com --user account@gmail.com --pass-pinentry \
   --folder "[Gmail]/All Mail" unseen
@@ -211,7 +235,7 @@ Or you just repeat this mirroring on a schedule so that [when/if GMail decides t
 Yes, just replace `--maildir DIRECTORY` with `--mda MDA`.
 For instance, for `maildrop` Mail Delivery Agent (also knows as Local Delivery Agent, LDA, as it is an MDA that gets used to deliver messages to same machine) from [Courier Mail Server project](https://www.courier-mta.org/) --- which is a commodity MDA/LDA with the simplest setup, that I know of --- the simplest `hoardy-mail fetch` invocation looks like this:
 
-``` {.bash}
+```bash
 ### setup: do once
 mkdir -p ~/Mail/backup/{new,cur,tmp}
 
@@ -232,9 +256,9 @@ Of course, you can use any other MDA/LDA you want, e.g.:
 
 ## <span id="workflow"/>How to: implement "fetch + backup + expire" workflow
 
-The intended workflow described [above](#why) looks like this:
+The intended workflow described [above](#recipes) looks like this (note that this uses `--older-than-timestamp-in` instead of `--older-than-mtime-of`, since this is a bit safer):
 
-``` {.bash}
+```bash
 ### setup: do once
 echo 0 > ~/.rsync-last-mail-backup-timestamp
 
@@ -252,13 +276,13 @@ if rsync -aHAX ~/Mail /disk/backup ; then
 fi
 EOF
 chmod +x ~/bin/new-mail-hook
-```
-
-``` {.bash}
-### repeatable part
 
 # optionally, if needed
 # hoardy-mail mark ... --folder "[Gmail]/All Mail" unseen
+```
+
+```bash
+### repeatable part
 
 # every hour, fetch new and expire old mail from two GMail accounts,
 # generate new desktop notifications with `notify-send` if some of the commands fail
@@ -312,7 +336,7 @@ Or, if you are really paranoid, you can this feature to check files produced by 
 
 Running in parallel with `fetchmail` using `maildrop` MDA for both `fetchmail` and `hoardy-mail` can be implemented like this:
 
-``` {.bash}
+```bash
 ### setup: do once
 echo 0 > ~/.rsync-last-mail-backup-timestamp
 
@@ -350,7 +374,7 @@ secondary_common=(--host imap.gmail.com \
 hoardy-mail mark "${secondary_common[@]}" --folder "INBOX" unflagged
 ```
 
-``` {.bash}
+```bash
 ### repeatable part
 # run fetchmail daemon as usual, fetching new mail into the secondary maildir every hour
 fetchmail --mda "maildrop ~/.mailfilter-secondary" -d 3600
