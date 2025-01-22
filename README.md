@@ -2,7 +2,6 @@
 <details><summary>(Click me to see it.)</summary>
 <ul>
 <li><a href="#what-is-hoardy-mail" id="toc-what-is-hoardy-mail">What is <code>hoardy-mail</code>?</a></li>
-<li><a href="#screenshots" id="toc-screenshots">Screenshots</a></li>
 <li><a href="#who-hoardy-mail-is-for" id="toc-who-hoardy-mail-is-for">Who <code>hoardy-mail</code> is for?</a></li>
 <li><a href="#why-make-a-replacement-for-fetchmailgetmail" id="toc-why-make-a-replacement-for-fetchmailgetmail">Why make a replacement for <code>fetchmail</code>/<code>getmail</code>?</a></li>
 <li><a href="#highlights" id="toc-highlights">Highlights</a></li>
@@ -83,15 +82,6 @@ In other words, [in comparison to other things](#alternatives), `hoardy-mail` is
 
 `hoardy-mail` was previously knows as `imaparms`.
 
-# Screenshots
-
-[![](https://oxij.org/software/imaparms/imaparms-v2.5.png)](https://oxij.org/software/imaparms/imaparms-v2.5.webm)
-
-Click the above image to see the full terminal recording video of `hoardy-mail` invocation that also runs `new-mail-hook` indexing new mail with [notmuch](https://notmuchmail.org/) ([see workflow example below](#workflow)), followed by a full-text search in Emacs UI of `notmuch`.
-(`hoardy-mail` was named `imaparms` at the point the recording was made. The account data was edited out and replaced by fake GMail accounts in post-processing.)
-
-It was recorded on a 2013-era laptop (Thinkpad X230 with Intel Core i5-3230M CPU @ 2.60GHz upgraded with 16GB RAM and Samsung 870 EVO SSD), my `notmuch` database contains ~4 millions messages, and the whole search takes only 0.25 seconds in person (but about 2 seconds in the video because rendering an [asciinema](https://github.com/asciinema/asciinema) file to gif and then compressing it into webm adds extra time between frames, so it looks much more laggy than it actually is at the end there).
-
 # Who `hoardy-mail` is for?
 
 If you
@@ -118,6 +108,13 @@ I used to patch `fetchmail` and `IMAPExpire` to help with this, but then I decid
 After I implemented `--older-than-mtime-of`, `--older-than-timestamp-in`, etc (to automate the above in a very nice manner), `--maildir` (which tortures my SSD 150x times less than `fetchmail` does), `--every-add-random` (which improves my privacy quite a bit) options I can no longer go back.
 
 # Highlights
+
+[![](https://oxij.org/asset/demo/software/hoardy-mail/imaparms-v2.5.png)](https://oxij.org/asset/demo/software/hoardy-mail/imaparms-v2.5.webm)
+
+Click the above image to see the full terminal recording video of `hoardy-mail` invocation that also runs `new-mail-hook` indexing new mail with [notmuch](https://notmuchmail.org/) ([see workflow example below](#workflow)), followed by a full-text search in Emacs UI of `notmuch`.
+(`hoardy-mail` was named `imaparms` at the point the recording was made. The account data was edited out and replaced by fake GMail accounts in post-processing.)
+
+It was recorded on a 2013-era laptop (Thinkpad X230 with Intel Core i5-3230M CPU @ 2.60GHz upgraded with 16GB RAM and Samsung 870 EVO SSD), my `notmuch` database contains ~4 millions messages, and the whole search takes only 0.25 seconds in person (but about 2 seconds in the video because rendering an [asciinema](https://github.com/asciinema/asciinema) file to gif and then compressing it into webm adds extra time between frames, so it looks much more laggy than it actually is at the end there).
 
 `hoardy-mail` seems to be one of the fastest, if not the fastest, IMAP fetchers there is.
 By default, it fetches mail more than 150 times faster and using 150 less disk writes than [fetchmail](https://www.fetchmail.info/) (and [getmail](https://github.com/getmail6/getmail6)) while keeping to all the usual "only mark/delete messages on the server after they are `fsync`ed to disk" guarantees.
