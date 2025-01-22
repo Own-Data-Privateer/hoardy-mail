@@ -1,3 +1,63 @@
+# Table of Contents
+<details><summary>(Click me to see it.)</summary>
+<ul>
+<li><a href="#what-is-hoardy-mail" id="toc-what-is-hoardy-mail">What is <code>hoardy-mail</code>?</a></li>
+<li><a href="#screenshots" id="toc-screenshots">Screenshots</a></li>
+<li><a href="#who-hoardy-mail-is-for" id="toc-who-hoardy-mail-is-for">Who <code>hoardy-mail</code> is for?</a></li>
+<li><a href="#why-make-a-replacement-for-fetchmailgetmail" id="toc-why-make-a-replacement-for-fetchmailgetmail">Why make a replacement for <code>fetchmail</code>/<code>getmail</code>?</a></li>
+<li><a href="#highlights" id="toc-highlights">Highlights</a></li>
+<li><a href="#quickstart" id="toc-quickstart">Quickstart</a>
+<ul>
+<li><a href="#pre-installation" id="toc-pre-installation">Pre-installation</a></li>
+<li><a href="#installation" id="toc-installation">Installation</a></li>
+<li><a href="#check-that-it-works" id="toc-check-that-it-works">Check that it works</a></li>
+</ul></li>
+<li><a href="#recipes" id="toc-recipes">Recipes</a>
+<ul>
+<li><a href="#how-to-backup-all-your-mail-from-gmail-yahoo-hotmail-yandex-etc" id="toc-how-to-backup-all-your-mail-from-gmail-yahoo-hotmail-yandex-etc">How to: backup all your mail from GMail, Yahoo, Hotmail, Yandex, etc</a></li>
+<li><a href="#how-to-fetch-all-your-emails-from-gmail-yahoo-hotmail-yandex-etc" id="toc-how-to-fetch-all-your-emails-from-gmail-yahoo-hotmail-yandex-etc">How to: fetch all your emails from GMail, Yahoo, Hotmail, Yandex, etc</a></li>
+<li><a href="#how-to-efficiently-incrementally-backup-all-your-mail-from-gmail-yahoo-hotmail-yandex-etc" id="toc-how-to-efficiently-incrementally-backup-all-your-mail-from-gmail-yahoo-hotmail-yandex-etc">How to: efficiently incrementally backup all your mail from GMail, Yahoo, Hotmail, Yandex, etc</a></li>
+<li><a href="#how-to-efficiently-incrementally-backup-millions-andor-decades-of-messages-from-gmail-yahoo-hotmail-yandex-etc" id="toc-how-to-efficiently-incrementally-backup-millions-andor-decades-of-messages-from-gmail-yahoo-hotmail-yandex-etc">How to: efficiently incrementally backup millions and/or decades of messages from GMail, Yahoo, Hotmail, Yandex, etc</a></li>
+<li><a href="#what-do-i-do-with-the-resulting-maildir" id="toc-what-do-i-do-with-the-resulting-maildir">What do I do with the resulting Maildir?</a></li>
+<li><a href="#can-i-use-an-mdalda-to-deliver-messages" id="toc-can-i-use-an-mdalda-to-deliver-messages">Can I use an MDA/LDA to deliver messages?</a></li>
+<li><a href="#how-to-implement-fetch-backup-expire-workflow" id="toc-how-to-implement-fetch-backup-expire-workflow"><span id="workflow"/>How to: implement “fetch + backup + expire” workflow</a></li>
+<li><a href="#how-to-run-hoardy-mail-in-parallel-with-fetchmail-or-similar" id="toc-how-to-run-hoardy-mail-in-parallel-with-fetchmail-or-similar">How to: run <code>hoardy-mail</code> in parallel with <code>fetchmail</code> or similar</a></li>
+<li><a href="#see-also" id="toc-see-also">See also</a></li>
+</ul></li>
+<li><a href="#why-would-you-even-want-to-use-any-of-this-isnt-gmail-good-enough" id="toc-why-would-you-even-want-to-use-any-of-this-isnt-gmail-good-enough"><span id="why-not-gmail"/>Why would you even want to use any of this, isn’t GMail good enough?</a></li>
+<li><a href="#googles-security-theater" id="toc-googles-security-theater"><span id="gmail-is-evil"/>Google’s security theater</a></li>
+<li><a href="#your-emails-will-eventually-get-stolen-anyway" id="toc-your-emails-will-eventually-get-stolen-anyway"><span id="stolen-anyway"/>Your emails will eventually get stolen anyway</a></li>
+<li><a href="#alternatives" id="toc-alternatives">Alternatives</a>
+<ul>
+<li><a href="#fetchmail-and-getmail" id="toc-fetchmail-and-getmail">fetchmail and getmail</a></li>
+<li><a href="#fdm" id="toc-fdm">fdm</a></li>
+<li><a href="#imapexpire" id="toc-imapexpire">IMAPExpire</a></li>
+<li><a href="#offlineimap-imapsync-and-similar" id="toc-offlineimap-imapsync-and-similar">offlineimap, imapsync, and similar</a></li>
+</ul></li>
+<li><a href="#meta" id="toc-meta">Meta</a>
+<ul>
+<li><a href="#changelog" id="toc-changelog">Changelog?</a></li>
+<li><a href="#todo" id="toc-todo">TODO?</a></li>
+<li><a href="#license" id="toc-license">License</a></li>
+<li><a href="#contributing" id="toc-contributing">Contributing</a></li>
+</ul></li>
+<li><a href="#usage" id="toc-usage">Usage</a>
+<ul>
+<li><a href="#hoardy-mail" id="toc-hoardy-mail">hoardy-mail</a>
+<ul>
+<li><a href="#hoardy-mail-list" id="toc-hoardy-mail-list">hoardy-mail list</a></li>
+<li><a href="#hoardy-mail-count" id="toc-hoardy-mail-count">hoardy-mail count</a></li>
+<li><a href="#hoardy-mail-mark" id="toc-hoardy-mail-mark">hoardy-mail mark</a></li>
+<li><a href="#hoardy-mail-fetch" id="toc-hoardy-mail-fetch">hoardy-mail fetch</a></li>
+<li><a href="#hoardy-mail-delete" id="toc-hoardy-mail-delete">hoardy-mail delete</a></li>
+<li><a href="#hoardy-mail-for-each" id="toc-hoardy-mail-for-each">hoardy-mail for-each</a></li>
+</ul></li>
+<li><a href="#notes-on-usage" id="toc-notes-on-usage">Notes on usage</a></li>
+<li><a href="#examples" id="toc-examples">Examples</a></li>
+</ul></li>
+</ul>
+</details>
+
 # What is `hoardy-mail`?
 
 `hoardy-mail` is a tool that can help you quickly fetch your email from remote IMAP servers to a local file system (150x faster and using 150x less disk writes than [fetchmail](https://www.fetchmail.info/)/[getmail](https://github.com/getmail6/getmail6)), programmatically change flags on messages on IMAP servers (e.g. mark all messages newer than a day old in some folder as unread), delete or expire old messages from IMAP servers, and do other similar things.
