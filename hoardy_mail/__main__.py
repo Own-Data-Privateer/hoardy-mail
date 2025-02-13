@@ -203,19 +203,6 @@ def imap_parse(  # pylint: disable=dangerous-default-value
     return res
 
 
-##print(imap_parse(b'(0 1) (1 2 3'))
-# print(imap_parse(b'(\\Trash \\Nya) "." "All Mail"'))
-# print(imap_parse(b'(\\Trash \\Nya) "." "All\\"Mail"'))
-# print(imap_parse(b'(1 2 3)'))
-# print(imap_parse(b'(0 1) ((1 2 3))'))
-# print(imap_parse(b'(0 1) ((1 2 3) )'))
-# print(imap_parse(b'1 2 3 4 "\\\\Nya" 5 6 7'))
-# print(imap_parse(b'(1 2 3) 4 "\\\\Nya" 5 6 7'))
-# print(imap_parse(b'1 (UID 123 RFC822.SIZE 128)'))
-# print(imap_parse(b'1 (UID 123 BODY[HEADER] {128})', [b'128bytesofdata']))
-# sys.exit(1)
-
-
 def imap_parse_attrs(data: _t.List[bytes]) -> _t.Dict[bytes, bytes]:
     if len(data) % 2 != 0:
         raise ValueError("data array of non-even length")
@@ -228,8 +215,50 @@ def imap_parse_attrs(data: _t.List[bytes]) -> _t.Dict[bytes, bytes]:
     return res
 
 
-# print(imap_parse_attrs(imap_parse(b'UID 123 BODY[HEADER] {128}', [b'128bytesofdata'])))
-# sys.exit(1)
+def test_imap_parse() -> None:
+    assert imap_parse(b"(1 2 3)") == [[b"1", b"2", b"3"]]
+    assert imap_parse(b"(0 1) (1 2 3)") == [[b"0", b"1"], [b"1", b"2", b"3"]]
+    assert imap_parse(b"(0 1) ((1 2 3))") == [[b"0", b"1"], [[b"1", b"2", b"3"]]]
+    assert imap_parse(b"(0 1) ((1 2 3) )") == [[b"0", b"1"], [[b"1", b"2", b"3"], b""]]
+    assert imap_parse(b'(\\Trash \\Nya) "." "All Mail"') == [
+        [b"\\Trash", b"\\Nya"],
+        b".",
+        b"All Mail",
+    ]
+    assert imap_parse(b'(\\Trash \\Nya) "." "All\\"Mail"') == [
+        [b"\\Trash", b"\\Nya"],
+        b".",
+        b'All"Mail',
+    ]
+    assert imap_parse(b'1 2 3 4 "\\\\Nya" 5 6 7') == [
+        b"1",
+        b"2",
+        b"3",
+        b"4",
+        b"\\Nya",
+        b"5",
+        b"6",
+        b"7",
+    ]
+    assert imap_parse(b'(1 2 3) 4 "\\\\Nya" 5 6 7') == [
+        [b"1", b"2", b"3"],
+        b"4",
+        b"\\Nya",
+        b"5",
+        b"6",
+        b"7",
+    ]
+    assert imap_parse(b"1 (UID 123 RFC822.SIZE 128)") == [
+        b"1",
+        [b"UID", b"123", b"RFC822.SIZE", b"128"],
+    ]
+    val = imap_parse(b"UID 123 BODY[HEADER] {128}", [b"128bytesofdata"])
+    assert val == [b"UID", b"123", b"BODY[HEADER]", b"128bytesofdata"]
+    assert imap_parse(b"1 (UID 123 BODY[HEADER] {128})", [b"128bytesofdata"]) == [b"1", val]
+    assert imap_parse_attrs(val) == {
+        b"UID": b"123",
+        b"BODY[HEADER]": b"128bytesofdata",
+    }
 
 
 def imap_quote(arg: str) -> str:
