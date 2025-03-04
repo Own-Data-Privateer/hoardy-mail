@@ -511,8 +511,12 @@ def for_each_account_poll(cfg: Namespace, state: State, *args: _t.Any) -> None:
 def for_each_account(
     cfg: Namespace, state: State, func: _t.Callable[..., None], *args: _t.Any
 ) -> None:
-    num_delivered, num_undelivered = 0, 0
-    num_marked, num_trashed, num_deleted = 0, 0, 0
+    num_delivered = 0
+    num_marked = 0
+    num_trashed = 0
+    num_deleted = 0
+    num_undelivered = 0
+    num_errors = 0
     changes = []
     errors = []
 
@@ -620,13 +624,19 @@ def for_each_account(
             num_trashed += account.num_trashed
             num_deleted += account.num_deleted
             num_undelivered += account.num_undelivered
+            num_errors += len(account.errors)
             if len(account.changes) > 0:
                 changes.append(
                     gettext("%s on %s:") % (account.user, account.host)
                     + "\n- "
                     + "\n- ".join(account.changes)
                 )
-            errors += account.errors
+            if len(account.errors) > 0:
+                errors.append(
+                    gettext("%s on %s:") % (account.user, account.host)
+                    + "\n- "
+                    + "\n- ".join(account.errors)
+                )
 
     if len(state.pending_hooks) > 0:
         for hook in state.pending_hooks:
@@ -661,12 +671,9 @@ def for_each_account(
             )
             % (num_undelivered,)
         )
-
-    num_new_errors = len(errors)
-    if num_new_errors > 0:
+    if num_errors > 0:
         bad.append(
-            ngettext("produced %d new error", "produced %d new errors", num_new_errors)
-            % (num_new_errors,)
+            ngettext("produced %d new error", "produced %d new errors", num_errors) % (num_errors,)
         )
 
     if len(good) > 0:
