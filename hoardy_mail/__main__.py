@@ -482,12 +482,14 @@ def for_each_account_poll(cfg: Namespace, state: State, *args: _t.Any) -> None:
             end="",
             color=ANSIColor.YELLOW,
         )
-        for i in range(3, 0, -1):
-            stdout.write_str(f" {i}...", color=ANSIColor.YELLOW)
+
+        with yes_signals():
+            for i in range(3, 0, -1):
+                stdout.write_str(f" {i}...", color=ANSIColor.YELLOW)
+                stdout.flush()
+                sleep(1)
+            stdout.write_str_ln("")
             stdout.flush()
-            sleep(1)
-        stdout.write_str_ln("")
-        stdout.flush()
 
     to_sleep = random.randint(0, cfg.every_add_random)
     if to_sleep > 0:
