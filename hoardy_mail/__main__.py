@@ -476,11 +476,18 @@ def for_each_account_poll(cfg: Namespace, state: State, *args: _t.Any) -> None:
         except SignalInterrupt as exc:
             if exc.signum != _signal.SIGINT:
                 raise
-            printf(
-                gettext("starting in a little bit, last chance to abort..."),
-                color=ANSIColor.YELLOW,
-            )
+
+        printf(
+            gettext("starting in a little bit, last chance to abort..."),
+            end="",
+            color=ANSIColor.YELLOW,
+        )
+        for i in range(3, 0, -1):
+            stdout.write_str(f" {i}...", color=ANSIColor.YELLOW)
+            stdout.flush()
             sleep(1)
+        stdout.write_str_ln("")
+        stdout.flush()
 
     to_sleep = random.randint(0, cfg.every_add_random)
     if to_sleep > 0:
