@@ -1,6 +1,7 @@
 { pkgs ? import <nixpkgs> {}
 , lib ? pkgs.lib
 , developer ? false
+, kisstdlib ? import ./vendor/kisstdlib { inherit pkgs developer; }
 }:
 
 with pkgs.python3Packages;
@@ -27,6 +28,7 @@ buildPythonApplication (rec {
 
   propagatedBuildInputs = [
     setuptools
+    kisstdlib
   ];
 } // lib.optionalAttrs developer {
   nativeBuildInputs = [

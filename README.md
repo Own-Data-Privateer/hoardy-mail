@@ -666,7 +666,7 @@ I.e., for each specified IMAP server: login, perform specified actions on all me
   - `-h, --help`
   : show this help message and exit
   - `--markdown`
-  : show help messages formatted in Markdown
+  : show `--help` formatted in Markdown
   - `-q, --quieter`
   : be less verbose
 
@@ -786,6 +786,10 @@ I.e., for each specified IMAP server: login, perform specified actions on all me
 Login, perform IMAP `LIST` command to get all folders, print them one per line.
 
 - options:
+  - `-h, --help`
+  : show this help message and exit
+  - `--markdown`
+  : show `--help` formatted in Markdown
   - `--porcelain`
   : print in a machine-readable format (the default at the moment)
 
@@ -794,6 +798,10 @@ Login, perform IMAP `LIST` command to get all folders, print them one per line.
 Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP `SEARCH` command with specified filters in each folder, print message counts for each folder one per line.
 
 - options:
+  - `-h, --help`
+  : show this help message and exit
+  - `--markdown`
+  : show `--help` formatted in Markdown
   - `--porcelain`
   : print in a machine-readable format
 
@@ -824,6 +832,12 @@ Login, (optionally) perform IMAP `LIST` command to get all folders, perform IMAP
 ### hoardy-mail mark
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, mark resulting messages in specified way by issuing IMAP `STORE` commands.
+
+- options:
+  - `-h, --help`
+  : show this help message and exit
+  - `--markdown`
+  : show `--help` formatted in Markdown
 
 - folder search filters (required):
   - `--all-folders`
@@ -860,6 +874,12 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, mar
 ### hoardy-mail fetch
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, fetch resulting messages in (configurable) batches, put each batch of message into the specified Maildir and `fsync` them to disk or feed them to the specified MDA/LDA, and, if and only if all of the above succeeds, mark each message in the batch on the server in a specified way by issuing IMAP `STORE` commands.
+
+- options:
+  - `-h, --help`
+  : show this help message and exit
+  - `--markdown`
+  : show `--help` formatted in Markdown
 
 - folder search filters:
   - `--all-folders`
@@ -920,6 +940,12 @@ Login, perform IMAP `SEARCH` command with specified filters for each folder, fet
 
 Login, perform IMAP `SEARCH` command with specified filters for each folder, delete them from the server using a specified method.
 
+- options:
+  - `-h, --help`
+  : show this help message and exit
+  - `--markdown`
+  : show `--help` formatted in Markdown
+
 - folder search filters (required):
   - `--all-folders`
   : operate on all folders
@@ -968,6 +994,12 @@ E.g., if you have several `fetch --new-mail-cmd filter-my-mail` as subcommands o
 - positional arguments:
   - `ARG`
   : arguments, these will be split by `;` and parsed into other subcommands
+
+- options:
+  - `-h, --help`
+  : show this help message and exit
+  - `--markdown`
+  : show `--help` formatted in Markdown
 
 - folder search filters (will be used as default for subcommands):
   - `--all-folders`
@@ -1163,4 +1195,3 @@ gmail_common_mda=("${{gmail_common[@]}}" --mda maildrop)
   Also note that `delete` will use `--method gmail-trash` for `[Gmail]/All Mail` and `[Gmail]/Spam` and then use `--method delete` for `[Gmail]/Trash` even though they are specified together.
 
   Also, when running in parallel with another IMAP client that changes IMAP flags, `hoardy-mail for-each` will notice the other client doing it while `fetch`ing and will skip all following `delete`s of that `--every` cycle to prevent data loss.
-
