@@ -30,7 +30,7 @@ import socket as _socket
 import ssl
 import subprocess
 import sys as _sys
-import time
+import time as _time
 import typing as _t
 
 from imaplib import IMAP4, IMAP4_SSL
@@ -194,7 +194,7 @@ def imap_quote(arg: str) -> str:
 imap_months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]  # fmt: skip
 
 
-def imap_date(date: time.struct_time) -> str:
+def imap_date(date: _time.struct_time) -> str:
     return f"{str(date.tm_mday)}-{imap_months[date.tm_mon-1]}-{str(date.tm_year)}"
 
 
@@ -242,7 +242,7 @@ def make_search_filter(cfg: Namespace, now: int) -> _t.Tuple[str, bool]:
         older_than.append(os.stat(os.path.expanduser(path)).st_mtime_ns)
 
     if len(older_than) > 0:
-        date = time.gmtime(min(older_than) / 10**9)
+        date = _time.gmtime(min(older_than) / 10**9)
         filters.append(f"BEFORE {imap_date(date)}")
         dynamic = True
 
@@ -257,7 +257,7 @@ def make_search_filter(cfg: Namespace, now: int) -> _t.Tuple[str, bool]:
         newer_than.append(os.stat(os.path.expanduser(path)).st_mtime_ns)
 
     if len(newer_than) > 0:
-        date = time.gmtime(max(newer_than) / 10**9)
+        date = _time.gmtime(max(newer_than) / 10**9)
         filters.append(f"NOT BEFORE {imap_date(date)}")
         dynamic = True
 
@@ -473,7 +473,7 @@ def for_each_account_poll(cfg: Namespace, state: State, *args: _t.Any) -> None:
 
         try:
             soft_sleep(to_sleep, verbose="")
-        except SignalInterrupt as exc:
+        except GentleSignalInterrupt as exc:
             if exc.signum != _signal.SIGINT:
                 raise
 
@@ -493,27 +493,27 @@ def for_each_account_poll(cfg: Namespace, state: State, *args: _t.Any) -> None:
 
     to_sleep = random.randint(0, cfg.every_add_random)
     if to_sleep > 0:
-        now = time.time()
-        ttime = time.strftime(fmt, time.localtime(now + to_sleep))
+        now = _time.time()
+        ttime = _time.strftime(fmt, _time.localtime(now + to_sleep))
         do_sleep(ttime)
 
     while True:
-        now = time.time()
+        now = _time.time()
         repeat_at = now + every
-        ftime = time.strftime(fmt, time.localtime(now))
+        ftime = _time.strftime(fmt, _time.localtime(now))
         if not cfg.quiet:
             printf("# " + gettext("poll: starting at %s"), ftime)
 
         for_each_account(cfg, state, *args)
 
-        now = time.time()
-        ntime = time.strftime(fmt, time.localtime(now))
+        now = _time.time()
+        ntime = _time.strftime(fmt, _time.localtime(now))
 
         if not cfg.quiet:
             printf("# " + gettext("poll: finished at %s"), ntime)
 
         to_sleep = max(60, repeat_at - now + random.randint(0, cfg.every_add_random))
-        ttime = time.strftime(fmt, time.localtime(now + to_sleep))
+        ttime = _time.strftime(fmt, _time.localtime(now + to_sleep))
         do_sleep(ttime)
 
 
@@ -808,7 +808,7 @@ def prepare_cmd(cfg: Namespace, now: int) -> str:
 def cmd_action(cfg: Namespace, state: State) -> None:
     check_cmd(cfg)
     print_prelude(cfg)
-    now = time.time_ns()
+    now = _time.time_ns()
     cfg.search_filter = prepare_cmd(cfg, now)
 
     if cfg.very_dry_run:
@@ -819,7 +819,7 @@ def cmd_action(cfg: Namespace, state: State) -> None:
 
 def cmd_multi_action(common_cfg: Namespace, state: State, subcfgs: _t.List[Namespace]) -> None:
     print_prelude(common_cfg)
-    now = time.time_ns()
+    now = _time.time_ns()
     for subcfg in subcfgs:
         subcfg.search_filter = prepare_cmd(subcfg, now)
 
@@ -833,7 +833,7 @@ def for_each_folder_multi(
     common_cfg: Namespace, state: State, account: Account, srv: IMAP4, subcfgs: _t.List[Namespace]
 ) -> None:
     if common_cfg.every is not None:
-        now = time.time_ns()
+        now = _time.time_ns()
         for subcfg in subcfgs:
             subcfg.search_filter, _ = make_search_filter(subcfg, now)
 
@@ -1097,8 +1097,8 @@ def do_fetch_batch(
             total_size,
         )
 
-    # because time.time() gives a float
-    epoch_ms = time.time_ns() // 1000000
+    # because _time.time() gives a float
+    epoch_ms = _time.time_ns() // 1000000
 
     joined = b",".join(message_uids)
     typ, data = srv.uid("FETCH", joined, "(BODY.PEEK[HEADER] BODY.PEEK[TEXT])")  # type: ignore
@@ -2185,7 +2185,8 @@ E.g., if you have several `fetch --new-mail-cmd filter-my-mail` as subcommands o
 
 
 def main() -> None:
-    setup_result = setup_kisstdlib(__prog__, signals=["SIGTERM", "SIGINT", "SIGBREAK", "SIGUSR1"])
+    setup_result = setup_kisstdlib(__prog__, do_setup_delay_signals=False)
+    setup_delay_signals(["SIGTERM", "SIGINT", "SIGBREAK", "SIGUSR1"])
     run_kisstdlib_main(
         setup_result,
         argparse.make_argparser_and_run,
