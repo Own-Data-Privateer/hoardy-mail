@@ -53,8 +53,14 @@ strict = true
 implicit_reexport = true
 explicit_package_bases = true
 files = [
-    "*/*.py"
+    "*.py",
+    "hoardy_mail/**/*.py"
 ]
+[[tool.mypy.overrides]]
+module = [
+    "setuptools",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "6.0"
